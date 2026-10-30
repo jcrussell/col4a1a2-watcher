@@ -21,7 +21,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from col4a1.cli import load_config, make_client  # noqa: E402
+from col4a1.cli import make_client  # noqa: E402
+from col4a1.config import load_settings  # noqa: E402
 from col4a1.sources import europepmc  # noqa: E402
 
 
@@ -31,7 +32,7 @@ def main() -> int:
         print(__doc__)
         return 2
 
-    client = make_client(load_config())
+    client = make_client(load_settings())
     terms = " OR ".join(f'"{s}"' for s in spellings)
     query = f"(COL4A1 OR COL4A2) AND ({terms})"
 

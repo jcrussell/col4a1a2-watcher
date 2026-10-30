@@ -1,0 +1,94 @@
+# Configuration for the COL4A1/COL4A2 literature watcher.
+# Read with stdlib tomllib. Override the file with `--config`, and individual
+# paths with the flags on each subcommand.
+#
+# What lives here: things an operator would plausibly tune. What deliberately
+# does NOT live here: the zip-bomb limits in sources/supplements.py (a config
+# that can relax a defence against untrusted archives eventually will), the
+# extraction MAX_TOKENS (coupled to the streaming requirement), the API beta
+# string, and every *_PROMPT_VERSION (bumping one costs money and must be a
+# reviewed code change).
+
+contact_email = "joncrussell@gmail.com"
+user_agent = "col4a1-watcher/0.1 (https://github.com/joncrussell/col4a1; joncrussell@gmail.com)"
+
+[europepmc]
+# Precision first: the gene must be named in the title or abstract. A full-text
+# match on COL4A1 pulls in cancer and fibrosis papers that list the gene in
+# passing. Measured 2026-10-30: 1,468 papers, 645 of them open access.
+query = "(TITLE:COL4A1 OR TITLE:COL4A2 OR ABSTRACT:COL4A1 OR ABSTRACT:COL4A2)"
+page_size = 100
+
+[pubtator]
+# Papers where PubTator 3 tagged the gene and at least one variant mention.
+# Results carry a date, so they are windowed client-side.
+gene_ids = ["1282", "1284"]            # NCBI Gene: COL4A1, COL4A2
+queries = ["@GENE_COL4A1 AND @VARIANT", "@GENE_COL4A2 AND @VARIANT"]
+page_size = 100
+
+# Per-host request rate limits, in requests per second. Anything unlisted
+# defaults to 1/s.
+#
+# EVERY KEY MUST BE QUOTED. TOML reads a bare dotted key as a nested table, so
+# `www.ebi.ac.uk = 2` would parse as {"www": {"ebi": {"ac": {"uk": 2}}}}, the
+# rate limiter would match no host at all, and every host would silently fall
+# back to 1/s -- including the supplement endpoint below, which returns HTTP 500
+# at that rate. tests/test_config.py asserts the exact key set for this reason.
+[rates]
+"www.ebi.ac.uk" = 2
+# Europe PMC builds the supplementary-file zip per request, so this endpoint is
+# far more expensive to serve than the metadata calls on the same host and gets
+# its own much slower bucket. At 2/s it starts returning HTTP 500.
+"europepmc:supplementaryFiles" = 0.25
+"eutils.ncbi.nlm.nih.gov" = 2
+"www.ncbi.nlm.nih.gov" = 2
+"ftp.ncbi.nlm.nih.gov" = 1
+"rest.ensembl.org" = 5
+"gnomad.broadinstitute.org" = 0.15
+
+[paths]
+# Relative paths resolve against the repository root.
+cache_dir = "data/cache"
+snapshot_root = "data/raw"
+curated_dir = "data/curated"
+
+[anthropic]
+# The SDK default is max_retries = 2 with 0.5s initial and 8s maximum backoff,
+# which we were taking silently. Worst case per call is timeout x (retries + 1),
+# so keep the product bounded: 120s x 9 = 18 minutes.
+max_retries = 8
+timeout_s = 120.0
+
+[models]
+# Effort is the only thinking control on these models; budget_tokens is
+# rejected and thinking cannot be disabled. Opus defaults to "medium".
+extract_model = "claude-opus-5-5"
+extract_effort = "high"
+triage_model = "claude-haiku-5-5"
+triage_effort = "low"
+figure_model = "claude-opus-5-5"
+figure_effort = "low"
+
+[prices]
+# USD per million tokens. Token counts in the usage records are the durable
+# fact; these are a convenience for reporting and will go stale, so any spend
+# figure can be recomputed from the counts.
+#
+# Note: docs quoted triage at ~$0.0011/paper for months by applying Haiku 4.5
+# prices ($1/$5) to a Haiku 5.5 model. Measured over 742 decisions the true
+# figure is $0.000103/paper.
+"claude-opus-5-5" = { input = 4.0, output = 20.0, cache_read = 0.20, cache_write = 5.0 }
+"claude-haiku-5-5" = { input = 0.10, output = 0.50, cache_read = 0.005, cache_write = 0.125 }
+
+[figures]
+max_per_paper = 3
+max_tokens = 4000
+
+[supplements]
+# These three change the assembled paper text, therefore its hash, therefore
+# whether a paper is re-extracted. Any change here is recorded in the snapshot
+# manifest so a surprise re-extraction can be traced to its cause.
+max_chars_per_paper = 24000
+max_rows_per_sheet = 200
+keep_all_below_rows = 60
+bundle_deadline_s = 60.0

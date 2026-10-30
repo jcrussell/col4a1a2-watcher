@@ -14,8 +14,8 @@ from dataclasses import dataclass, field as dc_field
 from pathlib import Path
 
 import anthropic
-import yaml
 
+from col4a1.config import ConfigError, Settings, load_settings
 from col4a1.extract.prompt import PaperInput
 from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
 from col4a1.http import PoliteClient
@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[2]
 # Bundle members live outside any snapshot. The endpoint they come from fails or
 # stalls for most requests, so a successful download is valuable and must be
 # reused by every later snapshot rather than re-attempted per run.
-BUNDLE_STORE = REPO / "data" / "cache" / "bundles"
+BUNDLE_STORE = REPO / "data" / "cache" / "bundles"   # default; settings.bundle_store wins
 CLINICAL_DEFAULT = (
     r"variant|mutation|pathogenic|de novo|heterozygous|c\.\d|p\.\(?[A-Z][a-z]{2}\d|Gould|HANAC|porencephal|"
     r"schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|"
@@ -36,21 +36,35 @@ CLINICAL_DEFAULT = (
 )
 
 
-def load_config(path: Path | None = None) -> dict:
-    p = path or (REPO / "config" / "queries.yaml")
-    return yaml.safe_load(p.read_text())
+def load_config(path: Path | None = None) -> Settings:
+    """Back-compatible name; returns Settings now rather than a raw dict."""
+    return load_settings(path)
 
 
-def make_client(cfg: dict) -> PoliteClient:
+def make_client(settings: Settings) -> PoliteClient:
     return PoliteClient(
-        user_agent=cfg["user_agent"],
-        cache_path=REPO / "data" / "cache" / "http.sqlite",
-        rates=cfg.get("rates", {}),
+        user_agent=settings.user_agent,
+        cache_path=settings.http_cache,
+        rates=settings.rates,
     )
 
 
-def snapshot_dir(arg: str | None) -> Path:
-    d = Path(arg) if arg else REPO / "data" / "raw" / dt.date.today().isoformat()
+def make_anthropic(settings: Settings) -> anthropic.Anthropic:
+    """The one place an Anthropic client is constructed.
+
+    The SDK defaults to two retries with 0.5s/8s backoff, which we were taking
+    silently in five separate places. Worst case per call is
+    timeout x (retries + 1), so both come from config and stay bounded.
+    """
+    return anthropic.Anthropic(
+        max_retries=settings.anthropic_max_retries,
+        timeout=settings.anthropic_timeout_s,
+    )
+
+
+def snapshot_dir(arg: str | None, settings: Settings | None = None) -> Path:
+    root = settings.snapshot_root if settings else (REPO / "data" / "raw")
+    d = Path(arg) if arg else root / dt.date.today().isoformat()
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -220,15 +234,15 @@ def _enrich(
 
 
 def cmd_fetch_papers(a: argparse.Namespace) -> int:
-    cfg = load_config()
-    client = make_client(cfg)
-    snap = snapshot_dir(a.snapshot)
-    email = cfg["contact_email"]
+    st: Settings = a.settings
+    client = make_client(st)
+    snap = snapshot_dir(a.snapshot, a.settings)
+    email = st.contact_email
 
     log.info("Europe PMC search %s..%s", a.date_from, a.date_to)
     epmc = europepmc.search(
-        client, cfg["europepmc"]["query"], date_from=a.date_from, date_to=a.date_to,
-        page_size=cfg["europepmc"]["page_size"], max_results=a.max_search,
+        client, st.europepmc_query, date_from=a.date_from, date_to=a.date_to,
+        page_size=st.europepmc_page_size, max_results=a.max_search,
     )
     by_pmid: dict[str, europepmc.PaperMeta] = {}
     for m in epmc:
@@ -238,8 +252,8 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
 
     pubtator_hits: dict[str, dict] = {}
     if not a.skip_pubtator:
-        for q in cfg["pubtator"]["queries"]:
-            res = pubtator.search(client, q, page_size=cfg["pubtator"]["page_size"], max_results=a.max_search)
+        for q in st.pubtator_queries:
+            res = pubtator.search(client, q, page_size=st.pubtator_page_size, max_results=a.max_search)
             for r in res:
                 pmid = str(r.get("pmid") or "")
                 date = (r.get("date") or "")[:10]
@@ -274,9 +288,11 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     # Triage before downloading any full text: PubTator annotations come from the
     # title/abstract export and are cheap; full texts are fetched only for kept papers.
     annots = pubtator.export_biocjson(client, [m.pmid for m in metas if m.pmid]) if not a.skip_pubtator else {}
-    gene_ids = set(cfg["pubtator"].get("gene_ids", []))
+    gene_ids = set(st.pubtator_gene_ids)
     gene_re = re.compile(r"\bCOL4A[12]\b", re.I)
-    clinical_re = re.compile(cfg.get("triage", {}).get("clinical_keywords_regex", CLINICAL_DEFAULT), re.I)
+    # The regex is a classifier, versioned with the code that uses it, and it is
+    # immune to TOML/YAML string-literal hazards here. It is deliberately not config.
+    clinical_re = re.compile(CLINICAL_DEFAULT, re.I)
 
     # The LLM gate runs on title + abstract only, before any full text is fetched.
     # Without a key (or with --no-llm-triage) we fall back to the keyword rule,
@@ -284,8 +300,8 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     use_llm = not a.no_llm_triage and bool(os.environ.get("ANTHROPIC_API_KEY"))
     if not use_llm and not a.no_llm_triage:
         log.warning("ANTHROPIC_API_KEY not set; falling back to keyword triage")
-    tcache = TriageCache(REPO / "data" / "curated" / "triage_decisions.jsonl")
-    acl = anthropic.Anthropic() if use_llm else None
+    tcache = TriageCache(st.triage_decisions)
+    acl = make_anthropic(st) if use_llm else None
 
     triaged: list[tuple[europepmc.PaperMeta, list[dict], dict]] = []
     for m in metas:
@@ -337,11 +353,11 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     want_figures = not a.no_figures and bool(os.environ.get("ANTHROPIC_API_KEY"))
     if not a.no_figures and not want_figures:
         log.warning("ANTHROPIC_API_KEY not set; skipping figure transcription")
-    acl = anthropic.Anthropic() if want_figures else None
+    acl = make_anthropic(st) if want_figures else None
     fig_cache = None
     if want_figures:
         from col4a1.extract.figures import FigureCache
-        fig_cache = FigureCache(REPO / "data" / "curated" / "figure_transcripts.jsonl")
+        fig_cache = FigureCache(st.figure_transcripts)
 
     rows = []
     n_full = 0
@@ -368,7 +384,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             if triage["keep"] and (want_supplements or want_figures):
                 try:
                     enr = _enrich(
-                        client, pt, xml, m.pmcid, BUNDLE_STORE / m.pmcid,
+                        client, pt, xml, m.pmcid, st.bundle_store / m.pmcid,
                         want_supplements=want_supplements, want_figures=want_figures,
                         force_figures=a.figures, acl=acl, fig_cache=fig_cache,
                     )
@@ -412,7 +428,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     manifest = {
         "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "date_from": a.date_from, "date_to": a.date_to, "limit": a.limit, "oa_only": a.oa_only,
-        "europepmc_query": cfg["europepmc"]["query"], "pubtator_queries": cfg["pubtator"]["queries"],
+        "europepmc_query": st.europepmc_query, "pubtator_queries": st.pubtator_queries,
         "papers": n, "full_text": n_full, "abstract_only": n - n_full,
         "triage_keep": sum(1 for r in rows if r["triage"]["keep"]), "triage_keep_before_limit": n_keep_all,
         "candidates_before_limit": len(metas),
@@ -460,12 +476,16 @@ def cmd_extract(a: argparse.Namespace) -> int:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
         return 2
-    snap = snapshot_dir(a.snapshot)
+    st: Settings = a.settings
+    # argparse defaults are None so config can win; the CLI flag still beats it.
+    model = a.model or st.extract_model
+    effort = a.effort or st.extract_effort
+    snap = snapshot_dir(a.snapshot, st)
     _paper_inputs.include_all = a.all
     papers = _paper_inputs(snap)
     if a.limit:
         papers = papers[: a.limit]
-    client = anthropic.Anthropic()
+    client = make_anthropic(st)
     out_path = snap / "extractions.jsonl"
     # Resume on (prompt version, text hash). Keying on the prompt version alone
     # silently skipped papers whose text had grown — e.g. once supplements and
@@ -483,7 +503,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
     if a.count_only:
         total = 0
         for p in papers:
-            n = count_tokens(client, p, model=a.model or DEFAULT_MODEL)
+            n = count_tokens(client, p, model=model)
             total += n
             print(f"{p.pmid}\t{'abstract' if p.abstract_only else 'fulltext'}\t{n} tokens")
         print(f"TOTAL\t{len(papers)} papers\t{total} input tokens\tmean {total // max(1, len(papers))}")
@@ -499,7 +519,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
                 continue
             log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
             try:
-                res = extract_paper(client, p, model=a.model or DEFAULT_MODEL, effort=a.effort)
+                res = extract_paper(client, p, model=model, effort=effort)
             except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
                 # One unusable paper must not abort the batch; record why and move on.
                 log.warning("%s: %s", p.pmid, e)
@@ -557,7 +577,7 @@ def latest_extractions(path: Path) -> list[dict]:
 
 
 def cmd_show(a: argparse.Namespace) -> int:
-    snap = snapshot_dir(a.snapshot)
+    snap = snapshot_dir(a.snapshot, a.settings)
     rows = latest_extractions(snap / "extractions.jsonl")
     if a.pmid:
         rows = [r for r in rows if r["pmid"] == a.pmid]
@@ -588,7 +608,7 @@ def cmd_show(a: argparse.Namespace) -> int:
 # ---------------------------------------------------------------- list
 
 def cmd_list(a: argparse.Namespace) -> int:
-    snap = snapshot_dir(a.snapshot)
+    snap = snapshot_dir(a.snapshot, a.settings)
     for r in read_jsonl(snap / "papers.jsonl"):
         tr = r.get("triage", {})
         flags = "".join(["T" if tr.get("title_abstract_mention") else "-", "C" if tr.get("clinical_keyword") else "-",
@@ -607,9 +627,16 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("httpx", "httpx2", "anthropic"):
         logging.getLogger(name).setLevel(logging.WARNING)
     ap = argparse.ArgumentParser(prog="col4a1", description="COL4A1/COL4A2 literature watcher")
+    # Carried by every subcommand via parents=[common]. Deliberately NOT also on
+    # the top-level parser: two parsers writing one dest means the later write
+    # silently wins. The consequence is that these flags go *after* the
+    # subcommand -- `col4a1 extract --config X`, not `col4a1 --config X extract`.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--config", help="path to col4a1.toml (default config/col4a1.toml)")
+    common.add_argument("--cache-dir", help="override the cache directory from config")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    f = sub.add_parser("fetch-papers", help="search Europe PMC + PubTator and fetch texts into a snapshot")
+    f = sub.add_parser("fetch-papers", parents=[common], help="search Europe PMC + PubTator and fetch texts into a snapshot")
     f.add_argument("--snapshot", help="snapshot directory (default data/raw/<today>)")
     f.add_argument("--date-from", help="YYYY-MM-DD")
     f.add_argument("--date-to", help="YYYY-MM-DD")
@@ -628,25 +655,31 @@ def main(argv: list[str] | None = None) -> int:
                    help="use the keyword triage rule instead of the Haiku gate (offline / no API key)")
     f.set_defaults(func=cmd_fetch_papers)
 
-    e = sub.add_parser("extract", help="run Claude extraction over a snapshot's papers (synchronous)")
+    e = sub.add_parser("extract", parents=[common], help="run Claude extraction over a snapshot's papers (synchronous)")
     e.add_argument("--snapshot")
     e.add_argument("--limit", type=int)
-    e.add_argument("--model")
-    e.add_argument("--effort", default="high")
+    e.add_argument("--model", default=None, help="default from config")
+    e.add_argument("--effort", default=None,
+                   help="low|medium|high|xhigh|max (default from config)")
     e.add_argument("--count-only", action="store_true", help="only count input tokens per paper")
     e.add_argument("--all", action="store_true", help="include papers the triage step rejected")
     e.set_defaults(func=cmd_extract)
 
-    l = sub.add_parser("list", help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
+    l = sub.add_parser("list", parents=[common], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
     l.add_argument("--snapshot")
     l.set_defaults(func=cmd_list)
 
-    s = sub.add_parser("show", help="print extractions in a snapshot")
+    s = sub.add_parser("show", parents=[common], help="print extractions in a snapshot")
     s.add_argument("--snapshot")
     s.add_argument("--pmid")
     s.set_defaults(func=cmd_show)
 
     a = ap.parse_args(argv)
+    try:
+        a.settings = load_settings(a.config, cache_dir=a.cache_dir)
+    except ConfigError as e:
+        print(f"config error: {e}", file=sys.stderr)
+        return 2
     return a.func(a)
 
 
