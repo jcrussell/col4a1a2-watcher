@@ -416,11 +416,11 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
             has_pmcid=bool(m.pmcid), found_by={m.source}, citation=citation(m),
             dropped_at="limit" if cut else "", snapshot=snap.name,
-            rank=rank, limit_at=a.limit,
         )
-        ledger.record(identity=(m.pmid or ""), stage="triaged",
-                      triage={k: tr.get(k) for k in ("keep", "llm_keep", "llm_reason",
-                                                     "pubtator_gene_linked_variant")}) if m.pmid else None
+        if m.pmid:
+            ledger.record_triage(m.pmid, {k: tr.get(k) for k in
+                                          ("keep", "llm_keep", "llm_reason",
+                                           "pubtator_gene_linked_variant")})
     n_triaged = len(triaged)
     if a.limit:
         triaged = triaged[: a.limit]
@@ -501,7 +501,8 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             "pubtator_hints": hints, "triage": triage,
         })
     for r in rows:
-        if r["pmid"]:
+        prev = ledger._state.get(r["pmid"] or "") or {}
+        if r["pmid"] and prev.get("text_sha256") != r["text_sha256"]:
             ledger.record(identity=r["pmid"], stage="fetched", snapshot=snap.name,
                           text_sha256=r["text_sha256"], n_chars=r["n_chars"],
                           abstract_only=r["abstract_only"],

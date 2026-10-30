@@ -74,6 +74,7 @@ class Ledger:
     path: Path
     rows: list[dict] = field(default_factory=list)
     appended: int = 0
+    skipped_unchanged: int = 0
 
     def __post_init__(self) -> None:
         if self.path.exists():
@@ -86,6 +87,11 @@ class Ledger:
                     # A tracked file can be hand-edited or merge-resolved badly.
                     # One bad line must not break every command that reads it.
                     log.warning("ledger: skipping malformed line in %s", self.path)
+        # Folded once at load so writers can skip rows that would change
+        # nothing. Without it every fetch re-appends a row per candidate and the
+        # tracked file grows by about 3,400 rows a run; it reached 11 MB over a
+        # handful of runs before this existed.
+        self._state = self.fold()
 
     # ---------------------------------------------------------------- writing
 
@@ -104,14 +110,33 @@ class Ledger:
         with self.path.open("a", encoding="utf-8") as f:
             f.write(jsonl.dumps(row) + "\n")
         self.rows.append(row)
+        cur = self._state.setdefault(row["identity"], {})
+        stage_old = cur.get("stage")
+        cur.update({k: v for k, v in row.items() if k != "stage"})
+        if row.get("stage") and _STAGE_RANK.get(row["stage"], -1) >= _STAGE_RANK.get(stage_old or "", -1):
+            cur["stage"] = row["stage"]
+        elif stage_old:
+            cur["stage"] = stage_old
         self.appended += 1
         return row
 
     def record_candidate(self, *, pmid, doi, title, journal, first_pub_date,
                          is_open_access, has_pmcid, found_by, dropped_at="",
-                         snapshot=None, rank=None, limit_at=None, citation=None) -> dict:
+                         snapshot=None, citation=None) -> dict:
         identity, kind = identify(pmid, doi, title)
         if not identity:
+            return {}
+        # Nothing new to say about this candidate: skip rather than append. The
+        # fold is unchanged either way, and the file stays a log of changes
+        # rather than of runs.
+        prev = self._state.get(identity)
+        if prev is not None and all(
+            prev.get(k) == v for k, v in (
+                ("dropped_at", dropped_at),
+                ("is_open_access", bool(is_open_access)), ("has_pmcid", bool(has_pmcid)),
+            )
+        ):
+            self.skipped_unchanged += 1
             return {}
         return self.record(
             identity=identity, identity_kind=kind, pmid=pmid, doi=doi,
@@ -120,8 +145,21 @@ class Ledger:
             is_open_access=bool(is_open_access), has_pmcid=bool(has_pmcid),
             found_by=sorted(found_by) if found_by else None,
             dropped_at=dropped_at, stage="candidate" if not dropped_at else "candidate",
-            snapshot=snapshot, rank=rank, limit_at=limit_at,
+            snapshot=snapshot,
         )
+
+    def record_triage(self, identity: str, triage: dict) -> dict:
+        """Record a triage verdict, unless it is the verdict already recorded.
+
+        Unguarded, this appended one row per candidate per run -- 744 of them --
+        whatever the decision cache said.
+        """
+        prev = self._state.get(identity) or {}
+        if prev.get("triage") == triage and prev.get("stage") in ("triaged", "fetched",
+                                                                  "extracted", "challenged"):
+            self.skipped_unchanged += 1
+            return {}
+        return self.record(identity=identity, stage="triaged", triage=triage)
 
     # ---------------------------------------------------------------- reading
 
@@ -176,11 +214,15 @@ class Ledger:
         paper that fails deterministically must stop being first in the queue
         forever, so attempts are counted.
         """
-        r = self.fold().get(identity)
+        r = self._state.get(identity)
         if r is None:
             return True
         if (r.get("attempts") or 0) >= max_attempts:
             return False
-        return not (r.get("text_sha256") == text_sha256
+        # The stage matters as well as the hash: a row recording only that the
+        # paper was *fetched* at this text hash is not an extraction, and
+        # treating it as one would skip the paper forever.
+        return not (r.get("stage") == "extracted"
+                    and r.get("text_sha256") == text_sha256
                     and r.get("prompt_version") == prompt_version
                     and not r.get("last_error"))

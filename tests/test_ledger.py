@@ -103,3 +103,58 @@ def test_summary_counts_sum_to_the_identity_total(tmp_path):
     s = led.summary()
     assert sum(s["by_disposition"].values()) == s["identities"] == 5
     assert sum(s["by_stage"].values()) == s["identities"]
+
+
+def test_an_unchanged_candidate_is_not_re_appended(tmp_path):
+    """Every fetch run would otherwise append a row per candidate whether or not
+    anything changed. The tracked file reached 11 MB over a handful of runs
+    before this guard existed."""
+    path = tmp_path / "l.jsonl"
+    kw = dict(pmid="1", doi=None, title="T", journal="J", first_pub_date="2020-01-01",
+              is_open_access=True, has_pmcid=True, found_by={"europepmc"}, dropped_at="")
+    first = Ledger(path)
+    first.record_candidate(**kw)
+    assert first.appended == 1
+
+    second = Ledger(path)
+    second.record_candidate(**kw)
+    assert second.appended == 0 and second.skipped_unchanged == 1
+
+    # A real change still lands.
+    third = Ledger(path)
+    third.record_candidate(**{**kw, "dropped_at": "limit"})
+    assert third.appended == 1
+    assert Ledger(path).fold()["1"]["dropped_at"] == "limit"
+
+
+def test_in_memory_state_tracks_appends_within_one_run(tmp_path):
+    led = Ledger(tmp_path / "l.jsonl")
+    led.record(identity="1", stage="fetched", text_sha256="aaa", prompt_version="v2")
+    assert led.needs_extraction("1", "aaa", "v2") is True, "fetched is not extracted"
+    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v2", attempts=0)
+    assert led.needs_extraction("1", "aaa", "v2") is False
+
+
+def test_a_repeated_triage_verdict_is_not_re_appended(tmp_path):
+    """Unguarded this wrote one row per candidate per run -- 744 of them --
+    regardless of what the decision cache said."""
+    path = tmp_path / "l.jsonl"
+    tr = {"keep": True, "llm_keep": True, "llm_reason": "case report"}
+    first = Ledger(path)
+    first.record_triage("1", tr)
+    assert first.appended == 1
+    second = Ledger(path)
+    second.record_triage("1", tr)
+    assert second.appended == 0 and second.skipped_unchanged == 1
+    third = Ledger(path)
+    third.record_triage("1", {**tr, "keep": False})
+    assert third.appended == 1
+
+
+def test_run_scoped_fields_are_not_ledger_state(tmp_path):
+    """rank and limit_at describe a run, not a paper. Keeping them here meant
+    every candidate row was rewritten whenever --limit changed."""
+    import inspect
+
+    sig = inspect.signature(Ledger.record_candidate)
+    assert "rank" not in sig.parameters and "limit_at" not in sig.parameters

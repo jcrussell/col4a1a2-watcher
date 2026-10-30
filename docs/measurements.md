@@ -147,7 +147,11 @@ What was invisible before it existed, now recorded per candidate:
 | Dropped by the open-access filter | 2,108 |
 | Europe PMC hits carrying no PMID | 141 |
 
-2,991 identities over 3,978 events, about 2 MB tracked.
+3,396 identities over 3,396 events, 2.4 MB tracked, after two fixes: a run no
+longer re-appends a row whose state is unchanged, and `rank`/`limit_at` were
+removed because they describe a run rather than a paper, so every candidate row
+was being rewritten whenever `--limit` changed. Before both, the file reached
+11 MB over a handful of runs; a repeat run now appends zero events.
 
 ## Adversarial review, first run (2026-10-30)
 
@@ -171,3 +175,39 @@ deterministic magnitude check catches that one more decisively. And most of the
 should not be records at all, which the reviewer itself said in its notes, so
 `missed_variants` needs a relevance filter before the count can be read as
 recall.
+
+## Adversarial review over the corpus (2026-10-30)
+
+42 papers, 144 records, $3.11 in total.
+
+| | |
+|---|---|
+| Upheld | 109 |
+| Disputed, with a grounded refuting quote | 2 |
+| Unverifiable | 33 |
+| **Fabricated** (dispute attempted, quote not in the text) | **0** |
+| Incomplete verdict lists | 0 |
+| Grounded missed-variant reports | 115 |
+| Invented missed-variant reports | 0 |
+
+Two things this establishes and one it demolishes.
+
+The reviewer does not invent. Across every dispute attempt the refuting quote
+grounded, and not one of the 115 missed-variant strings failed to appear in the
+paper. It also never returned a short verdict list for a long record set.
+
+It finds real problems nothing else does. On the figure-transcribed cohort it
+spotted a variant listed under an exon out of order, implying a transcription
+misread, and noticed that the text names nine distinct COL4A2 variants where
+only eight were transcribed.
+
+**But `missed_variants` is nearly worthless as a recall signal as it stands.**
+All 115 ground, and almost none should be records: they are common association
+SNPs, mouse alleles, positive controls in assays, and variants cited from other
+papers. The reviewer said so itself, accurately, in its per-paper notes — which
+are the valuable output, not the count. Read naively the number looks like a
+catastrophic recall failure and is instead an artefact of asking for every
+variant designation in the text. A relevance filter is required before this can
+be called recall.
+
+Cost per paper came out at $0.07, against $0.11 estimated.
