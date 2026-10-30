@@ -22,3 +22,13 @@ def test_rate_limiter_spaces_requests_per_host():
     rl.acquire("b.example")
     assert abs(slept[0] - 1.0) < 1e-9
     assert rl.interval("unknown.example") == 1.0
+
+
+def test_cache_sets_incremental_vacuum_and_a_busy_timeout(tmp_path):
+    """DELETE alone never shrinks the file, and enabling incremental vacuum
+    requires a VACUUM that is cheap now and painful at gigabytes."""
+    from col4a1.http import HttpCache
+
+    c = HttpCache(tmp_path / "http.sqlite")
+    assert c._db.execute("PRAGMA auto_vacuum").fetchone()[0] == 2  # 2 = INCREMENTAL
+    assert c._db.execute("PRAGMA busy_timeout").fetchone()[0] == 30000

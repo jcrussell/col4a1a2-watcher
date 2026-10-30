@@ -242,6 +242,10 @@ def write_members(bundle: Bundle, dest: Path) -> list[Path]:
     """
     written: list[Path] = []
     dest.mkdir(parents=True, exist_ok=True)
+    # The marker is written last and removed first, so an interruption leaves
+    # members-without-marker (harmless, re-fetched) rather than
+    # marker-without-members (reports success, silently empty).
+    (dest / MARKER).unlink(missing_ok=True)
     for m in bundle.members:
         if m.data is None or m.skip_reason:
             continue
@@ -266,11 +270,18 @@ def load_cached(dest: Path) -> Bundle | None:
         summary = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    # A marker beside no members would otherwise report a successful bundle with
+    # nothing in it: `Bundle.ok` reads only the status, so `_enrich` would
+    # proceed, rewrite the marker, and record the paper as having had its
+    # supplements and figures read. That can happen today if a write is
+    # interrupted part-way, so treat it as absent and re-fetch.
+    files = [p for p in dest.iterdir() if p.is_file() and p.name != MARKER]
+    if not files:
+        log.warning("%s: bundle marker with no members; ignoring and re-fetching", dest.name)
+        return None
     b = Bundle(pmcid=dest.name, status=int(summary.get("status") or 200),
                n_bytes=int(summary.get("bytes") or 0))
-    for p in sorted(dest.iterdir()):
-        if p.name == MARKER or not p.is_file():
-            continue
+    for p in sorted(files):
         ext = p.suffix.lstrip(".").lower()
         b.members.append(BundleMember(name=p.name, stem=p.stem, ext=ext,
                                       size=p.stat().st_size, data=p.read_bytes()))

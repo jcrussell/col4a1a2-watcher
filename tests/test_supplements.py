@@ -230,3 +230,26 @@ def test_enrich_reports_an_unsupported_supplement_without_raising(tmp_path):
                     want_supplements=True, want_figures=False, force_figures=False)
     assert e.supplements == []
     assert "unsupported" in e.supplement_meta[0]["skip_reason"]
+
+
+def test_marker_without_members_is_not_a_successful_bundle(tmp_path):
+    """A marker beside no members used to report success with zero members:
+    Bundle.ok reads only the status, so enrichment would proceed and record the
+    paper as having had its supplements read. Reachable today by interrupting a
+    write, not only by eviction."""
+    dest = tmp_path / "PMC1"
+    dest.mkdir()
+    (dest / sup.MARKER).write_text('{"status": 200, "bytes": 1, "members": 3, "skip_reason": ""}')
+    assert sup.load_cached(dest) is None
+
+
+def test_members_are_written_before_the_marker(tmp_path):
+    """So an interruption leaves members-without-marker, which is re-fetched,
+    rather than marker-without-members, which looks like success."""
+    dest = tmp_path / "PMC1"
+    b = sup.fetch_bundle(FakeClient(_zip({"a.csv": b"1"})), "PMC1")
+    sup.write_members(b, dest)
+    marker = dest / sup.MARKER
+    member = dest / "a.csv"
+    assert marker.stat().st_mtime_ns >= member.stat().st_mtime_ns
+    assert sup.load_cached(dest) is not None

@@ -83,6 +83,16 @@ class HttpCache:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path)
+        # Two commands can run at once -- a challenge alongside a fetch -- and
+        # without a busy timeout the second raises "database is locked" and
+        # aborts a paid run.
+        self._db.execute("PRAGMA busy_timeout = 30000")
+        # DELETE only moves pages to a freelist, so the file never shrinks.
+        # Enabling incremental vacuum needs one VACUUM to take effect, which is
+        # cheap at tens of megabytes and unpleasant at gigabytes, so do it now.
+        if self._db.execute("PRAGMA auto_vacuum").fetchone()[0] == 0:
+            self._db.execute("PRAGMA auto_vacuum = INCREMENTAL")
+            self._db.execute("VACUUM")
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS responses ("
             "key TEXT PRIMARY KEY, url TEXT, status INTEGER, headers TEXT, "
