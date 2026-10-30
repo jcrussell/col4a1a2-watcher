@@ -30,6 +30,12 @@ triage:
 # Per-host request rate limits (requests per second). Everything else defaults to 1/s.
 rates:
   www.ebi.ac.uk: 2
+  # Europe PMC zips supplementary files on demand, so this endpoint is much more
+  # expensive to serve than the metadata calls on the same host and gets its own
+  # much slower bucket. At 2/s it starts returning HTTP 500.
+  # 2/s provoked HTTP 500 from this endpoint; 0.25/s (one per four seconds) is
+  # still twenty times slower than the rest of the host and has held up.
+  "europepmc:supplementaryFiles": 0.25
   eutils.ncbi.nlm.nih.gov: 2
   www.ncbi.nlm.nih.gov: 2
   ftp.ncbi.nlm.nih.gov: 1

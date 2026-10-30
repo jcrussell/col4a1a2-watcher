@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from col4a1.sources.fulltext import TextRegion
 from pathlib import Path
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 
 
@@ -23,6 +25,9 @@ class PaperInput:
     pubtator_hints: list[dict] = field(default_factory=list)
     journal: str | None = None
     pub_date: str | None = None
+    # Labelled spans of `text`, used by grounding to attribute each quote to
+    # author body text, a parsed supplement, or a model figure transcription.
+    regions: list[TextRegion] = field(default_factory=list)
 
 
 def user_content(p: PaperInput) -> str:

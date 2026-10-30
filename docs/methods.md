@@ -42,9 +42,29 @@ Output is a single structured record per paper. The schema is flat by necessity:
 
 Precision is preferred over recall at this stage. The prompt tells the model to record absence of information as absence rather than inferring it, and the three-state phenotype fields exist so that "examined and normal" is never collapsed into "not mentioned".
 
+## Supplementary files and figures
+
+Variant data often is not in the article body. One 44-patient cohort reporting 39 variants had none of them in its text: they were in a figure and in supplementary tables. Reading only the body loses papers like that entirely.
+
+One request per paper to Europe PMC's `supplementaryFiles` endpoint returns a ZIP holding both the supplementary files and the figure image renditions, so no publisher site is ever contacted. That endpoint builds its ZIP on demand, which makes it far more expensive to serve than a metadata call; at the host's normal rate it starts returning errors, so it has its own bucket at one request every ten seconds. Downloads are streamed under a byte cap and a total wall-clock deadline, because at least one bundle sends a few megabytes and then stalls forever, which a per-read timeout cannot catch.
+
+The ZIP is untrusted third-party data whose member names would otherwise be written straight to disk, so each member is checked for path escape and size before it is read.
+
+Members are stored outside any snapshot, keyed by PMCID, and reused by every later run. That matters more than it sounds: measured over 100 papers, only 19 bundle requests succeeded, the rest timing out or stalling. A per-snapshot store would throw away each success and re-attempt every paper from scratch.
+
+**Supplements are parsed deterministically**: spreadsheets, Word documents, delimited files and PDFs all render into the same `[TABLE]` plus pipe-joined-rows format the article body uses, so they look identical to the model. A PDF yielding almost no text is probably scanned; that is recorded, never guessed at, and no OCR is attempted.
+
+Row filtering keeps this affordable. One measured supplement held 1,512 cell strings across 11 sheets covering 859 genes, of which two mentioned COL4A1 or COL4A2. Appending it whole would have spent some 3,600 input tokens to convey two useful rows. So the first few rows of every sheet are kept unconditionally, because multi-row headers are the norm, then only rows naming our genes or something variant-shaped; small sheets pass through whole, since that is cheaper than risking the filter dropping the answer. Filtering is never silent: the rendered text says how many rows were kept of how many, and the counts are recorded per sheet. A quietly truncated cohort table would make the model confidently undercount, which is a correctness failure rather than a cost one.
+
+**Figures are transcribed to text before extraction, never passed as images to it.** Grounding matches quotes against the exact string sent to the model, and an image has no string, so a fact read straight from one could never be verified. Transcribing first keeps grounding intact and leaves the transcription on disk as an auditable artefact. The transcription itself is a structured record rather than prose, for two reasons: a probe showed the model willing to *infer* which panel of a schematic belonged to which gene, which would silently misassign every variant in it, and the rendered text is what quotes are matched against, so it must not vary with the model's prose style. The figure's own caption is supplied alongside the image so the model need not guess.
+
+Vision is gated twice. Per paper: a paper whose text already names variants gains nothing from its figures and should not have model-transcribed evidence injected into it, so transcription runs only where the text names no variant while the paper claims a cohort. Per figure within those papers: figures cited from a paragraph that discusses variants are preferred. Caption keywords alone over-select badly, because imaging captions routinely say "in a patient with a COL4A1 variant" and some publishers emit no caption title at all. On the committed fixtures these two gates together select exactly one figure from the cohort paper and none from the case report.
+
 ## Grounding
 
 Every variant record carries two to five verbatim quotes. `extract/verify.py` normalises whitespace, dashes and quote marks, then string-matches each quote against the source text. Any unmatched quote, and any low-confidence variant, puts the record on the spot-check queue. This is the main defence against fabricated detail, and it is not relaxed into fuzzy matching.
+
+Grounding also records **which region** of the input each quote matched: author text, a parsed supplement, or a figure transcription. Provenance is therefore computed from the match rather than declared by the model, which is the only version of it worth auditing. The distinction matters because the guarantees differ. A quote matching a parsed supplement is as verifiable as one matching a body table, since the parse is deterministic. A quote matching a figure transcription proves only fidelity to the transcription, so those records are flagged, are not given high confidence, and go to the front of the spot-check queue. Each region is normalised separately, which makes matching marginally stricter at the seams: a quote spanning two regions no longer grounds, which is correct, since it is verbatim in neither source.
 
 ## Deduplication
 

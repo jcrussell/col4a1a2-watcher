@@ -10,7 +10,7 @@ Instructions for anyone, human or agent, working in this repository.
 
 ## Hard constraints
 
-1. **Machine-readable sources only.** Nothing on the critical path may require a human to transcribe a PDF or retype a table. Human effort is reserved for spot-checking extractions. If a data source only exists as a PDF or a web form, it does not go in the pipeline.
+1. **Everything we produce is structured data.** Intermediate and published artefacts are JSON Lines, TSV or typed records, never prose or Markdown that something downstream has to re-parse. A stage that emits a pile of Markdown for the next stage to read is wrong, however convenient. (This rule is about *our* outputs. Input formats are not restricted: spreadsheets, Word documents, PDFs and figure images are all fair game, and we parse them. What stays off the critical path is a *human* retyping any of it; human effort is reserved for spot-checking.)
 2. **Never pull fast.** Every request to a non-Anthropic host goes through `src/col4a1/http.py`, which enforces per-host rate limits, issues requests serially, backs off on 429 and 5xx, caches to disk, and sends a User-Agent naming the project and a contact address. Do not add a second HTTP client, and do not call `httpx` or `requests` directly from a source module.
 3. **Respect upstream licences and terms.** See `docs/sources.md`. In particular: full texts are stored locally and never redistributed; AlphaGenome and AlphaMissense are out of scope, because their terms forbid training other models on their output and we would gain little.
 4. **No clinical claims.** Every output says, in its own text, that it is machine-extracted, spot-checked at a stated rate, for research use, and not clinical advice.
@@ -22,6 +22,8 @@ Instructions for anyone, human or agent, working in this repository.
 - **Snapshots are immutable and dated.** `data/raw/<YYYY-MM-DD>/` holds what a fetch found, with a `manifest.json` recording the queries, the window, counts and request totals. `build` must be offline, deterministic, and derived from one snapshot.
 - **Tests run offline.** Every test works with no network and no API key, against fixtures. Keep it that way; measurement scripts that need the network live in `tools/` and are never invoked by the test suite.
 - **Quotes are grounded, not trusted.** Every extracted fact carries a verbatim quote that `extract/verify.py` string-matches against the source. An unmatched quote flags the record for human review. Do not relax this into fuzzy matching.
+- **Provenance is computed, never self-reported.** Grounding records *which region* of the input a quote matched, so a fact from a parsed supplementary table can be told apart from one read out of a figure image by a model. Never add a schema field asking the model where it got something: a model-declared source is worthless as an audit signal, and the schema is at its grammar budget anyway.
+- **Figures are transcribed before extraction, never passed as images to it.** An image has no string for grounding to match, so a fact read straight from one could never be verified. `extract/figures.py` turns a figure into text first, clearly labelled as machine-generated.
 - **Claude's own spend is explicit.** Triage uses Haiku on title and abstract only; extraction uses Opus on full text. Decisions and extractions are both cached so that re-running costs nothing. Before adding a model call to a loop, work out what it costs over the full corpus and say so.
 
 ## Decisions already made, with reasons

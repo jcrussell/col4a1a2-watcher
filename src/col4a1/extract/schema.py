@@ -88,7 +88,7 @@ class PaperExtraction(BaseModel):
     input_was_abstract_only: bool = Field(description="True if only the title and abstract were available")
     has_variant_level_data: bool = Field(description="True if the paper reports specific COL4A1/COL4A2 variants in specific individuals")
     variants: list[VariantEvidence] = Field(default_factory=list)
-    extraction_notes: str = Field(default="", description="Anything the reviewer should know: tables not parsed, supplementary data referenced, numbering issues")
+    extraction_notes: str = Field(default="", description="Anything the reviewer should know: data referred to but not provided, supplementary rows filtered out, an illegible figure transcription, numbering issues")
 
 
 def json_schema() -> dict:

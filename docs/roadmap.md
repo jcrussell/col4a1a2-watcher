@@ -30,7 +30,7 @@ Milestone 1 is complete except for the human spot-check.
 
 ## Known gaps
 
-- **Supplementary files are not read.** This is currently the largest loss. In the first window the single richest paper, a 44-patient cohort, passed triage, was read in full, and yielded nothing, because every variant sits in supplementary tables. Fixing this is worth more than any further triage tuning.
+- **Supplementary files and figures are now read**, which closes what was the largest loss. Spreadsheets, Word documents, delimited files and PDFs are parsed deterministically; figures are transcribed by a vision model, but only for papers whose text does not already name its variants. What remains out of reach: supplements that the article's publisher hosts and PMC does not, scanned PDFs (detected and recorded, never guessed at), and TIFF figures, which the vision API does not accept.
 - **Deduplication is designed but not built.** See `docs/methods.md`.
 - Non-open-access papers yield title and abstract only.
 - Reviews contribute pointers, never counts, by design.

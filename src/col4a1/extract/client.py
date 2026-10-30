@@ -15,7 +15,11 @@ log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
-MAX_TOKENS = 16000
+# A variant-dense cohort paper can need far more than the original 16k: 39
+# variants at a few hundred output tokens each straddles that cap, and the cap
+# raises ExtractionTruncated rather than degrading. Large max_tokens needs
+# streaming to avoid request timeouts, so extract_paper streams.
+MAX_TOKENS = 64000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
@@ -55,7 +59,7 @@ def count_tokens(client: anthropic.Anthropic, p: PaperInput, model: str = DEFAUL
 
 
 def _beta_parse_supports_fallbacks(client: anthropic.Anthropic) -> bool:
-    params = inspect.signature(client.beta.messages.parse).parameters
+    params = inspect.signature(client.beta.messages.stream).parameters
     return "fallbacks" in params and "betas" in params
 
 
@@ -79,10 +83,15 @@ def extract_paper(
         output_format=PaperExtraction,
         output_config={"effort": effort},
     )
+    # Streaming is mandatory at this max_tokens: the SDK refuses a non-streaming
+    # request that could exceed its ten-minute ceiling. get_final_message()
+    # returns the same parsed object the non-streaming helper would.
     if _beta_parse_supports_fallbacks(client):
-        resp = client.beta.messages.parse(betas=[FALLBACK_BETA], fallbacks="default", **kwargs)
+        with client.beta.messages.stream(betas=[FALLBACK_BETA], fallbacks="default", **kwargs) as st:
+            resp = st.get_final_message()
     else:
-        resp = client.messages.parse(**kwargs)
+        with client.messages.stream(**kwargs) as st:
+            resp = st.get_final_message()
 
     stop = getattr(resp, "stop_reason", None)
     if stop == "refusal":

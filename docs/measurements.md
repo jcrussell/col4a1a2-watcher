@@ -80,3 +80,34 @@ Separately, a variant-string search over full text returns a small candidate set
 ## Text shape, relevant to the output format
 
 No extracted quote or free-text field in the 2026-10-29 records contained a tab or a newline; about half contained a comma. Longest quote was 316 characters. Hence tab-separated output, with the writer still rejecting tabs and newlines rather than assuming.
+
+## Supplements and figures, 100-paper batch (2026-10-30)
+
+A historical window back to 2015, open access only, triaged then capped at 100 papers.
+
+| | |
+|---|---|
+| Candidates triaged | 742 |
+| Kept by the gate | 124 |
+| Papers taken (cap) | 100 |
+| Extracted without failure | 100 |
+| Papers yielding variant records | 71 |
+| Variant records | 177 |
+| Quotes matching their source | 524 of 525 |
+| Records flagged for review | 10 |
+| Extraction cost | $9.30, about $0.09 per paper |
+
+Quote provenance, computed from where each quote matched: 472 author body, 11 abstract, 39 figure transcription, 1 parsed supplement. Every one of the 39 figure-sourced records was flagged, and none claimed high confidence.
+
+The supplement and figure stages added **39 variant records that the body text alone did not contain**, taking the batch from 138 to 177. Thirty-eight of those come from one paper, the 44-patient cohort that previously produced nothing: it went from 0 records to 38, each marked as transcribed from a figure. Its figure transcription correctly declined to say which panel was COL4A1 and which was COL4A2, since the figure does not label them; an earlier free-prose probe of the same image had guessed. Gene assignment for those records therefore comes from the body text and remains the weakest part of them.
+
+Cost of the enrichment itself was negligible: the figure gate fired on 8 of 100 papers, producing 9 transcriptions for well under a dollar, and supplements added about 43,000 characters across the batch against 2.9 million overall.
+
+### What limits it
+
+The Europe PMC bundle endpoint is the bottleneck, not the parsing or the vision. It builds its ZIP per request and, measured over these runs, **succeeded for roughly one request in five**; the rest timed out or stalled mid-transfer. Consequences, all handled rather than worked around:
+
+- Bundles are stored outside any snapshot and reused by every later run, so each run accumulates successes instead of re-attempting from scratch. The store grew from 19 to 29 bundles across two passes of the same 100 papers.
+- The endpoint has its own rate bucket at 0.25/s. At the host's normal 2/s it returns HTTP 500.
+- Downloads stream under a byte cap and a total wall-clock deadline, and get exactly one attempt. A per-read timeout does not catch a server that dribbles bytes, and retrying an optional enrichment let a handful of bad papers dominate the wall clock of a whole run.
+- The same cohort paper yielded 38 records on a run where its bundle arrived and 0 on a run where it timed out. Nothing about the parsing changed; only the download did.

@@ -121,6 +121,14 @@ class HttpCache:
         self._db.commit()
 
 
+class ResponseTooLarge(RuntimeError):
+    """A streamed body exceeded the caller's byte cap."""
+
+
+class DownloadTimeout(RuntimeError):
+    """A streamed body was still arriving past the caller's total deadline."""
+
+
 class TooManyFailures(RuntimeError):
     pass
 
@@ -212,3 +220,78 @@ class PoliteClient:
 
     def post(self, url: str, data: bytes, **kw) -> Response:
         return self.request("POST", url, data=data, **kw)
+
+    def download(
+        self,
+        url: str,
+        *,
+        max_bytes: int,
+        deadline_s: float = 120.0,
+        params: Mapping[str, str] | None = None,
+        rate_key: str | None = None,
+        read_timeout: float | None = None,
+        max_attempts: int | None = None,
+    ) -> Response:
+        """Stream a large binary body, bounded by size and by wall clock.
+
+        `request()` buffers the whole response, and its httpx timeout applies to
+        each individual read rather than the transfer as a whole, so a server
+        that dribbles bytes holds the connection open indefinitely. One Europe
+        PMC supplement bundle does exactly that: it sends about 3 MB and then
+        never finishes. A per-read timeout cannot catch that; a total deadline
+        can, and streaming also lets an oversized body be abandoned rather than
+        read into memory and then discarded.
+
+        `rate_key` rate-limits this call under its own bucket instead of the
+        hostname's. Some endpoints do real work per request -- Europe PMC builds
+        the supplement zip on demand -- and deserve a far slower rate than the
+        rest of the host.
+
+        Raises `TooManyFailures` after `max_attempts` network errors or retryable
+        statuses, `ResponseTooLarge` past `max_bytes`, and `DownloadTimeout` past
+        `deadline_s`. Never cached: these bodies are large and the caller stores
+        what it keeps.
+        """
+        req = self._http.build_request("GET", url, params=params)
+        full_url = str(req.url)
+        bucket = rate_key or (urlsplit(full_url).hostname or "")
+        timeout = httpx.Timeout(read_timeout) if read_timeout else httpx.USE_CLIENT_DEFAULT
+        attempts = max_attempts or self.max_attempts
+        failures = 0
+        while True:
+            self.limiter.acquire(bucket)
+            self.network_requests += 1
+            started = time.time()
+            chunks: list[bytes] = []
+            total = 0
+            try:
+                with self._http.stream("GET", full_url, timeout=timeout) as r:
+                    if r.status_code in RETRYABLE:
+                        retry_after = r.headers.get("Retry-After")
+                        r.close()
+                        failures += 1
+                        log.warning("GET %s -> %d (attempt %d)", full_url, r.status_code, failures)
+                        if failures >= attempts:
+                            raise TooManyFailures(f"GET {full_url}: HTTP {r.status_code}")
+                        self.limiter._sleep(self._backoff(failures, retry_after))
+                        continue
+                    if r.status_code >= 400:
+                        r.close()
+                        return Response(full_url, r.status_code, dict(r.headers), b"", False, time.time())
+                    for chunk in r.iter_bytes():
+                        chunks.append(chunk)
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise ResponseTooLarge(f"GET {full_url}: over {max_bytes} bytes")
+                        if time.time() - started > deadline_s:
+                            raise DownloadTimeout(
+                                f"GET {full_url}: still receiving after {deadline_s:.0f}s ({total} bytes)")
+                    status, headers = r.status_code, dict(r.headers)
+            except httpx.HTTPError as e:
+                failures += 1
+                log.warning("GET %s: %s (attempt %d)", full_url, e, failures)
+                if failures >= attempts:
+                    raise TooManyFailures(f"GET {full_url}: {e}") from e
+                self.limiter._sleep(self._backoff(failures, None))
+                continue
+            return Response(full_url, status, headers, b"".join(chunks), False, time.time())

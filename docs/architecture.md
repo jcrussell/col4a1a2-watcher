@@ -32,7 +32,7 @@ Rejected candidates are still recorded in the snapshot, with the reason, so a tr
 
 ## Stages
 
-**`fetch-papers`** searches Europe PMC and PubTator 3 for a date window, takes the union of PMIDs, triages the candidates, and downloads open-access full text only for the ones that survive. It writes `papers.jsonl`, the raw JATS XML per paper, and a `manifest.json` recording the queries, window, counts, request totals and rate-limiter sleep.
+**`fetch-papers`** searches Europe PMC and PubTator 3 for a date window, takes the union of PMIDs, triages the candidates, and downloads open-access full text only for the ones that survive. For those it also fetches the article's file bundle, parses any supplementary tables, and transcribes figures where the text looks to be missing its variants. It writes `papers.jsonl`, the raw JATS XML and bundle members per paper, and a `manifest.json` recording the queries, window, counts, request totals, rate-limiter sleep and what the supplement and figure stages cost.
 
 **`extract`** sends each kept paper to Claude and stores one structured record per paper in `extractions.jsonl`, together with the model, prompt version, schema version, token usage and a quote-grounding report. Papers already extracted at the current prompt version are skipped, so the command is safe to re-run.
 
@@ -50,7 +50,10 @@ Rejected candidates are still recorded in the snapshot, with the reason, so a tr
 | `sources/europepmc.py` | Search with cursor pagination, paper metadata including authors and affiliation, a prepared citation line, open-access full text, and the reference list for a paper. |
 | `sources/pubtator.py` | Entity-aware search, BioC annotations, and variant mentions normalised to a specific gene. |
 | `sources/ncbi.py` | Full-text fallback via E-utilities when Europe PMC has no XML. |
-| `sources/fulltext.py` | JATS XML to plain text. Keeps table cells as rows, preserves tail text around removed inline elements, drops bibliographies and acknowledgements. |
+| `sources/fulltext.py` | JATS XML to plain text. Keeps table cells as rows, preserves tail text around removed inline elements, drops bibliographies and acknowledgements. Also owns the prompt layout, the labelled text regions grounding uses, the figure and supplement inventory, and the figure cost gate. |
+| `sources/supplements.py` | The article's file bundle: one streamed, size- and deadline-bounded request, ZIP member safety checks, and classification into figure renditions versus supplements. |
+| `sources/tabular.py` | Supplement bytes to rows. Spreadsheets, Word, delimited files and PDFs, plus the row filtering that keeps the input affordable. Pure: no network, no JATS, no model. |
+| `extract/figures.py` | Reading variant labels out of figure images, as a structured transcription, cached by image content. |
 | `extract/triage.py` | The cheap gate: does this abstract justify reading the paper? Haiku, cached by prompt version. |
 | `extract/schema.py` | The Pydantic record. Deliberately flat; see the note in `AGENTS.md`. |
 | `extract/prompt.py`, `extract/prompts/` | Versioned system prompt and the per-paper user message. |
@@ -65,7 +68,8 @@ Bootstrap and monthly refresh run the same code; only the date window differs.
 |---|---|---|
 | `data/raw/<date>/` | no | Snapshot: paper metadata, full texts, extractions, manifest. Full texts are never redistributed. |
 | `data/cache/http.sqlite` | no | Response cache, so a repeated fetch makes no network requests. |
-| `data/curated/` | yes | Human-checked and hand-labelled artefacts, plus the triage decision log. Small, durable, worth keeping across clones. |
+| `data/cache/bundles/<pmcid>/` | no | Supplementary files and figure images, shared across snapshots. The endpoint they come from fails or stalls for most requests, so a successful download is reused by every later run rather than re-attempted. |
+| `data/curated/` | yes | Human-checked and hand-labelled artefacts, plus the triage decision log and figure transcriptions. Small, durable, worth keeping across clones and re-fetches. |
 | `data/built/<date>/` | no | Generated tables. |
 | `reports/<date>/` | yes | Published Markdown reports. |
 

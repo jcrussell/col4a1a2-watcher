@@ -7,6 +7,7 @@ Every host below is reached through `src/col4a1/http.py`. Rates are configured i
 | Source | What we take | Rate | Terms |
 |---|---|---|---|
 | Europe PMC REST | Search results, abstracts, author lists and affiliations, open-access full text as JATS XML, reference lists | 2/s | Metadata is open. Article licences vary per paper and are stated in the XML. |
+| Europe PMC `supplementaryFiles` | One ZIP per paper holding supplementary files and figure image renditions | 0.1/s | Same article licences. The ZIP is built per request, so it gets its own much slower bucket; at 2/s it returns errors. Members stay in the untracked snapshot and are never redistributed. |
 | PubTator 3 (NCBI) | Entity-aware search, BioC annotations, variant mentions linked to a gene | 2/s | Public NCBI resource. |
 | NCBI E-utilities | Full-text fallback, ClinVar record counts | 2/s | Public. Requests carry a contact address, as NCBI asks. |
 | Anthropic API | Triage on title and abstract, extraction on full text | n/a | Outputs belong to the account holder. |
@@ -27,8 +28,13 @@ Reference transcripts are NM_001845.6 for COL4A1 and NM_001846.4 for COL4A2.
 - **AlphaMissense.** Licensed CC BY-NC-SA 4.0, which would constrain redistribution of anything derived from it, and the current scope makes no use of a missense pathogenicity score.
 - Hosts unreachable from the development sandbox and not needed: Zenodo, HuggingFace, DECIPHER, MGI, UCSC downloads, AlphaFold, RCSB, GTEx.
 
+## Parsing dependencies
+
+All permissively licensed and compatible with the project's Apache-2.0: `openpyxl` (MIT) for spreadsheets, `python-docx` (MIT) for Word, `pdfplumber` (MIT) for PDFs. PyMuPDF was rejected: it is AGPL-3.0 and would conflict. `pdfplumber` brings Pillow and pypdfium2, which means a scanned PDF could later be rendered to an image and read with vision without adding anything new.
+
 ## Licensing of our own output
 
+- **Full texts and supplementary files are stored locally and never redistributed.** Supplement bytes carry the article's licence, vary per paper, and can hold third-party or identifiable material, so they stay in the untracked snapshot and must never become a test fixture.
 - **Full texts are stored locally and never redistributed.** This is why `data/raw/` is untracked and why test fixtures are limited to papers under a licence that permits redistribution, with attribution recorded in `tests/fixtures/README.md`.
 - **Extracted records** carry a PMID, a prepared citation and short verbatim quotes. Attribution per row is both a licence obligation and the thing that makes the table checkable.
 - **The evidence table** will be released CC BY 4.0. Annotations obtained from other services are not redistributed with it; only identifiers and coordinates.

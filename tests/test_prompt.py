@@ -37,3 +37,19 @@ def test_citation_line_is_built_without_double_periods():
     bare = PaperMeta(pmid=None, pmcid=None, doi=None, title="T", journal=None, pub_year=None,
                      first_pub_date=None, is_open_access=False, abstract=None)
     assert citation(bare) == ""
+
+
+def test_latest_extractions_supersedes_earlier_rows_and_drops_errors(tmp_path):
+    import json
+
+    from col4a1.cli import latest_extractions
+
+    p = tmp_path / "extractions.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in [
+        {"pmid": "1", "text_sha256": "a", "extraction": {"variants": []}},
+        {"pmid": "2", "text_sha256": "b", "error": "ExtractionRefused"},
+        {"pmid": "1", "text_sha256": "c", "extraction": {"variants": [1, 2]}},
+    ]) + "\n")
+    rows = latest_extractions(p)
+    assert [r["pmid"] for r in rows] == ["1"]
+    assert rows[0]["text_sha256"] == "c", "the newer row must win"
