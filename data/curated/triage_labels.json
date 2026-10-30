@@ -1,0 +1,26 @@
+{
+  "_about": "Hand-assigned ground truth for triage evaluation. 'yes' means the paper reports one or more specific COL4A1/COL4A2 variants carried by specific individuals, whether or not the variants appear in the text we can download (supplement-only papers are still yes). Assigned 2026-10-29 by reading all 20 extraction outputs for the data/raw/2026-10-29 window.",
+  "snapshot": "2026-10-29",
+  "labels": {
+    "42568836": {"label": "yes", "note": "BLEED panel cohort; 8 COL4A1/COL4A2 variants in tables 3 and 5"},
+    "42438399": {"label": "yes", "note": "four unrelated probands, two glycine missense variants"},
+    "42921483": {"label": "yes", "note": "prenatal case report, maternally inherited variant"},
+    "42099677": {"label": "yes", "note": "44-patient cohort; variants only in a figure and supplementary tables"},
+    "42746649": {"label": "yes", "note": "case report; de novo variant stated but not named"},
+    "42534916": {"label": "borderline", "note": "systematic review; aggregate counts of previously published individuals, no new patients"},
+    "42499187": {"label": "no", "note": "GWAS cross-trait; gene is nearest to a common SNP"},
+    "42481886": {"label": "no", "note": "exome cohort pre-screened negative for COL4A1/COL4A2"},
+    "42560887": {"label": "no", "note": "iPSC endothelial study; COL4A2 a QKI-7 target"},
+    "42433664": {"label": "no", "note": "hematuria GWAS; common intronic SNP"},
+    "42237372": {"label": "no", "note": "zebrafish Notch3 CADASIL model; col4a1/2 downregulated"},
+    "41931622": {"label": "no", "note": "iPSC CADASIL model; NOTCH3 variants"},
+    "42500603": {"label": "no", "note": "progeria fibroblasts; LMNA variant"},
+    "42329432": {"label": "no", "note": "network methodology paper; 9 patients in aggregate, data to be published separately"},
+    "42303913": {"label": "no", "note": "nasopharyngeal carcinoma expression model"},
+    "42454751": {"label": "no", "note": "scientific statement; generic mention"},
+    "41705475": {"label": "no", "note": "mouse cardiac stromal scRNA-seq"},
+    "42253502": {"label": "no", "note": "NHS gene variants; COL4A1 a downstream transcript"},
+    "42565569": {"label": "no", "note": "mouse NAFLD scRNA-seq; Col4a1 an endothelial marker"},
+    "41957434": {"label": "no", "note": "SOX17 variant knock-in mice; COL4A1/2 downstream"}
+  }
+}

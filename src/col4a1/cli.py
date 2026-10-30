@@ -1,0 +1,379 @@
+"""Command-line interface: fetch-papers, extract, show."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import logging
+import os
+import re
+import sys
+from pathlib import Path
+
+import anthropic
+import yaml
+
+from col4a1.extract.prompt import PaperInput
+from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
+from col4a1.http import PoliteClient
+from col4a1.sources import europepmc, ncbi, pubtator
+from col4a1.sources.europepmc import citation
+from col4a1.sources.fulltext import jats_to_text
+
+log = logging.getLogger("col4a1")
+REPO = Path(__file__).resolve().parents[2]
+CLINICAL_DEFAULT = (
+    r"variant|mutation|pathogenic|de novo|heterozygous|c\.\d|p\.\(?[A-Z][a-z]{2}\d|Gould|HANAC|porencephal|"
+    r"schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|"
+    r"Axenfeld|tortuosity|hematuria|haematuria|nephropath|cramps|myopath|cerebral palsy|stroke|proband|famil"
+)
+
+
+def load_config(path: Path | None = None) -> dict:
+    p = path or (REPO / "config" / "queries.yaml")
+    return yaml.safe_load(p.read_text())
+
+
+def make_client(cfg: dict) -> PoliteClient:
+    return PoliteClient(
+        user_agent=cfg["user_agent"],
+        cache_path=REPO / "data" / "cache" / "http.sqlite",
+        rates=cfg.get("rates", {}),
+    )
+
+
+def snapshot_dir(arg: str | None) -> Path:
+    d = Path(arg) if arg else REPO / "data" / "raw" / dt.date.today().isoformat()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def write_jsonl(path: Path, rows) -> int:
+    n = 0
+    with path.open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            n += 1
+    return n
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+# ---------------------------------------------------------------- fetch-papers
+
+def cmd_fetch_papers(a: argparse.Namespace) -> int:
+    cfg = load_config()
+    client = make_client(cfg)
+    snap = snapshot_dir(a.snapshot)
+    email = cfg["contact_email"]
+
+    log.info("Europe PMC search %s..%s", a.date_from, a.date_to)
+    epmc = europepmc.search(
+        client, cfg["europepmc"]["query"], date_from=a.date_from, date_to=a.date_to,
+        page_size=cfg["europepmc"]["page_size"], max_results=a.max_search,
+    )
+    by_pmid: dict[str, europepmc.PaperMeta] = {}
+    for m in epmc:
+        if m.pmid:
+            by_pmid.setdefault(m.pmid, m)
+    log.info("Europe PMC: %d results, %d with PMID", len(epmc), len(by_pmid))
+
+    pubtator_hits: dict[str, dict] = {}
+    if not a.skip_pubtator:
+        for q in cfg["pubtator"]["queries"]:
+            res = pubtator.search(client, q, page_size=cfg["pubtator"]["page_size"], max_results=a.max_search)
+            for r in res:
+                pmid = str(r.get("pmid") or "")
+                date = (r.get("date") or "")[:10]
+                if not pmid:
+                    continue
+                if a.date_from and date and date < a.date_from:
+                    continue
+                if a.date_to and date and date > a.date_to:
+                    continue
+                pubtator_hits.setdefault(pmid, r)
+        log.info("PubTator: %d PMIDs in window", len(pubtator_hits))
+    # PMIDs only PubTator found: look them up in Europe PMC to get PMCID/OA/abstract.
+    missing = [p for p in pubtator_hits if p not in by_pmid]
+    for i in range(0, len(missing), 50):
+        chunk = missing[i : i + 50]
+        for m in europepmc.search(client, "PMID:" + " OR PMID:".join(chunk), page_size=100):
+            if m.pmid and m.pmid not in by_pmid:
+                m.source = "pubtator"
+                by_pmid[m.pmid] = m
+    for pmid in missing:
+        if pmid not in by_pmid:
+            r = pubtator_hits[pmid]
+            by_pmid[pmid] = europepmc.PaperMeta(pmid=pmid, pmcid=None, doi=r.get("doi"), title=r.get("title", ""),
+                                                journal=r.get("journal"), pub_year=None,
+                                                first_pub_date=(r.get("date") or "")[:10] or None,
+                                                is_open_access=False, abstract=None, source="pubtator")
+
+    metas = list(by_pmid.values())
+    if a.oa_only:
+        metas = [m for m in metas if m.is_open_access and m.pmcid]
+
+    # Triage before downloading any full text: PubTator annotations come from the
+    # title/abstract export and are cheap; full texts are fetched only for kept papers.
+    annots = pubtator.export_biocjson(client, [m.pmid for m in metas if m.pmid]) if not a.skip_pubtator else {}
+    gene_ids = set(cfg["pubtator"].get("gene_ids", []))
+    gene_re = re.compile(r"\bCOL4A[12]\b", re.I)
+    clinical_re = re.compile(cfg.get("triage", {}).get("clinical_keywords_regex", CLINICAL_DEFAULT), re.I)
+
+    # The LLM gate runs on title + abstract only, before any full text is fetched.
+    # Without a key (or with --no-llm-triage) we fall back to the keyword rule,
+    # which has the same recall on the 2026-10-29 snapshot but keeps 3x the noise.
+    use_llm = not a.no_llm_triage and bool(os.environ.get("ANTHROPIC_API_KEY"))
+    if not use_llm and not a.no_llm_triage:
+        log.warning("ANTHROPIC_API_KEY not set; falling back to keyword triage")
+    tcache = TriageCache(REPO / "data" / "curated" / "triage_decisions.jsonl")
+    acl = anthropic.Anthropic() if use_llm else None
+
+    triaged: list[tuple[europepmc.PaperMeta, list[dict], dict]] = []
+    for m in metas:
+        doc = annots.get(m.pmid, {})
+        hints = pubtator.annotations(doc) if m.pmid in annots else []
+        linked = pubtator.gene_linked_variants(doc, gene_ids) if doc else []
+        ta = f"{m.title} {m.abstract or ''}"
+        tr = {
+            "title_abstract_mention": bool(gene_re.search(ta)),
+            "clinical_keyword": bool(clinical_re.search(ta)),
+            "pubtator_gene_variant": any(h["type"] == "Gene" and str(h.get("identifier")) in gene_ids for h in hints)
+                                     and any(h["type"] in ("Variant", "Mutation") for h in hints),
+            "pubtator_gene_linked_variant": bool(linked),
+            "pubtator_linked_hgvs": [v["hgvs"] for v in linked if v.get("hgvs")],
+            "pubtator_search_hit": m.pmid in pubtator_hits,
+        }
+        keyword_keep = (tr["pubtator_search_hit"] or tr["pubtator_gene_variant"]
+                        or (tr["title_abstract_mention"] and tr["clinical_keyword"]))
+        tr["keyword_keep"] = keyword_keep
+        if use_llm:
+            cached = tcache.get(m.pmid)
+            if cached is None:
+                try:
+                    decision, usage = triage_paper(acl, m.title, m.abstract)
+                    cached = tcache.put(m.pmid, decision, usage)
+                except Exception as e:  # never let triage abort a fetch
+                    log.warning("triage failed for %s (%s); keeping paper", m.pmid, type(e).__name__)
+                    cached = {"read_full_text": True, "reason": f"triage error: {type(e).__name__}",
+                              "triage_prompt_version": TRIAGE_PROMPT_VERSION}
+            tr["llm_keep"] = bool(cached["read_full_text"])
+            tr["llm_reason"] = cached.get("reason", "")
+            tr["triage_prompt_version"] = cached.get("triage_prompt_version", TRIAGE_PROMPT_VERSION)
+            # A PubTator variant mention normalised to COL4A1/COL4A2 scored precision
+            # 1.00 on the snapshot, so it overrides a negative model decision.
+            tr["keep"] = tr["llm_keep"] or tr["pubtator_gene_linked_variant"]
+        else:
+            tr["keep"] = keyword_keep
+        triaged.append((m, hints, tr))
+
+    triaged.sort(key=lambda x: (x[2]["keep"], x[2]["pubtator_gene_linked_variant"],
+                                x[2]["pubtator_search_hit"], x[0].first_pub_date or ""), reverse=True)
+    n_keep_all = sum(1 for _, _, tr in triaged if tr["keep"])
+    log.info("triage: %d of %d papers kept (%s); cache hits %d, new calls %d",
+             n_keep_all, len(metas), "llm" if use_llm else "keyword", tcache.hits, tcache.misses)
+    if a.limit:
+        triaged = triaged[: a.limit]
+
+    rows = []
+    n_full = 0
+    for m, hints, triage in triaged:
+        xml = None
+        if m.pmcid and (triage["keep"] or a.fetch_all_texts):
+            xml = europepmc.full_text_xml(client, m.pmcid) or ncbi.pmc_full_text_xml(client, m.pmcid, email)
+        if xml:
+            pt = jats_to_text(xml)
+            text, abstract_only = pt.as_prompt_text(), False
+            n_full += 1
+            (snap / "fulltext").mkdir(exist_ok=True)
+            (snap / "fulltext" / f"{m.pmcid}.xml").write_bytes(xml)
+            n_tables = pt.n_tables
+        else:
+            text = f"TITLE: {m.title}\n\nABSTRACT:\n{m.abstract or '(no abstract available)'}"
+            abstract_only, n_tables = True, 0
+        rows.append({
+            "pmid": m.pmid, "pmcid": m.pmcid, "doi": m.doi, "title": m.title, "journal": m.journal,
+            "first_pub_date": m.first_pub_date, "pub_year": m.pub_year,
+            "author_string": m.author_string, "authors": m.authors, "affiliation": m.affiliation,
+            "abstract": m.abstract,
+            "citation": citation(m),
+            "is_open_access": m.is_open_access, "source": m.source,
+            "abstract_only": abstract_only, "n_tables": n_tables, "n_chars": len(text), "text": text,
+            "pubtator_hints": hints, "triage": triage,
+        })
+    n = write_jsonl(snap / "papers.jsonl", rows)
+    manifest = {
+        "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "date_from": a.date_from, "date_to": a.date_to, "limit": a.limit, "oa_only": a.oa_only,
+        "europepmc_query": cfg["europepmc"]["query"], "pubtator_queries": cfg["pubtator"]["queries"],
+        "papers": n, "full_text": n_full, "abstract_only": n - n_full,
+        "triage_keep": sum(1 for r in rows if r["triage"]["keep"]), "triage_keep_before_limit": n_keep_all,
+        "candidates_before_limit": len(metas),
+        "network_requests": client.network_requests, "cache_hits": client.cache_hits,
+        "rate_limiter_slept_s": round(client.limiter.slept_total, 1),
+    }
+    (snap / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    client.close()
+    print(json.dumps(manifest, indent=2))
+    return 0
+
+
+# ---------------------------------------------------------------- extract
+
+def _paper_inputs(snap: Path) -> list[PaperInput]:
+    return [
+        PaperInput(pmid=r["pmid"], pmcid=r.get("pmcid"), title=r.get("title", ""), text=r["text"],
+                   abstract_only=r["abstract_only"], pubtator_hints=r.get("pubtator_hints", []),
+                   journal=r.get("journal"), pub_date=r.get("first_pub_date"))
+        for r in read_jsonl(snap / "papers.jsonl")
+        if r.get("triage", {}).get("keep", True) or getattr(_paper_inputs, "include_all", False)
+    ]
+
+
+def cmd_extract(a: argparse.Namespace) -> int:
+    import anthropic
+    from col4a1.extract.client import DEFAULT_MODEL, count_tokens, extract_paper
+    from col4a1.extract.prompt import PROMPT_VERSION
+    from col4a1.extract.verify import ground
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
+        return 2
+    snap = snapshot_dir(a.snapshot)
+    _paper_inputs.include_all = a.all
+    papers = _paper_inputs(snap)
+    if a.limit:
+        papers = papers[: a.limit]
+    client = anthropic.Anthropic()
+    out_path = snap / "extractions.jsonl"
+    done = {r["pmid"] for r in read_jsonl(out_path) if r.get("prompt_version") == PROMPT_VERSION}
+    texts = {p.pmid: p.text for p in papers}
+
+    if a.count_only:
+        total = 0
+        for p in papers:
+            n = count_tokens(client, p, model=a.model or DEFAULT_MODEL)
+            total += n
+            print(f"{p.pmid}\t{'abstract' if p.abstract_only else 'fulltext'}\t{n} tokens")
+        print(f"TOTAL\t{len(papers)} papers\t{total} input tokens\tmean {total // max(1, len(papers))}")
+        return 0
+
+    with out_path.open("a", encoding="utf-8") as f:
+        for p in papers:
+            if p.pmid in done:
+                log.info("skip %s (already extracted at %s)", p.pmid, PROMPT_VERSION)
+                continue
+            log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
+            res = extract_paper(client, p, model=a.model or DEFAULT_MODEL, effort=a.effort)
+            rep = ground(res.extraction, texts[p.pmid])
+            row = {
+                "pmid": p.pmid, "pmcid": p.pmcid, "model": res.model, "prompt_version": res.prompt_version,
+                "schema_version": res.schema_version, "stop_reason": res.stop_reason,
+                "usage": {"input": res.input_tokens, "output": res.output_tokens,
+                          "cache_read": res.cache_read_tokens, "cache_write": res.cache_write_tokens},
+                "grounding": {"total": rep.total_quotes, "grounded": rep.grounded_quotes,
+                              "ungrounded": rep.ungrounded, "low_confidence": rep.low_confidence_variants,
+                              "needs_review": rep.needs_review},
+                "extraction": json.loads(res.raw_json),
+            }
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+            ex = res.extraction
+            print(f"{p.pmid}: {ex.paper_type.value}, variants={len(ex.variants)}, "
+                  f"quotes grounded {rep.grounded_quotes}/{rep.total_quotes}, "
+                  f"tokens in={res.input_tokens} out={res.output_tokens} cache_read={res.cache_read_tokens}"
+                  + ("  [REVIEW]" if rep.needs_review else ""))
+    return 0
+
+
+# ---------------------------------------------------------------- show
+
+def cmd_show(a: argparse.Namespace) -> int:
+    snap = snapshot_dir(a.snapshot)
+    rows = read_jsonl(snap / "extractions.jsonl")
+    if a.pmid:
+        rows = [r for r in rows if r["pmid"] == a.pmid]
+    for r in rows:
+        ex = r["extraction"]
+        g = r["grounding"]
+        print(f"\n=== PMID {r['pmid']} ({ex['paper_type']}; {'abstract only' if ex['input_was_abstract_only'] else 'full text'}) "
+              f"grounded {g['grounded']}/{g['total']}{' REVIEW' if g['needs_review'] else ''}")
+        for v in ex["variants"]:
+            ph = ", ".join(f"{k}={v['phenotypes'][k]}" for k in ("cerebrovascular", "small_vessel", "renal_hanac", "ocular", "muscle", "other"))
+            inh = "; ".join(f"{k}×{n}" for k, n in v["inheritance"].items() if n) or "unknown"
+            print(f"  {v['gene']} {v['as_written']} ({v.get('hgvs_c') or '-'} / {v.get('hgvs_p') or '-'}) type={v['variant_type']} "
+                  f"probands={v['n_probands']} families={v['n_families']} inh={inh} conf={v['confidence']}")
+            print(f"    {ph}")
+            if v.get("notes"):
+                print(f"    notes: {v['notes']}")
+        if ex.get("extraction_notes"):
+            print(f"  paper notes: {ex['extraction_notes']}")
+    return 0
+
+
+# ---------------------------------------------------------------- list
+
+def cmd_list(a: argparse.Namespace) -> int:
+    snap = snapshot_dir(a.snapshot)
+    for r in read_jsonl(snap / "papers.jsonl"):
+        tr = r.get("triage", {})
+        flags = "".join(["T" if tr.get("title_abstract_mention") else "-", "C" if tr.get("clinical_keyword") else "-",
+                         "P" if tr.get("pubtator_gene_variant") else "-", "S" if tr.get("pubtator_search_hit") else "-",
+                         "V" if tr.get("pubtator_gene_linked_variant") else "-",
+                         "L" if tr.get("llm_keep") else ("-" if "llm_keep" in tr else "?")])
+        print(f"{r['pmid']:>9} {r.get('pmcid') or '-':>12} {r.get('first_pub_date') or '':>10} "
+              f"{'FT' if not r['abstract_only'] else 'AB'} {flags} {'keep' if tr.get('keep') else 'skip'}  {r['title'][:78]}")
+    return 0
+
+
+# ---------------------------------------------------------------- main
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    for name in ("httpx", "httpx2", "anthropic"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    ap = argparse.ArgumentParser(prog="col4a1", description="COL4A1/COL4A2 literature watcher")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    f = sub.add_parser("fetch-papers", help="search Europe PMC + PubTator and fetch texts into a snapshot")
+    f.add_argument("--snapshot", help="snapshot directory (default data/raw/<today>)")
+    f.add_argument("--date-from", help="YYYY-MM-DD")
+    f.add_argument("--date-to", help="YYYY-MM-DD")
+    f.add_argument("--limit", type=int, help="keep only the N most recent papers")
+    f.add_argument("--max-search", type=int, help="cap search results per query (dev)")
+    f.add_argument("--oa-only", action="store_true", help="keep only open-access papers with a PMCID")
+    f.add_argument("--skip-pubtator", action="store_true")
+    f.add_argument("--fetch-all-texts", action="store_true", help="download full text even for triage-rejected papers")
+    f.add_argument("--no-llm-triage", action="store_true",
+                   help="use the keyword triage rule instead of the Haiku gate (offline / no API key)")
+    f.set_defaults(func=cmd_fetch_papers)
+
+    e = sub.add_parser("extract", help="run Claude extraction over a snapshot's papers (synchronous)")
+    e.add_argument("--snapshot")
+    e.add_argument("--limit", type=int)
+    e.add_argument("--model")
+    e.add_argument("--effort", default="high")
+    e.add_argument("--count-only", action="store_true", help="only count input tokens per paper")
+    e.add_argument("--all", action="store_true", help="include papers the triage step rejected")
+    e.set_defaults(func=cmd_extract)
+
+    l = sub.add_parser("list", help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
+    l.add_argument("--snapshot")
+    l.set_defaults(func=cmd_list)
+
+    s = sub.add_parser("show", help="print extractions in a snapshot")
+    s.add_argument("--snapshot")
+    s.add_argument("--pmid")
+    s.set_defaults(func=cmd_show)
+
+    a = ap.parse_args(argv)
+    return a.func(a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

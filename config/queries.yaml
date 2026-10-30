@@ -1,0 +1,37 @@
+# Literature queries for the COL4A1/COL4A2 watcher.
+# Both sources are run for the window and the union of PMIDs is taken.
+contact_email: joncrussell@gmail.com
+user_agent: "col4a1-watcher/0.1 (https://github.com/joncrussell/col4a1; joncrussell@gmail.com)"
+
+europepmc:
+  # Precision first: the gene must be named in the title or abstract.
+  # (A full-text match on COL4A1 pulls in cancer/fibrosis papers that list the gene in passing.)
+  # Measured 2026-10-29: 1,218 papers since 2015, 601 open access, ~210 in the last 12 months.
+  query: >-
+    (TITLE:COL4A1 OR TITLE:COL4A2 OR ABSTRACT:COL4A1 OR ABSTRACT:COL4A2)
+  page_size: 100
+
+pubtator:
+  # Papers where PubTator 3 tagged the gene and at least one variant mention (1,795 for COL4A1).
+  # Results carry a date, so they are windowed client-side.
+  gene_ids: ["1282", "1284"]   # NCBI Gene: COL4A1, COL4A2
+  queries:
+    - "@GENE_COL4A1 AND @VARIANT"
+    - "@GENE_COL4A2 AND @VARIANT"
+  page_size: 100
+
+triage:
+  # A paper is kept if PubTator's gene+variant search returned it, or its title/abstract
+  # annotations tag COL4A1/COL4A2 and a variant, or the gene is named in the title/abstract
+  # together with a clinical keyword. Everything else is recorded but not sent to Claude.
+  clinical_keywords_regex: >-
+    variant|mutation|pathogenic|de novo|heterozygous|c\.\d|p\.\(?[A-Z][a-z]{2}\d|Gould|HANAC|porencephal|schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|Axenfeld|tortuosity|hematuria|haematuria|nephropath|cramps|myopath|cerebral palsy|stroke|proband|famil
+
+# Per-host request rate limits (requests per second). Everything else defaults to 1/s.
+rates:
+  www.ebi.ac.uk: 2
+  eutils.ncbi.nlm.nih.gov: 2
+  www.ncbi.nlm.nih.gov: 2
+  ftp.ncbi.nlm.nih.gov: 1
+  rest.ensembl.org: 5
+  gnomad.broadinstitute.org: 0.15

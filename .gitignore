@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/raw/
+data/built/
+reports/*/html/
+.pytest_cache/
+*.egg-info/
+/*.pdf
+data/cache/
+docs/refs/
+plan.md
+docs/PLAN.md
+!data/curated/
