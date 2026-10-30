@@ -630,6 +630,171 @@ def cmd_extract(a: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- challenge
+
+def cmd_challenge(a: argparse.Namespace) -> int:
+    """Adversarially review extracted records, and verify the reviewer's output."""
+    import anthropic  # noqa: F401  (imported for its exceptions via make_anthropic)
+
+    from col4a1.extract.challenge import (
+        ChallengeCache,
+        ChallengeFailed,
+        challenge_paper,
+        check,
+        records_digest,
+        slim_records,
+    )
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
+        return 2
+    st: Settings = a.settings
+    snap = snapshot_dir(a.snapshot, st)
+    papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
+    rows = latest_extractions(snap / "extractions.jsonl")
+    if a.pmid:
+        rows = [r for r in rows if r["pmid"] == a.pmid]
+    # Every extracted paper, including those with no records: a zero-record
+    # extraction is either an empty paper or a total miss, and only
+    # missed_variants distinguishes them.
+    rows = [r for r in rows if r["pmid"] in papers]
+    if a.limit:
+        rows = rows[: a.limit]
+
+    cache = ChallengeCache(st.curated_dir / "challenges.jsonl")
+    client = make_anthropic(st)
+    ledger = Ledger(st.curated_dir / "ledger.jsonl")
+    spent = 0.0
+    price = st.price_for(st.extract_model)
+    n_done = n_failed = 0
+
+    for r in rows:
+        pmid = r["pmid"]
+        paper = papers[pmid]
+        text = paper["text"]
+        recs = slim_records(pmid, r["extraction"].get("variants") or [],
+                            (r.get("grounding") or {}).get("figure_sourced") or [])
+        digest = records_digest(recs)
+        cached = cache.get(paper.get("text_sha256", ""), digest)
+        if cached is not None:
+            log.info("skip %s (challenged at %s on identical text and records)", pmid,
+                     cached.get("challenge_prompt_version"))
+            continue
+        if a.budget_usd and spent >= a.budget_usd:
+            log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_done)
+            break
+        log.info("challenging %s (%d records)", pmid, len(recs))
+        try:
+            ch, usage = challenge_paper(client, pmid=pmid, source_text=text, records=recs,
+                                        model=st.extract_model, effort=a.effort)
+        except (ChallengeFailed, Exception) as e:  # fails closed: never "nothing to refute"
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            log.warning("%s: challenge failed (%s: %s)", pmid, type(e).__name__, e)
+            n_failed += 1
+            continue
+        rep = check(ch, recs, text)
+        cache.put(pmid=pmid, text_sha256=paper.get("text_sha256", ""), records_digest=digest,
+                  model=st.extract_model, challenge=ch, report=rep, usage=usage)
+        if price:
+            spent += price.cost(input=usage["input"], output=usage["output"],
+                                cache_read=usage["cache_read"])
+        ledger.record(identity=pmid, stage="challenged", snapshot=snap.name,
+                      challenge={k: rep.as_dict()[k] for k in
+                                 ("n_records", "n_upheld", "n_disputed", "n_unverifiable",
+                                  "n_fabricated", "incomplete")})
+        n_done += 1
+        flags = []
+        if rep.incomplete:
+            flags.append("INCOMPLETE")
+        if rep.fabricated:
+            flags.append(f"{len(rep.fabricated)} FABRICATED")
+        print(f"{pmid}: {len(recs)} records -> upheld={len(rep.upheld)} disputed={len(rep.disputed)} "
+              f"unverifiable={len(rep.unverifiable)} missed={len(rep.missed_grounded)}"
+              f"{'  ' + ' '.join(flags) if flags else ''}  [{usage['effort']}]")
+
+    print(f"\n{n_done} challenged, {n_failed} failed, cache hits {cache.hits}, ${spent:.2f} spent")
+    return 0
+
+
+# ---------------------------------------------------------------- review
+
+def cmd_review(a: argparse.Namespace) -> int:
+    """Emit the human spot-check queue as TSV, from both review signals."""
+    import csv as _csv
+
+    st: Settings = a.settings
+    snap = snapshot_dir(a.snapshot, st)
+    papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
+    rows = latest_extractions(snap / "extractions.jsonl")
+
+    from col4a1.extract.challenge import record_key, slim_records
+    challenges: dict[str, dict] = {}
+    cpath = st.curated_dir / "challenges.jsonl"
+    if cpath.exists():
+        for line in cpath.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                c = json.loads(line)
+                challenges[c["pmid"]] = c
+
+    def clean(v) -> str:
+        # The measurement that justified TSV covered extraction fields only;
+        # challenge output adds free text, so reject separators rather than assume.
+        return " ".join(str(v or "").split()).replace("\t", " ")
+
+    out = []
+    for r in rows:
+        pmid = r["pmid"]
+        g = r.get("grounding") or {}
+        ch = challenges.get(pmid, {})
+        verdicts = {v["record_key"]: v for v in (ch.get("challenge") or {}).get("verdicts", [])}
+        rep = ch.get("report") or {}
+        for i, v in enumerate(r["extraction"].get("variants") or []):
+            key = record_key(pmid, i, v)
+            reasons = []
+            if v["as_written"] in (g.get("figure_sourced") or []):
+                reasons.append("figure-sourced")
+            if v["confidence"] == "low":
+                reasons.append("low-confidence")
+            if any(u[0] == v["as_written"] for u in g.get("ungrounded") or []):
+                reasons.append("ungrounded-quote")
+            vd = verdicts.get(key, {})
+            if vd.get("verdict") == "disputed" and key in (rep.get("disputed") or []):
+                reasons.append("disputed")
+            if not reasons:
+                continue
+            out.append({
+                "pmid": pmid, "record_key": key,
+                "citation": clean(papers.get(pmid, {}).get("citation")),
+                "gene": v["gene"], "as_written": clean(v["as_written"]),
+                "hgvs_c": v.get("hgvs_c") or "", "hgvs_p": v.get("hgvs_p") or "",
+                "n_probands": v["n_probands"], "n_families": v["n_families"],
+                "confidence": v["confidence"], "flagged_because": "+".join(reasons),
+                "verdict": vd.get("verdict", ""),
+                "problem": clean(vd.get("problem"))[:200],
+                "refuting_quote": clean(vd.get("refuting_quote"))[:300],
+                "proposed_n_probands": vd.get("proposed_n_probands") or "",
+                "quote_1": clean((v["evidence_quotes"] or [""])[0])[:300],
+                "CURATOR_VERDICT": "", "CURATOR_NOTE": "",
+            })
+    missed = [(p, m) for p, c in challenges.items() for m in (c.get("report") or {}).get("missed_grounded", [])]
+    if not out and not missed:
+        print("nothing queued for review")
+        return 0
+    path = Path(a.tsv) if a.tsv else snap / "review_queue.tsv"
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = _csv.DictWriter(f, fieldnames=list(out[0].keys()), delimiter="\t",
+                            quoting=_csv.QUOTE_NONE, escapechar="\\")
+        w.writeheader()
+        w.writerows(out)
+    print(f"{len(out)} records across {len({r['pmid'] for r in out})} papers -> {path}")
+    if missed:
+        print(f"{len(missed)} grounded missed-variant reports across {len({p for p, _ in missed})} papers:")
+        for p, m in missed[:10]:
+            print(f"  {p}: {m[:70]}")
+    return 0
+
+
 # ---------------------------------------------------------------- ledger
 
 def cmd_ledger(a: argparse.Namespace) -> int:
@@ -773,6 +938,20 @@ def main(argv: list[str] | None = None) -> int:
     l = sub.add_parser("list", parents=[common], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
     l.add_argument("--snapshot")
     l.set_defaults(func=cmd_list)
+
+    c = sub.add_parser("challenge", parents=[common],
+                       help="adversarially review a snapshot's extracted records")
+    c.add_argument("--snapshot")
+    c.add_argument("--pmid")
+    c.add_argument("--limit", type=int)
+    c.add_argument("--effort", default=None, help="override the record-count-scaled effort")
+    c.add_argument("--budget-usd", type=float, help="stop once this much has been spent")
+    c.set_defaults(func=cmd_challenge)
+
+    r = sub.add_parser("review", parents=[common], help="emit the human spot-check queue as TSV")
+    r.add_argument("--snapshot")
+    r.add_argument("--tsv", help="output path (default <snapshot>/review_queue.tsv)")
+    r.set_defaults(func=cmd_review)
 
     g = sub.add_parser("ledger", parents=[common], help="summarise every candidate ever considered")
     g.add_argument("--tsv", help="also write the folded ledger to this TSV")
