@@ -16,6 +16,7 @@ from pathlib import Path
 import anthropic
 
 from col4a1.config import ConfigError, Settings, load_settings
+from col4a1.discovery import DiscoveryLog, plan as plan_slices
 from col4a1.extract.prompt import PaperInput
 from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
 from col4a1.http import PoliteClient
@@ -240,11 +241,47 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
     email = st.contact_email
 
-    log.info("Europe PMC search %s..%s", a.date_from, a.date_to)
-    epmc = europepmc.search(
-        client, st.europepmc_query, date_from=a.date_from, date_to=a.date_to,
-        page_size=st.europepmc_page_size, max_results=a.max_search,
-    )
+    # Time-sliced discovery. A sealed slice is never queried again, so a monthly
+    # run stops re-downloading the whole historical sweep (303 cached search
+    # rows, 17.4 MB) to find twenty new papers.
+    dlog = DiscoveryLog(st.curated_dir / "discovery.jsonl")
+    todo, sealed = plan_slices(a.date_from or "2000-01-01",
+                               a.date_to or dt.date.today().isoformat(),
+                               st.europepmc_query, dlog, rediscover=a.rediscover)
+    # Every slice is still queried, so the candidate set never shrinks. What
+    # sealing changes is the cache lifetime: a sealed slice's query is immutable
+    # -- a closed date range against a fixed query string -- so its answer is
+    # cached forever rather than expiring on the 7-day TTL that makes a monthly
+    # run re-download the whole historical sweep. Only the open window pays.
+    sealed_keys = {sl.key for sl in sealed}
+    log.info("Europe PMC: %d slices, %d sealed (served from cache permanently)",
+             len(todo) + len(sealed), len(sealed))
+    epmc: list[europepmc.PaperMeta] = []
+    for sl in sorted(todo + sealed, key=lambda s: s.date_from):
+        is_sealed_slice = sl.key in sealed_keys
+        got = europepmc.search(
+            client, st.europepmc_query, date_from=sl.date_from, date_to=sl.date_to,
+            page_size=st.europepmc_page_size, max_results=a.max_search,
+            ttl=None if is_sealed_slice else 7 * 86400,
+        )
+        epmc.extend(got)
+        if is_sealed_slice:
+            continue
+        available = None
+        try:
+            available = europepmc.hit_count(
+                client,
+                f"({st.europepmc_query}) AND FIRST_PDATE:[{sl.date_from} TO {sl.date_to}]",
+            )
+        except Exception as e:  # coverage reporting must never break a fetch
+            log.debug("hit_count failed for %s: %s", sl.key, e)
+        # A slice truncated by --max-search has not been covered, so recording it
+        # complete would silently freeze a partial sweep.
+        complete = available is None or len(got) >= available
+        dlog.record(query=st.europepmc_query, sl=sl, hits_available=available,
+                    hits_fetched=len(got), complete=complete)
+        if available is not None and not complete:
+            log.warning("slice %s: fetched %d of %d available", sl.key, len(got), available)
     ledger = Ledger(st.curated_dir / "ledger.jsonl")
     by_pmid: dict[str, europepmc.PaperMeta] = {}
     n_no_pmid = 0
@@ -490,6 +527,8 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         "candidates_before_filters": n_candidates_before_filters,
         "europepmc_hits_without_pmid": n_no_pmid,
         "ledger_events": ledger.appended,
+        "discovery_slices": len(todo) + len(sealed),
+        "discovery_slices_sealed": len(sealed),
         "supplement_files_parsed": n_sup_files,
         "figures_transcribed": n_fig_read,
         "figure_vision_calls": vision_usage["calls"],
@@ -921,6 +960,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="skip reading figure images with vision")
     f.add_argument("--figures", action="store_true",
                    help="transcribe figures even for papers whose text already names variants")
+    f.add_argument("--rediscover", action="store_true",
+                   help="re-query every slice, including sealed ones")
     f.add_argument("--no-llm-triage", action="store_true",
                    help="use the keyword triage rule instead of the Haiku gate (offline / no API key)")
     f.set_defaults(func=cmd_fetch_papers)
