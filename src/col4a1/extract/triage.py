@@ -28,6 +28,7 @@ import json
 import logging
 from pathlib import Path
 
+from col4a1 import jsonl
 from pydantic import BaseModel, Field
 
 TRIAGE_PROMPT_VERSION = "t1"
@@ -58,7 +59,7 @@ class TriageCache:
         self.path = path
         self.entries: dict[tuple[str, str], dict] = {}
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -87,7 +88,7 @@ class TriageCache:
         self.entries[(pmid, TRIAGE_PROMPT_VERSION)] = r
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            f.write(jsonl.dumps(r) + "\n")
         self.misses += 1
         return r
 

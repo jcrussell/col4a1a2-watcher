@@ -40,6 +40,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from col4a1 import jsonl
+
 log = logging.getLogger("col4a1")
 
 LEDGER_VERSION = 1
@@ -75,7 +77,7 @@ class Ledger:
 
     def __post_init__(self) -> None:
         if self.path.exists():
-            for line in self.path.read_text(encoding="utf-8").splitlines():
+            for line in self.path.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -100,7 +102,7 @@ class Ledger:
                 raise ValueError(f"ledger rows must not carry {banned!r}: the file is tracked")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.write(jsonl.dumps(row) + "\n")
         self.rows.append(row)
         self.appended += 1
         return row

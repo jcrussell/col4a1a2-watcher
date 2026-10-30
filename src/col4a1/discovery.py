@@ -46,6 +46,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from col4a1 import jsonl
+
 log = logging.getLogger("col4a1")
 
 # Measured: a twelve-month open window covers ~98% of indexing lag.
@@ -125,7 +127,7 @@ class DiscoveryLog:
         self.path = path
         self.rows: list[dict] = []
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -158,7 +160,7 @@ class DiscoveryLog:
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.write(jsonl.dumps(row) + "\n")
         self.rows.append(row)
         self.appended += 1
         return row

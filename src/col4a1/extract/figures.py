@@ -23,6 +23,7 @@ import json
 import logging
 from pathlib import Path
 
+from col4a1 import jsonl
 from pydantic import BaseModel, Field
 
 from col4a1.sources.fulltext import FigureRef, rows_to_text, text_deficit
@@ -193,7 +194,7 @@ class FigureCache:
         self.path = path
         self.entries: dict[tuple[str, str], dict] = {}
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -229,6 +230,6 @@ class FigureCache:
         self.entries[(image_sha256, FIGURE_PROMPT_VERSION)] = r
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            f.write(jsonl.dumps(r) + "\n")
         self.misses += 1
         return r

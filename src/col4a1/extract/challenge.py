@@ -56,6 +56,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from col4a1 import jsonl
 from col4a1.extract.prompt import PROMPT_VERSION
 from col4a1.extract.verify import find_quote, normalise
 
@@ -302,7 +303,7 @@ class ChallengeCache:
         self.path = path
         self.entries: dict[tuple[str, str, str], dict] = {}
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
+            for line in path.read_text(encoding="utf-8").split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -336,6 +337,6 @@ class ChallengeCache:
         self.entries[(text_sha256, records_digest, CHALLENGE_PROMPT_VERSION)] = row
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.write(jsonl.dumps(row) + "\n")
         self.misses += 1
         return row

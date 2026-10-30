@@ -19,6 +19,7 @@ from col4a1.config import ConfigError, Settings, load_settings
 from col4a1.discovery import DiscoveryLog, plan as plan_slices
 from col4a1.extract.prompt import PaperInput
 from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
+from col4a1 import jsonl
 from col4a1.http import PoliteClient
 from col4a1.ledger import Ledger
 from col4a1.sources import europepmc, ncbi, pubtator
@@ -72,18 +73,11 @@ def snapshot_dir(arg: str | None, settings: Settings | None = None) -> Path:
 
 
 def write_jsonl(path: Path, rows) -> int:
-    n = 0
-    with path.open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-            n += 1
-    return n
+    return jsonl.write(path, rows)
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return jsonl.read(path)
 
 
 # ---------------------------------------------------------------- fetch-papers
@@ -596,6 +590,16 @@ def cmd_extract(a: argparse.Namespace) -> int:
         for r in read_jsonl(out_path)
         if r.get("prompt_version") == PROMPT_VERSION and not r.get("error")
     }
+    # Resume across snapshots, not just within one. Without this a paper
+    # extracted in last month's snapshot is re-extracted in this month's at full
+    # price, which is the whole reason the bootstrap could not be split into
+    # affordable pieces. The ledger is the cross-snapshot index.
+    for ident, pr in prior.items():
+        if (pr.get("prompt_version") == PROMPT_VERSION
+                and pr.get("stage") == "extracted"
+                and not pr.get("last_error")
+                and pr.get("text_sha256")):
+            done.add((ident, pr["text_sha256"]))
     texts = {p.pmid: p.text for p in papers}
     regions_by_pmid = {p.pmid: p.regions for p in papers}
 
@@ -610,21 +614,28 @@ def cmd_extract(a: argparse.Namespace) -> int:
 
     n_failed = 0
     n_ok = 0
+    n_skipped = 0
+    spent = 0.0
+    price = st.price_for(model)
     with out_path.open("a", encoding="utf-8") as f:
         for p in papers:
             text_hash = hashlib.sha256(p.text.encode("utf-8")).hexdigest()
             if (p.pmid, text_hash) in done:
                 log.info("skip %s (already extracted at %s on identical text)", p.pmid, PROMPT_VERSION)
+                n_skipped += 1
                 continue
+            if a.budget_usd and spent >= a.budget_usd:
+                log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_ok)
+                break
             log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
             try:
                 res = extract_paper(client, p, model=model, effort=effort)
             except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
                 # One unusable paper must not abort the batch; record why and move on.
                 log.warning("%s: %s", p.pmid, e)
-                f.write(json.dumps({"pmid": p.pmid, "pmcid": p.pmcid, "prompt_version": PROMPT_VERSION,
-                                    "text_sha256": text_hash, "error": type(e).__name__, "detail": str(e)},
-                                   ensure_ascii=False) + "\n")
+                f.write(jsonl.dumps({"pmid": p.pmid, "pmcid": p.pmcid, "prompt_version": PROMPT_VERSION,
+                                     "text_sha256": text_hash, "error": type(e).__name__,
+                                     "detail": str(e)}) + "\n")
                 f.flush()
                 n_failed += 1
                 ledger.record(identity=p.pmid, stage="fetched", snapshot=snap.name,
@@ -649,10 +660,14 @@ def cmd_extract(a: argparse.Namespace) -> int:
                               "needs_review": rep.needs_review},
                 "extraction": json.loads(res.raw_json),
             }
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.write(jsonl.dumps(row) + "\n")
             f.flush()
             ex = res.extraction
             n_ok += 1
+            if price:
+                spent += price.cost(input=res.input_tokens, output=res.output_tokens,
+                                    cache_read=res.cache_read_tokens,
+                                    cache_write=res.cache_write_tokens)
             ledger.record(identity=p.pmid, stage="extracted", snapshot=snap.name,
                           text_sha256=text_hash, prompt_version=res.prompt_version,
                           n_variants=len(ex.variants), n_grounded=rep.grounded_quotes,
@@ -663,7 +678,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
                   f"quotes grounded {rep.grounded_quotes}/{rep.total_quotes}, "
                   f"tokens in={res.input_tokens} out={res.output_tokens} cache_read={res.cache_read_tokens}"
                   + ("  [REVIEW]" if rep.needs_review else ""))
-    print(f"\n{n_ok} extracted, {n_failed} failed")
+    print(f"\n{n_ok} extracted, {n_skipped} already done, {n_failed} failed, ${spent:.2f} spent")
     if ledger.appended:
         log.info("ledger: %d events appended", ledger.appended)
     return 0
@@ -974,6 +989,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="low|medium|high|xhigh|max (default from config)")
     e.add_argument("--count-only", action="store_true", help="only count input tokens per paper")
     e.add_argument("--all", action="store_true", help="include papers the triage step rejected")
+    e.add_argument("--budget-usd", type=float,
+                   help="stop once this much has been spent (may overshoot by one paper, "
+                        "since a call's cost is unknown until it returns)")
     e.set_defaults(func=cmd_extract)
 
     l = sub.add_parser("list", parents=[common], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
