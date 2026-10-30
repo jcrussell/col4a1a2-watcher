@@ -95,3 +95,60 @@ Working files are JSON Lines, one object per record, carrying full provenance: m
 Published tables are tab-separated with a `datapackage.json` descriptor that names, types and defines every column, so the table is machine-readable rather than merely parseable. Tabs rather than commas is a measured choice: about half the extracted quotes contain commas and none of the extracted text contains a tab or a newline. The writer still rejects them rather than trusting that.
 
 Every row carries both a prepared one-line citation and the structured identifiers it was built from.
+
+## Peer review of what the model derives
+
+Three artefacts here are model-derived: triage decisions, figure transcriptions
+and extraction records. Grounding already protects the last of those against
+fabricated detail, but it answers only "does this sentence appear in the text",
+not "does this sentence support the claim".
+
+So `col4a1 challenge` runs one call per extracted paper that tries to refute
+each record, and the reviewer's own output is verified before any of it is
+stored. A disputed verdict must cite the contradicting sentence verbatim, and
+that sentence goes through the same grounding machinery as an evidence quote.
+An ungrounded refutation is recorded as **fabricated** rather than stored as a
+verdict.
+
+Be precise about what that buys. It catches a reviewer inventing a
+contradiction. It does not catch one quoting a real sentence that does not
+actually refute the claim, which is the likeliest over-refutation mode for
+count disputes. The number is therefore a fabrication rate and is named that;
+**there is no precision estimate for either extraction or review until
+`data/curated/gold/` is populated by hand**, and until then challenge verdicts
+are advisory and labelled so wherever they appear.
+
+Two deliberate omissions. The reviewer is not asked how confident it is, since
+a self-report about a judgement is worth less than the grounded quote beside it.
+And it never runs as a second turn of the extraction conversation, which would
+let the paper text be read from cache and cut input cost by nearly half, because
+the model would then be reviewing its own prior output. A fresh conversation
+presenting the records as another analyst's work is far likelier to refute.
+
+`missed_variants` is the most valuable thing it produces, because grounding
+those strings makes extraction *recall* computable: a variant designation
+present verbatim in the text with no record is a real miss, and one absent from
+the text is an invention. It is also why papers that yielded no records are
+reviewed rather than skipped. One caveat found on the first run: most "missed"
+variants in a paper with a genome-wide association section were common SNPs
+that should not be records at all, so the count needs a relevance filter before
+it can be read as recall.
+
+Nothing the reviewer proposes is applied. Count corrections are named
+`proposed_*`, `extractions.jsonl` is never rewritten, and `col4a1 review`
+hands the whole queue to a human as TSV.
+
+## Deterministic checks
+
+`extract/derive.py` holds what can be computed rather than asked for, and the
+module is honest about its yield. The five consistency checks fire twice across
+177 records. Deriving `variant_type` from nomenclature is *worse* than the model
+where no protein change is printed, so it is a cross-check on the unambiguous
+subset and the model's value is still what gets published; predicate order
+matters, because a glycine-first rule flags seven correct records, as
+`p.(Gly423Trpfs*19)` is a frameshift and `p.(Gly2=)` is synonymous.
+
+One check earns its place. `n_families <= n_probands` passes the worst record in
+the corpus, 174 individuals from a population biobank recorded as 174 distinct
+families. Flagging equality at implausible magnitude catches it, and catches it
+more decisively than the adversarial reviewer did.

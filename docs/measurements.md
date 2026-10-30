@@ -55,7 +55,7 @@ On the full window the adopted gate keeps 8 of 47 candidates, against 20 under t
 
 Paper types assigned: 7 functional, 5 cohort, 3 other, 2 review, 2 case report, 1 case series.
 
-Triage costs $0.0011 per paper, so the full bootstrap gate is about $2.60. Extraction of a triaged bootstrap corpus lands near $70 synchronous or half that through the Batches API.
+Triage costs **$0.000103** per paper, so the whole gate is about 8 cents. (This document said $0.0011 for some weeks, a clean 10x, by applying Haiku 4.5 prices to a Haiku 5.5 model. Measured directly over all 742 decisions: 515,607 input and 50,427 output tokens, $0.077 in total.) Extraction of a triaged bootstrap corpus lands near $70 synchronous or half that through the Batches API.
 
 A character-count estimate made before measuring put the mean at 10.7k tokens, about 30% low. Do not estimate tokens from characters for this corpus.
 
@@ -111,3 +111,63 @@ The Europe PMC bundle endpoint is the bottleneck, not the parsing or the vision.
 - The endpoint has its own rate bucket at 0.25/s. At the host's normal 2/s it returns HTTP 500.
 - Downloads stream under a byte cap and a total wall-clock deadline, and get exactly one attempt. A per-read timeout does not catch a server that dribbles bytes, and retrying an optional enrichment let a handful of bad papers dominate the wall clock of a whole run.
 - The same cohort paper yielded 38 records on a run where its bundle arrived and 0 on a run where it timed out. Nothing about the parsing changed; only the download did.
+
+## Corpus size, corrected (2026-10-30)
+
+Planning documents carried a "2,200-paper bootstrap" for months. That came from
+the rev-5 full-text query, which was replaced by the title-or-abstract query
+long before the batch ran. Measured against the live query:
+
+| | |
+|---|---|
+| Papers addressed by the query | 1,468 |
+| Of those, open access | 645 (603 since 2015, 42 before) |
+| Candidates seen, union with PubTator, before filters | 2,850 |
+| Of those, open access with a PMCID | 742 |
+| Kept by the triage gate | 124 |
+| Already extracted | 100 |
+
+So the bootstrap is **roughly 30 papers and $3 from done**, not $200. The
+manifest compounded the error by reporting `candidates_before_limit` as 742,
+computed after the open-access filter had reassigned its own input, understating
+the candidate pool roughly fourfold.
+
+The binding constraint is wall clock, not money: the supplement endpoint runs at
+0.25 requests per second and succeeds for roughly one request in five, so each
+pass over the remaining papers is a 25-minute problem that no spend cap touches.
+
+## The processing ledger (2026-10-30)
+
+What was invisible before it existed, now recorded per candidate:
+
+| Disposition | Candidates |
+|---|---|
+| Still in play | 100 |
+| Cut by `--limit` | 642, of which **24 were papers the gate wanted** |
+| Dropped by the open-access filter | 2,108 |
+| Europe PMC hits carrying no PMID | 141 |
+
+2,991 identities over 3,978 events, about 2 MB tracked.
+
+## Adversarial review, first run (2026-10-30)
+
+Three papers, 50 records, $0.55. Not a precision estimate: `data/curated/gold/`
+is still empty, so these verdicts are advisory.
+
+| Paper | Records | Upheld | Disputed | Unverifiable | Fabricated | Grounded misses |
+|---|---|---|---|---|---|---|
+| 35711275 | 11 | 11 | 0 | 0 | 0 | 13 |
+| 42099677 | 38 | 24 | 0 | 14 | 0 | 0 |
+| 36300346 | 1 | 0 | 0 | 1 | 0 | 0 |
+
+Three things worth recording from it. The reviewer found two real problems in
+the figure-transcribed cohort that nothing else had: a variant listed under an
+exon out of order, implying a transcription misread, and one COL4A2 variant
+named in the text but absent from the transcription. It correctly diagnosed the
+174-probands-in-174-families record as a biobank cohort rather than ascertained
+families, but filed it as unverifiable rather than disputed, so the
+deterministic magnitude check catches that one more decisively. And most of the
+13 "missed" variants in 35711275 are common SNPs from a GWAS section that
+should not be records at all, which the reviewer itself said in its notes, so
+`missed_variants` needs a relevance filter before the count can be read as
+recall.

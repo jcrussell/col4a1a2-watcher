@@ -40,7 +40,9 @@ Rejected candidates are still recorded in the snapshot, with the reason, so a tr
 
 **`report`** (not yet written) diffs two snapshots into a monthly Markdown and HTML summary.
 
-`list` and `show` are read-only views over a snapshot.
+**`challenge`** asks a second model call to refute each extracted record, and verifies the reviewer's own output before storing it: a disputed verdict must cite a sentence that grounds against the paper text, or it is recorded as fabricated rather than believed.
+
+`list`, `show`, `review` and `ledger` are read-only views. `review` emits the human spot-check queue as TSV from both review signals; `ledger` reports the denominator.
 
 ## Modules
 
@@ -59,6 +61,10 @@ Rejected candidates are still recorded in the snapshot, with the reason, so a tr
 | `extract/prompt.py`, `extract/prompts/` | Versioned system prompt and the per-paper user message. |
 | `extract/client.py` | The Opus call: structured output, prompt caching, refusal fallbacks, usage accounting. |
 | `extract/verify.py` | String-matches every quote against the source and decides whether a record needs human review. |
+| `extract/derive.py` | Deterministic consistency checks and the `variant_type` cross-check. No model, no network. |
+| `extract/challenge.py` | Adversarial review of records, and the verification of the reviewer's own claims. |
+| `config.py` | The one TOML file, resolved into a frozen `Settings` passed to every command. |
+| `ledger.py` | Append-only record of every candidate ever considered, folded on read. |
 
 ## Data lifecycle
 
@@ -69,7 +75,7 @@ Bootstrap and monthly refresh run the same code; only the date window differs.
 | `data/raw/<date>/` | no | Snapshot: paper metadata, full texts, extractions, manifest. Full texts are never redistributed. |
 | `data/cache/http.sqlite` | no | Response cache, so a repeated fetch makes no network requests. |
 | `data/cache/bundles/<pmcid>/` | no | Supplementary files and figure images, shared across snapshots. The endpoint they come from fails or stalls for most requests, so a successful download is reused by every later run rather than re-attempted. |
-| `data/curated/` | yes | Human-checked and hand-labelled artefacts, plus the triage decision log and figure transcriptions. Small, durable, worth keeping across clones and re-fetches. |
+| `data/curated/` | yes | Hand-labelled artefacts, the triage decision log, figure transcriptions, challenge verdicts, and `ledger.jsonl`. Append-only with a union merge driver, folded by `written_at`, so line order never changes the result. |
 | `data/built/<date>/` | no | Generated tables. |
 | `reports/<date>/` | yes | Published Markdown reports. |
 

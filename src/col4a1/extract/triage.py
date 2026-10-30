@@ -16,7 +16,9 @@ genes, and a systematic review carrying only aggregate counts. None of those
 is decidable from the abstract, and the keyword rule excluded them by luck
 rather than by signal. Recall is what matters here, so we prefer the model.
 
-Cost: ~$0.0012 per paper, so about $2.60 for a 2,200-paper bootstrap.
+Cost: $0.000103 per paper measured over 742 decisions, so about 8 cents for
+the whole gate. (This said $0.0012 for some weeks by applying Haiku 4.5 prices
+to a Haiku 5.5 model.)
 Decisions are cached by (pmid, prompt version) so refetching is free.
 """
 
