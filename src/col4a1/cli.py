@@ -19,6 +19,7 @@ from col4a1.config import ConfigError, Settings, load_settings
 from col4a1.extract.prompt import PaperInput
 from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
 from col4a1.http import PoliteClient
+from col4a1.ledger import Ledger
 from col4a1.sources import europepmc, ncbi, pubtator
 from col4a1.sources.europepmc import citation
 from col4a1.sources.fulltext import TextRegion, jats_inventory, jats_to_text
@@ -244,10 +245,23 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         client, st.europepmc_query, date_from=a.date_from, date_to=a.date_to,
         page_size=st.europepmc_page_size, max_results=a.max_search,
     )
+    ledger = Ledger(st.curated_dir / "ledger.jsonl")
     by_pmid: dict[str, europepmc.PaperMeta] = {}
+    n_no_pmid = 0
     for m in epmc:
         if m.pmid:
             by_pmid.setdefault(m.pmid, m)
+        else:
+            # Write point 1. These vanished entirely before: no snapshot row, no
+            # triage decision, only an aggregate in a log line. Identity falls
+            # back to DOI, then to a title hash.
+            n_no_pmid += 1
+            ledger.record_candidate(
+                pmid=None, doi=m.doi, title=m.title, journal=m.journal,
+                first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
+                has_pmcid=bool(m.pmcid), found_by={"europepmc"},
+                dropped_at="no_pmid", snapshot=snap.name,
+            )
     log.info("Europe PMC: %d results, %d with PMID", len(epmc), len(by_pmid))
 
     pubtator_hits: dict[str, dict] = {}
@@ -282,8 +296,23 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                                                 is_open_access=False, abstract=None, source="pubtator")
 
     metas = list(by_pmid.values())
+    # Captured before the filter reassigns `metas`: the manifest has been
+    # reporting a post-filter number under this name.
+    n_candidates_before_filters = len(metas)
     if a.oa_only:
-        metas = [m for m in metas if m.is_open_access and m.pmcid]
+        kept_oa = [m for m in metas if m.is_open_access and m.pmcid]
+        # Write point 2. The filter runs before the triage loop, so a paper cut
+        # here never gets a decision row and used to leave no trace at all.
+        dropped = [m for m in metas if m not in kept_oa]
+        for m in dropped:
+            ledger.record_candidate(
+                pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,
+                first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
+                has_pmcid=bool(m.pmcid), found_by={m.source}, citation=citation(m),
+                dropped_at="oa_filter", snapshot=snap.name,
+            )
+        log.info("open-access filter: dropped %d of %d candidates", len(dropped), len(metas))
+        metas = kept_oa
 
     # Triage before downloading any full text: PubTator annotations come from the
     # title/abstract export and are cheap; full texts are fetched only for kept papers.
@@ -346,6 +375,22 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     n_keep_all = sum(1 for _, _, tr in triaged if tr["keep"])
     log.info("triage: %d of %d papers kept (%s); cache hits %d, new calls %d",
              n_keep_all, len(metas), "llm" if use_llm else "keyword", tcache.hits, tcache.misses)
+    # Write point 3. Recorded for every triaged candidate, including the ones
+    # `--limit` is about to discard, which previously survived only as a bare
+    # triage decision with no title, journal, date or identifier.
+    for rank, (m, _hints, tr) in enumerate(triaged):
+        cut = bool(a.limit) and rank >= a.limit
+        ledger.record_candidate(
+            pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,
+            first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
+            has_pmcid=bool(m.pmcid), found_by={m.source}, citation=citation(m),
+            dropped_at="limit" if cut else "", snapshot=snap.name,
+            rank=rank, limit_at=a.limit,
+        )
+        ledger.record(identity=(m.pmid or ""), stage="triaged",
+                      triage={k: tr.get(k) for k in ("keep", "llm_keep", "llm_reason",
+                                                     "pubtator_gene_linked_variant")}) if m.pmid else None
+    n_triaged = len(triaged)
     if a.limit:
         triaged = triaged[: a.limit]
 
@@ -424,6 +469,16 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             "n_chars_figures": sum(len(t) for _, t in enr.figures),
             "pubtator_hints": hints, "triage": triage,
         })
+    for r in rows:
+        if r["pmid"]:
+            ledger.record(identity=r["pmid"], stage="fetched", snapshot=snap.name,
+                          text_sha256=r["text_sha256"], n_chars=r["n_chars"],
+                          abstract_only=r["abstract_only"],
+                          fulltext_source=r.get("fulltext_source"),
+                          bundle_status=(r.get("supplement_bundle") or {}).get("status"),
+                          n_supplements=len([x for x in (r.get("supplements") or []) if x.get("sheets")]),
+                          n_figures=len([x for x in (r.get("figures") or []) if x.get("transcribed")]))
+    log.info("ledger: %d events appended to %s", ledger.appended, ledger.path)
     n = write_jsonl(snap / "papers.jsonl", rows)
     manifest = {
         "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -431,7 +486,10 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         "europepmc_query": st.europepmc_query, "pubtator_queries": st.pubtator_queries,
         "papers": n, "full_text": n_full, "abstract_only": n - n_full,
         "triage_keep": sum(1 for r in rows if r["triage"]["keep"]), "triage_keep_before_limit": n_keep_all,
-        "candidates_before_limit": len(metas),
+        "candidates_triaged": n_triaged,
+        "candidates_before_filters": n_candidates_before_filters,
+        "europepmc_hits_without_pmid": n_no_pmid,
+        "ledger_events": ledger.appended,
         "supplement_files_parsed": n_sup_files,
         "figures_transcribed": n_fig_read,
         "figure_vision_calls": vision_usage["calls"],
@@ -477,6 +535,8 @@ def cmd_extract(a: argparse.Namespace) -> int:
         print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
         return 2
     st: Settings = a.settings
+    ledger = Ledger(st.curated_dir / "ledger.jsonl")
+    prior = ledger.fold()
     # argparse defaults are None so config can win; the CLI flag still beats it.
     model = a.model or st.extract_model
     effort = a.effort or st.extract_effort
@@ -528,6 +588,10 @@ def cmd_extract(a: argparse.Namespace) -> int:
                                    ensure_ascii=False) + "\n")
                 f.flush()
                 n_failed += 1
+                ledger.record(identity=p.pmid, stage="fetched", snapshot=snap.name,
+                              text_sha256=text_hash, prompt_version=PROMPT_VERSION,
+                              last_error=type(e).__name__,
+                              attempts=(prior.get(p.pmid, {}).get("attempts") or 0) + 1)
                 continue
             rep = ground(res.extraction, texts[p.pmid], regions_by_pmid.get(p.pmid, []))
             row = {
@@ -550,11 +614,52 @@ def cmd_extract(a: argparse.Namespace) -> int:
             f.flush()
             ex = res.extraction
             n_ok += 1
+            ledger.record(identity=p.pmid, stage="extracted", snapshot=snap.name,
+                          text_sha256=text_hash, prompt_version=res.prompt_version,
+                          n_variants=len(ex.variants), n_grounded=rep.grounded_quotes,
+                          n_ungrounded=len(rep.ungrounded), needs_review=rep.needs_review,
+                          n_figure_sourced=len(rep.figure_sourced),
+                          last_error=None, attempts=0)
             print(f"{p.pmid}: {ex.paper_type.value}, variants={len(ex.variants)}, "
                   f"quotes grounded {rep.grounded_quotes}/{rep.total_quotes}, "
                   f"tokens in={res.input_tokens} out={res.output_tokens} cache_read={res.cache_read_tokens}"
                   + ("  [REVIEW]" if rep.needs_review else ""))
     print(f"\n{n_ok} extracted, {n_failed} failed")
+    if ledger.appended:
+        log.info("ledger: %d events appended", ledger.appended)
+    return 0
+
+
+# ---------------------------------------------------------------- ledger
+
+def cmd_ledger(a: argparse.Namespace) -> int:
+    """Report the denominator: everything we have ever considered."""
+    st: Settings = a.settings
+    ledger = Ledger(st.curated_dir / "ledger.jsonl")
+    if not ledger.rows:
+        print(f"no ledger yet at {ledger.path}")
+        return 0
+    s = ledger.summary()
+    print(f"{s['identities']} candidates over {s['events']} events  ({ledger.path})")
+    print(f"  kept by the gate: {s['kept_by_gate']}   with records: {s['with_records']}"
+          f"   needing review: {s['needs_review']}   wedged: {s['wedged']}")
+    print("  by stage:       " + ", ".join(f"{k}={v}" for k, v in sorted(s["by_stage"].items())))
+    print("  by disposition: " + ", ".join(f"{k}={v}" for k, v in sorted(s["by_disposition"].items())))
+    if a.tsv:
+        import csv as _csv
+        cols = ["identity", "identity_kind", "pmid", "stage", "dropped_at", "rank", "limit_at",
+                "is_open_access", "has_pmcid", "n_variants", "needs_review", "attempts",
+                "last_error", "first_pub_date", "journal", "title"]
+        out = Path(a.tsv)
+        with out.open("w", newline="", encoding="utf-8") as f:
+            w = _csv.DictWriter(f, fieldnames=cols, delimiter="\t", extrasaction="ignore",
+                                quoting=_csv.QUOTE_NONE, escapechar="\\")
+            w.writeheader()
+            for r in sorted(ledger.fold().values(), key=lambda x: (x.get("stage") or "", x.get("identity"))):
+                row = {k: r.get(k, "") for k in cols}
+                row["title"] = " ".join(str(row["title"]).split())[:160]
+                w.writerow(row)
+        print(f"  wrote {out}")
     return 0
 
 
@@ -668,6 +773,10 @@ def main(argv: list[str] | None = None) -> int:
     l = sub.add_parser("list", parents=[common], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
     l.add_argument("--snapshot")
     l.set_defaults(func=cmd_list)
+
+    g = sub.add_parser("ledger", parents=[common], help="summarise every candidate ever considered")
+    g.add_argument("--tsv", help="also write the folded ledger to this TSV")
+    g.set_defaults(func=cmd_ledger)
 
     s = sub.add_parser("show", parents=[common], help="print extractions in a snapshot")
     s.add_argument("--snapshot")

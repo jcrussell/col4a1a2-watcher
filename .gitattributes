@@ -1,0 +1,4 @@
+# Append-only event logs. A conflict at end-of-file resolves by
+# concatenation, which is always right for a log; the readers fold by
+# written_at, so line order never changes the result.
+data/curated/*.jsonl merge=union
