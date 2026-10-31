@@ -62,7 +62,6 @@ class Prices:
 
 @dataclass(frozen=True)
 class Settings:
-    config_path: Path
     contact_email: str
     user_agent: str
 
@@ -198,7 +197,6 @@ def load_settings(
         )
 
     return Settings(
-        config_path=path,
         contact_email=raw["contact_email"],
         # `{version}` is filled from the package, so the version is written once.
         user_agent=raw["user_agent"].replace("{version}", __version__),

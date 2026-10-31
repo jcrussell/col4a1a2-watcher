@@ -32,10 +32,8 @@ user_agent = "col4a1a2-watcher/{version} (https://github.com/joncrussell/col4a1a
 # and rejected: they add 63 papers for one relevant hit we already hold, nearly
 # all of it collagen-IV cell biology.
 #
-# Measured 2026-10-31: symbols alone 1,469 papers; with the disease names
-# 1,485, so +16, of which 3 are open access. The earlier "645 open access"
-# figure in this file was an artefact of the broken PMID lookup (see
-# docs/measurements.md) and is not comparable.
+# Measured: symbols alone match 1,469 papers; with the disease names 1,485, so
+# +16, of which 3 are open access (docs/measurements.md).
 #
 # Editing this string changes `query_hash` and so re-opens every discovery
 # slice, by design: stale coverage must not be left behind silently.
@@ -81,8 +79,8 @@ responses_dir = "data/responses"
 
 [anthropic]
 # The SDK default is max_retries = 2 with 0.5s initial and 8s maximum backoff,
-# which we were taking silently. Worst case per call is timeout x (retries + 1),
-# so keep the product bounded: 120s x 9 = 18 minutes.
+# too few for a long batch. Worst case per call is timeout x (retries + 1), so
+# keep the product bounded: 120s x 9 = 18 minutes.
 max_retries = 8
 timeout_s = 120.0
 
@@ -100,21 +98,20 @@ figure_effort = "low"
 # USD per million tokens. Token counts in the usage records are the durable
 # fact; these are a convenience for reporting and will go stale, so any spend
 # figure can be recomputed from the counts.
-#
-# Note: docs quoted triage at ~$0.0011/paper for months by applying Haiku 4.5
-# prices ($1/$5) to a Haiku 5.5 model. Measured over 742 decisions the true
-# figure is $0.000103/paper.
+# Check each model's own price: triage measures $0.000103 per paper over 742
+# decisions, and an older model's price would overstate it tenfold.
 "claude-opus-5-5" = { input = 4.0, output = 20.0, cache_read = 0.20, cache_write = 5.0 }
 "claude-haiku-5-5" = { input = 0.10, output = 0.50, cache_read = 0.005, cache_write = 0.125 }
 
+# Every setting in [figures] and [supplements] changes the assembled paper text,
+# therefore its hash, therefore whether a paper is re-extracted. Each is
+# recorded in the snapshot manifest so a re-extraction can be traced to its
+# cause. Defaults live beside the code that uses them.
 [figures]
 max_per_paper = 3
 max_tokens = 4000
 
 [supplements]
-# These three change the assembled paper text, therefore its hash, therefore
-# whether a paper is re-extracted. Any change here is recorded in the snapshot
-# manifest so a surprise re-extraction can be traced to its cause.
 max_chars_per_paper = 24000
 max_rows_per_sheet = 200
 keep_all_below_rows = 60

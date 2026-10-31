@@ -831,7 +831,7 @@ REVIEW_COLUMNS = [
 
 
 def cmd_review(a: argparse.Namespace) -> int:
-    """Emit the human spot-check queue as TSV, from both review signals."""
+    """Write the human spot-check queue as JSONL, from both review signals; TSV on request."""
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
     papers = {r["pmid"]: r for r in jsonl.read(snap / "papers.jsonl")}
