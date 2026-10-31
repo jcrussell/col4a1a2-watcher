@@ -1,19 +1,16 @@
 from col4a1a2.extract.schema import (
-    Confidence, Gene, PaperExtraction, PaperType, VariantEvidence,
+    Confidence, PaperExtraction, PaperType, VariantEvidence,
 )
 from col4a1a2.extract.verify import ground, normalise, quote_in_text
+from conftest import make_variant
 
 TEXT = "The proband carried the c.1537G>A (p.Gly513Ser) variant — inherited from her mother. Renal ultrasound was normal."
 
 
 def _variant(quotes, conf=Confidence.high):
-    return VariantEvidence(
-        gene=Gene.COL4A1, as_written="c.1537G>A", variant_type="missense_glycine",
-        n_probands=1, n_families=1,
-        inh_de_novo_confirmed=0, inh_de_novo_assumed=0, inh_inherited=1, inh_unknown=0,
-        same_family_as_prior_report=False, phenotype_systems="cerebrovascular",
-        phenotype_details="porencephaly", evidence_quotes=quotes, confidence=conf,
-    )
+    return VariantEvidence.model_validate(make_variant(
+        as_written="c.1537G>A", inh_inherited=1, inh_unknown=0, phenotype_systems="cerebrovascular",
+        phenotype_details="porencephaly", evidence_quotes=quotes, confidence=conf.value))
 
 
 def test_normalise_unifies_dashes_quotes_whitespace():

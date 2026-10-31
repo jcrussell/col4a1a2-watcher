@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import hashlib
 import logging
 import os
 import sys
@@ -512,7 +511,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             "citation": citation(m),
             "is_open_access": m.is_open_access, "source": m.source,
             "abstract_only": abstract_only, "n_tables": n_tables, "n_chars": len(text), "text": text,
-            "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "text_sha256": sha256_text(text),
             "regions": [{"kind": r.kind, "label": r.label, "start": r.start, "end": r.end} for r in regions],
             "fulltext_source": fulltext_source,
             "supplement_bundle": enr.bundle_summary,

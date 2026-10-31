@@ -8,14 +8,13 @@ into an exception at the call site.
 """
 
 import json
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from col4a1a2 import jsonl, schemas
 
-REPO = Path(__file__).resolve().parents[1]
+from conftest import REPO
 
 
 def test_every_jsonl_and_json_file_we_write_has_a_model():

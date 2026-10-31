@@ -12,6 +12,7 @@ import json
 import pytest
 
 from col4a1a2 import jsonl
+from conftest import corpus_file, make_provenance
 
 # Everything str.splitlines() treats as a break and that we therefore escape.
 BREAKERS = ["\u2028", "\u2029", "\u0085", "\u000b", "\u000c", "\u001c", "\u001d", "\u001e"]
@@ -75,11 +76,8 @@ def test_append_creates_parents(tmp_path):
 
 
 def test_the_real_snapshot_that_exposed_this_parses(tmp_path):
-    from pathlib import Path
 
-    snap = Path(__file__).resolve().parents[1] / "data/raw/2026-10-30-rest/papers.jsonl"
-    if not snap.exists():
-        pytest.skip("snapshot not present")
+    snap = corpus_file("data/raw/2026-10-30-rest/papers.jsonl")
     rows = jsonl.read(snap)
     assert len(rows) == 802
     assert any(" " in (r.get("text") or "") for r in rows), \
@@ -128,7 +126,8 @@ def test_every_appender_validates(tmp_path):
     from col4a1a2.extract.figures import FigureCache
     from col4a1a2.extract.triage import TriageCache, TriageDecision
 
-    bad = {"model": "m", "requested_model": "m", "effort": "low"}  # no written_at
+    bad = make_provenance()
+    del bad["written_at"]
     with pytest.raises(ValidationError):
         TriageCache(tmp_path / "triage.jsonl").put(
             "1", TriageDecision(read_full_text=True, reason="r"), {"input": 1, "output": 1}, bad)

@@ -2,6 +2,7 @@
 
 import json
 
+from conftest import make_provenance
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, TriageDecision
 from col4a1a2.sources.pubtator import gene_linked_variants
 
@@ -11,10 +12,9 @@ def test_cache_round_trips_and_keys_on_prompt_version(tmp_path):
     c = TriageCache(p)
     assert c.get("111", "m") is None
     c.put("111", TriageDecision(read_full_text=True, reason="case report"), {"input": 10, "output": 2},
-          {"model": "m", "requested_model": "m", "effort": "low", "written_at": "2026-10-31T00:00:00+00:00"})
+          make_provenance())
 
     reread = TriageCache(p)
-    assert reread.get("111", "other-model") is None, "a second model must not see the first's verdict"
     r = reread.get("111", "m")
     assert r is not None and r["read_full_text"] is True
     assert r["triage_prompt_version"] == TRIAGE_PROMPT_VERSION

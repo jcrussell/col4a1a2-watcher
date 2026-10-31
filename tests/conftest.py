@@ -16,7 +16,9 @@ that text rather than trusting a pre-parsed object.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 
@@ -117,14 +119,66 @@ def fake_response():
     return FakeResponse
 
 
-# ---------------------------------------------------------------- row fixtures
+# ---------------------------------------------------------------- settings
 
-def _configured_extract_model() -> str:
-    from pathlib import Path
+REPO = Path(__file__).resolve().parents[1]
+CONFIG = REPO / "config" / "col4a1a2.toml"
+
+
+def make_settings(root: Path | None = None, **over):
+    """The real config, rooted at `root` (a tmp_path) so nothing touches data/.
+
+    Keyword overrides replace individual settings, for testing that a setting
+    actually reaches the code it governs.
+    """
+    import dataclasses
 
     from col4a1a2.config import load_settings
 
-    return load_settings(Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml").extract_model
+    st = load_settings(CONFIG, repo=root) if root is not None else load_settings(CONFIG)
+    if root is not None:
+        st.curated_dir.mkdir(parents=True, exist_ok=True)
+    return dataclasses.replace(st, **over) if over else st
+
+
+@pytest.fixture
+def settings(tmp_path):
+    return make_settings(tmp_path)
+
+
+def corpus_file(rel: str) -> Path:
+    """A file from the real corpus under data/, or a skip on a fresh clone."""
+    path = REPO / rel
+    if not path.exists():
+        pytest.skip(f"{rel} is not present (corpus data is not in git)")
+    return path
+
+
+def cmd_args(st, snap=None, **over) -> argparse.Namespace:
+    """Arguments for any `cmd_*`, with every flag at its default."""
+    a = dict(settings=st, snapshot=str(snap) if snap is not None else None, pmid=None, limit=None,
+             model=None, effort=None, count_only=False, budget_usd=None, no_llm_cache=False,
+             all=False, tsv=None, json=False)
+    a.update(over)
+    return argparse.Namespace(**a)
+
+
+def make_snapshot(st, name: str = "s1", *, papers=(), extractions=(), manifest: bool = True) -> Path:
+    from col4a1a2 import jsonl, schemas
+
+    snap = st.snapshot_root / name
+    snap.mkdir(parents=True)
+    if manifest:
+        schemas.write_document(snap / "manifest.json", {"fetched_at": "2026-10-31T00:00:00+00:00"})
+    jsonl.write(snap / "papers.jsonl", list(papers))
+    jsonl.write(snap / "extractions.jsonl", list(extractions))
+    return snap
+
+
+# ---------------------------------------------------------------- row fixtures
+
+def _configured_extract_model() -> str:
+    return make_settings().extract_model
 
 
 # What every model-derived row carries. The requested model is the configured
@@ -132,6 +186,25 @@ def _configured_extract_model() -> str:
 EXTRACT_MODEL = _configured_extract_model()
 PROVENANCE = {"model": EXTRACT_MODEL, "requested_model": EXTRACT_MODEL, "effort": "high",
               "written_at": "2026-10-31T00:00:00+00:00"}
+
+
+def make_provenance(model: str = "m", **over) -> dict:
+    return {"model": model, "requested_model": model, "effort": "low",
+            "written_at": "2026-10-31T00:00:00+00:00", **over}
+
+
+def make_triage_row(pmid: str = "1", **over) -> dict:
+    return {"pmid": pmid, "triage_prompt_version": "t1", **PROVENANCE, "read_full_text": True,
+            "reason": "r", "usage": {"input": 1, "output": 1}, **over}
+
+
+def make_paper_extraction(pmid: str = "1", **over):
+    from col4a1a2.extract.schema import PaperExtraction, PaperType
+
+    return PaperExtraction(**{"pmid": pmid, "paper_type": PaperType.case_report,
+                              "input_was_abstract_only": False, "has_variant_level_data": False, **over})
+
+
 #
 # Built through the real Pydantic models rather than written out by hand, so a
 # fixture cannot drift from the schema it is meant to represent. Hand-written
@@ -153,10 +226,8 @@ def make_variant(**over) -> dict:
 
 def make_extraction_row(pmid="1", variants=None, **over) -> dict:
     from col4a1a2.extract.prompt import PROMPT_VERSION
-    from col4a1a2.extract.schema import PaperExtraction, PaperType
 
-    ex = PaperExtraction(pmid=pmid, paper_type=PaperType.case_report,
-                         input_was_abstract_only=False, has_variant_level_data=True)
+    ex = make_paper_extraction(pmid, has_variant_level_data=True)
     row = {
         "pmid": pmid, "pmcid": f"PMC{pmid}", **PROVENANCE, "prompt_version": PROMPT_VERSION,
         "text_sha256": "h", "schema_version": "1", "stop_reason": "end_turn",

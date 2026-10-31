@@ -257,13 +257,9 @@ def test_members_are_written_before_the_marker(tmp_path):
 
 
 def _settings(**over):
-    import dataclasses
-    from pathlib import Path
+    from conftest import make_settings
 
-    from col4a1a2.config import load_settings
-
-    st = load_settings(Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml")
-    return dataclasses.replace(st, **over)
+    return make_settings(**over)
 
 
 def test_enrich_honours_the_configured_supplement_cap(tmp_path):

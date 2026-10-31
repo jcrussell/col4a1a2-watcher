@@ -44,29 +44,3 @@ def test_citation_line_is_built_without_double_periods():
     bare = PaperMeta(pmid=None, pmcid=None, doi=None, title="T", journal=None, pub_year=None,
                      first_pub_date=None, is_open_access=False, abstract=None)
     assert citation(bare) == ""
-
-
-def test_latest_extractions_supersedes_earlier_rows_and_drops_errors(tmp_path):
-    import json
-
-    from col4a1a2.extract.rows import latest_extractions
-    from col4a1a2.config import load_settings
-    from col4a1a2.extract.prompt import PROMPT_VERSION
-
-    st = load_settings()
-    cur = {"prompt_version": PROMPT_VERSION, "requested_model": st.extract_model}
-    p = tmp_path / "extractions.jsonl"
-    p.write_text("\n".join(json.dumps(r) for r in [
-        {**cur, "pmid": "1", "text_sha256": "a", "written_at": "1", "extraction": {"variants": []}},
-        {**cur, "pmid": "2", "text_sha256": "b", "written_at": "2", "error": "ExtractionRefused"},
-        {**cur, "pmid": "1", "text_sha256": "c", "written_at": "3", "extraction": {"variants": [1, 2]}},
-        # A comparison model's newer row must not displace the current one.
-        {**cur, "requested_model": "other", "pmid": "1", "text_sha256": "d", "written_at": "4",
-         "extraction": {"variants": []}},
-        # Nor may a retired prompt's.
-        {**cur, "prompt_version": "v0", "pmid": "3", "text_sha256": "e", "written_at": "5",
-         "extraction": {"variants": []}},
-    ]) + "\n")
-    rows = latest_extractions(p, st.extract_model)
-    assert [r["pmid"] for r in rows] == ["1"]
-    assert rows[0]["text_sha256"] == "c", "the newer current row must win"

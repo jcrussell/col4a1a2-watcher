@@ -38,11 +38,11 @@ somebody else's bytes and three orders of magnitude larger.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from col4a1a2.digest import sha256_text
 from col4a1a2 import jsonl
 
 log = logging.getLogger("col4a1a2")
@@ -92,7 +92,7 @@ def identify(pmid: str | None, doi: str | None, title: str | None) -> tuple[str,
         return str(doi).lower(), "doi"
     norm = " ".join((title or "").split()).casefold()
     if norm:
-        return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16], "title_sha256"
+        return sha256_text(norm)[:16], "title_sha256"
     return "", "unknown"
 
 

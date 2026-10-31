@@ -6,11 +6,11 @@ correctly, because p.(Gly423Trpfs*19) is a frameshift and p.(Gly2=) is
 synonymous. Those seven are pinned below.
 """
 
-from pathlib import Path
 
 import pytest
 
 from col4a1a2 import jsonl
+from conftest import corpus_file
 from col4a1a2.extract.derive import check_extraction, check_record, derive_variant_type
 
 
@@ -107,9 +107,7 @@ def test_checks_are_quiet_on_the_real_corpus():
     future check that floods the review queue. If this fails, the new check
     needs its false-positive rate measured before it ships.
     """
-    snap = Path(__file__).resolve().parents[1] / "data/raw/2026-10-31/extractions.jsonl"
-    if not snap.exists():
-        pytest.skip("corpus snapshot not present")
+    snap = corpus_file("data/raw/2026-10-31/extractions.jsonl")
     rows = {}
     for r in jsonl.read(snap):
         if not r.get("error"):

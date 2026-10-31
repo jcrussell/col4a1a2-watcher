@@ -40,11 +40,11 @@ record can legitimately appear in a slice earlier than expected.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from col4a1a2.digest import sha256_text
 from col4a1a2 import jsonl
 
 log = logging.getLogger("col4a1a2")
@@ -54,7 +54,7 @@ DEFAULT_RECENCY_DAYS = 365
 
 
 def query_hash(query: str) -> str:
-    return hashlib.sha256(" ".join(query.split()).encode("utf-8")).hexdigest()[:12]
+    return sha256_text(" ".join(query.split()))[:12]
 
 
 @dataclass(frozen=True)

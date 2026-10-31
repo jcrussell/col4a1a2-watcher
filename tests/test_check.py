@@ -2,49 +2,49 @@
 
 import json
 import subprocess
-from pathlib import Path
 
 import pytest
 
-from col4a1a2 import jsonl, schemas
+from col4a1a2 import jsonl
 from col4a1a2.check import Checker
-from col4a1a2.config import load_settings
-from col4a1a2.extract.challenge import records_digest, slim_records
+from col4a1a2.extract.rows import records_digest_for
 from col4a1a2.ledger import Ledger
-from conftest import PROVENANCE, make_challenge_row, make_extraction_row, make_variant
-
-CONFIG = Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml"
+from conftest import (
+    make_challenge_row,
+    make_extraction_row,
+    make_settings,
+    make_snapshot,
+    make_triage_row,
+    make_variant,
+)
 
 
 def _git(repo, *args):
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
+def _commit(repo, msg, *args):
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", *args, "-m", msg)
+
+
 @pytest.fixture
 def world(tmp_path):
     """A consistent little repository: one paper triaged, extracted, challenged, committed."""
-    st = load_settings(CONFIG, repo=tmp_path)
+    st = make_settings(tmp_path)
     cur = st.curated_dir
-    cur.mkdir(parents=True)
     led = Ledger(cur / "ledger.jsonl")
     led.record(identity="1", stage="candidate", dropped_at="")
-    jsonl.append(cur / "triage.jsonl", {"pmid": "1", "triage_prompt_version": "t1", **PROVENANCE,
-                                        "read_full_text": True, "reason": "r",
-                                        "usage": {"input": 1, "output": 1}})
+    jsonl.append(cur / "triage.jsonl", make_triage_row("1"))
     row = make_extraction_row("1", variants=[make_variant()])
     led.record(identity="1", stage="extracted", text_sha256=row["text_sha256"],
                prompt_version=row["prompt_version"], requested_model=row["requested_model"], attempts=0)
-    recs = slim_records("1", row["extraction"]["variants"], [])
     jsonl.append(cur / "challenges.jsonl", make_challenge_row("1", text_sha256=row["text_sha256"],
-                                                              records_digest=records_digest(recs)))
+                                                              records_digest=records_digest_for(row)))
     led.record(identity="1", stage="challenged")
-    snap = st.snapshot_root / "s1"
-    snap.mkdir(parents=True)
-    schemas.write_document(snap / "manifest.json", {"fetched_at": "2026-10-31T00:00:00+00:00"})
-    jsonl.write(snap / "extractions.jsonl", [row])
+    snap = make_snapshot(st, extractions=[row])
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "data/curated")
-    _git(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base")
+    _commit(tmp_path, "base")
     return st, tmp_path, snap
 
 
@@ -83,9 +83,7 @@ def test_a_byte_identical_duplicate_is_a_warning_not_a_re_run(world):
 
 def test_a_dangling_pmid_is_an_error(world):
     st, repo, _ = world
-    jsonl.append(st.curated_dir / "triage.jsonl", {"pmid": "999", "triage_prompt_version": "t1",
-                                                   **PROVENANCE, "read_full_text": False,
-                                                   "reason": "r", "usage": {"input": 1, "output": 1}})
+    jsonl.append(st.curated_dir / "triage.jsonl", make_triage_row("999", read_full_text=False))
     assert "dangling-pmid" in _errors(st, repo, allow_rewrite=False)
 
 
@@ -113,7 +111,7 @@ def test_a_migration_may_not_lose_a_triage_verdict(world):
     led = Ledger(st.curated_dir / "ledger.jsonl")
     led.record_triage("1", {"keep": True, "llm_keep": True, "llm_reason": "r",
                             "pubtator_gene_linked_variant": False})
-    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "verdict")
+    _commit(repo, "verdict", "-a")
     path = st.curated_dir / "ledger.jsonl"
     jsonl.write(path, [{k: v for k, v in r.items() if k != "triage"} for r in jsonl.read(path)])
     assert "migration-lost-verdict" in _errors(st, repo, allow_rewrite=True)

@@ -1,13 +1,12 @@
 """Configuration loading, and the rate-key hazard that motivates most of it."""
 
 import tomllib
-from pathlib import Path
 
 import pytest
 
 from col4a1a2.config import EXPECTED_RATE_KEYS, ConfigError, Prices, load_settings
 
-CONFIG = Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml"
+from conftest import CONFIG
 
 
 def test_committed_config_loads():

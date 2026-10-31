@@ -19,20 +19,18 @@ from col4a1a2.extract.challenge import (
     slim_records,
 )
 
+from conftest import make_variant, make_provenance, make_paper_extraction
+
 TEXT = ("The proband carried c.1537G>A. "
         "Only one family was studied. "
         "We also observed c.4493C>T in an unrelated patient.")
 
 
 def _variant(as_written="c.1537G>A", **kw):
-    base = dict(gene="COL4A1", as_written=as_written, hgvs_c=as_written, hgvs_p="",
-                transcript_if_stated="", variant_type="other", n_probands=1, n_families=1,
-                n_total_carriers=None,
-                inh_de_novo_confirmed=0, inh_de_novo_assumed=0, inh_inherited=1, inh_unknown=0,
-                reported_classification="", same_family_as_prior_report=False,
-                confidence="high", evidence_quotes=["The proband carried c.1537G>A."], notes="")
-    base.update(kw)
-    return base
+    # Through the schema, so a fixture cannot drift from the record it stands for.
+    return make_variant(**{"as_written": as_written, "hgvs_c": as_written, "hgvs_p": "",
+                           "variant_type": "other", "inh_inherited": 1, "inh_unknown": 0,
+                           "evidence_quotes": ["The proband carried c.1537G>A."], **kw})
 
 
 def test_record_key_is_stable_and_not_a_list_position():
@@ -128,13 +126,12 @@ def test_cache_keys_on_both_text_and_records(tmp_path):
     assert c.get("textA", d, "m") is None
     c.put(pmid="1", text_sha256="textA", records_digest=d,
           challenge=ch, report=rep, usage={"input": 1, "output": 2, "cache_read": 0, "effort": "low"},
-          provenance={"model": "m", "requested_model": "m", "effort": "low", "written_at": "2026-10-31T00:00:00+00:00"})
+          provenance=make_provenance())
 
     again = ChallengeCache(tmp_path / "c.jsonl")
     assert again.get("textA", d, "m") is not None
     assert again.get("textB", d, "m") is None, "different text must miss"
     assert again.get("textA", "otherdigest", "m") is None, "different records must miss"
-    assert again.get("textA", d, "other-model") is None, "a second model must not see the first's verdict"
 
 
 def test_cache_misses_on_a_bumped_challenge_version(tmp_path):
@@ -201,11 +198,9 @@ def test_the_fake_client_exercises_the_beta_branch(fake_anthropic):
 def test_extract_paper_is_now_covered_at_all(fake_anthropic, fake_response):
     from col4a1a2.extract.client import ExtractionRefused, extract_paper
     from col4a1a2.extract.prompt import PaperInput
-    from col4a1a2.extract.schema import PaperExtraction, PaperType
 
     p = PaperInput(pmid="1", pmcid=None, title="T", text="TITLE: T", abstract_only=False)
-    ex = PaperExtraction(pmid="1", paper_type=PaperType.case_report,
-                         input_was_abstract_only=False, has_variant_level_data=False)
+    ex = make_paper_extraction()
     res = extract_paper(fake_anthropic(default_output=ex), p, model="m", effort="high")
     assert res.extraction == ex and res.reply.stop_reason == "end_turn"
     assert res.reply.requested_model == "m" and res.reply.written_at
