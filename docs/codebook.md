@@ -1,6 +1,6 @@
 # Codebook: per-paper variant evidence extraction
 
-This defines every field Claude fills in `PaperExtraction` (see `src/col4a1a2/extract/schema.py`) and how a human spot-checker should judge it. The system prompt (`src/col4a1a2/extract/prompts/v1.md`) is the operational version of these rules; keep the two in sync and bump `PROMPT_VERSION` when either changes.
+This defines every field Claude fills in `PaperExtraction` (see `src/col4a1a2/extract/schema.py`) and how a human spot-checker should judge it. The system prompt (`src/col4a1a2/extract/prompts/v1.md`) is the operational version of these rules; keep the two in sync. A change to the prompt itself means bumping `PROMPT_VERSION`, which re-extracts every paper.
 
 ## What the schema is for
 
@@ -10,11 +10,11 @@ Three questions, and nothing else:
 2. **What variants exist?** gene, the variant as published, HGVS, the transcript, the variant class.
 3. **How many people are known to carry each?** probands, families, total carriers, and the denominator they came out of.
 
-Fields that served interpretation rather than these three were cut while prototyping, after measuring them over 206 records: co-segregation counts (filled 12%, 11% and 2% of the time), per-assay functional structure (16 of 206 records), and the present / absent-on-exam / not-assessed phenotype status. See the module docstring of `schema.py` for the reasoning and `docs/measurements.md` for the grammar ceiling that forced the choice.
+Fields that serve interpretation rather than these three are deliberately absent: co-segregation counts, per-assay functional structure, and a present / absent-on-exam / not-assessed phenotype status. Measured over 206 records they were rarely filled (segregation 12%, 11% and 2% of the time; structured functional data in 16 records), and the structured-output grammar has room only for the fields above. See the module docstring of `schema.py` and `docs/measurements.md`.
 
 ## Unit of extraction
 
-One record per paper. Inside it, one `VariantEvidence` per distinct COL4A1/COL4A2 variant reported in specific individuals **in this paper**. Variants cited from earlier publications without new individuals are not records. Nor are **common polymorphisms studied for association** -- an rsID reported with allele frequencies, odds ratios or p-values across a cohort. A draft of the prompt extracted them more eagerly than the one before it (one association paper went from 2 records to 5); they are not disease variants, and their carrier counts are not probands.
+One record per paper. Inside it, one `VariantEvidence` per distinct COL4A1/COL4A2 variant reported in specific individuals **in this paper**. Variants cited from earlier publications without new individuals are not records. Nor are **common polymorphisms studied for association** -- an rsID reported with allele frequencies, odds ratios or p-values across a cohort. They are not disease variants, and their carrier counts are not probands.
 
 ## Counting
 
@@ -48,7 +48,7 @@ One record per paper. Inside it, one `VariantEvidence` per distinct COL4A1/COL4A
 | `muscle` | cramps, elevated CK, myopathy |
 | `other` | anything else, described in `phenotype_details` |
 
-A system examined and found normal is **not** listed, and nothing records that it was examined. That is a deliberate loss: a normal renal ultrasound was real evidence under the old three-state status and is now invisible.
+A system examined and found normal is **not** listed, and nothing records that it was examined. That is a deliberate loss: a normal renal ultrasound is real evidence, and the record cannot show it.
 
 `phenotype_details` is the phenotype as reported, including age at onset if stated.
 
@@ -63,7 +63,7 @@ A system examined and found normal is **not** listed, and nothing records that i
 
 `as_written` is copied verbatim. `hgvs_c` / `hgvs_p` only when given or unambiguous; never converted between numbering systems by the model. `transcript_if_stated` matters because a `c.` number means nothing without it. Normalisation to NM_001845.6 / NM_001846.4 and GRCh38 happens later via Ensembl VEP, not in extraction.
 
-`variant_type`: `missense_glycine` (substitution of a Gly), `missense_other`, `splice`, `nonsense`, `frameshift`, `inframe_indel`, `intronic`, `utr`, `deletion_cnv`, `other`.
+`variant_type`: `missense_glycine` (substitution of a Gly), `missense_other`, `splice`, `nonsense`, `frameshift`, `inframe_indel`, `intronic`, `utr`, `deletion_cnv`, `other`. The vocabulary has no class for a copy-number gain, so a duplication lands in `deletion_cnv`; `derive.py` flags it.
 
 ## Evidence quotes and grounding
 

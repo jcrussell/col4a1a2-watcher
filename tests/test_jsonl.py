@@ -74,7 +74,7 @@ def test_append_creates_parents(tmp_path):
     assert jsonl.read(path) == [{"a": 1}]
 
 
-def test_the_real_snapshot_that_exposed_this_parses(tmp_path):
+def test_a_real_snapshot_with_line_separators_parses(tmp_path):
 
     snap = corpus_file("data/raw/2026-10-30-rest/papers.jsonl")
     rows = jsonl.read(snap)

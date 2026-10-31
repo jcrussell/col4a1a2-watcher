@@ -10,31 +10,34 @@ The audience is a patient foundation following these genes, clinicians and resea
 
 ## Status
 
-Milestone 1 is complete except for the human spot-check.
+In place:
 
-- Rate-limited, cached HTTP client; Europe PMC, PubTator 3 and NCBI sources; JATS to text.
-- Haiku triage gate, cached by prompt version, with a keyword fallback for offline runs.
-- Extraction schema, versioned prompt, structured-output client, quote grounding.
-- `fetch-papers`, `list`, `extract`, `show`. Tests run offline.
-- One window extracted end to end. Numbers in `docs/measurements.md`.
+- Rate-limited, cached HTTP client; time-sliced Europe PMC discovery, PubTator 3 and NCBI sources; JATS to text; supplementary files parsed and figures transcribed.
+- Haiku triage gate, cached by prompt version and model, with a keyword fallback for offline runs.
+- Extraction (prompt v1), quote grounding with computed provenance, deterministic checks, adversarial review (prompt c1), and the spot-check queue.
+- Every raw Claude response archived; schema-validated files throughout; the ledger as denominator; `col4a1a2 check` in the pre-commit hook. Tests run offline.
+- The open-access corpus triaged, extracted and challenged; closed-access candidates triaged on title and abstract. Numbers in `docs/measurements.md`.
+
+Not yet: the human spot-check, HGVS normalisation, `build`, `report`, and any published table.
 
 ## Milestones
 
-**M1. Twenty papers end to end.** Fetch, triage, extract and ground a recent window; measure tokens and cost; have a human read the outputs against the papers to seed the gold set; iterate the prompt once. *Remaining: the spot-check, and the first gold records in `data/curated/gold/`.*
+**M1. End to end on one window.** Done, except the human spot-check that seeds the gold set in `data/curated/gold/`.
 
-**M2. Bootstrap.** Corpus list with no date window, back to roughly 2000. Triage, then extraction through the Batches API at half price. Then HGVS normalisation via VEP, `build`, and the first evidence tables. Grow the gold set to thirty papers and report measured precision and recall.
+**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: HGVS normalisation via VEP, `build`, and the first evidence tables; a gold set of thirty papers and measured precision and recall.
 
-**M3. Watcher.** ClinVar diff, `report`, `watch` as a single scheduled command, snapshot freshness keys, idempotence tests. Runs monthly after the ClinVar release.
+**M3. Watcher.** ClinVar diff, `report`, `watch` as a single scheduled command, snapshot freshness keys, idempotence tests. Runs monthly after the ClinVar release, with extraction through the Batches API at half price.
 
 **M4. Publish.** Static tables and report, README carrying the measured accuracy and the known limits, outreach to the Gould Syndrome Foundation and the Gould lab with the first report.
 
 ## Known gaps
 
-- **Supplementary files and figures are now read**, which closes what was the largest loss. Spreadsheets, Word documents, delimited files and PDFs are parsed deterministically; figures are transcribed by a vision model, but only for papers whose text does not already name its variants. What remains out of reach: supplements that the article's publisher hosts and PMC does not, scanned PDFs (detected and recorded, never guessed at), and TIFF figures, which the vision API does not accept.
-- **No precision estimate exists yet**, for extraction or for review, because `data/curated/gold/` is empty. `col4a1a2 review` now emits the queue; filling it is human work and the one thing blocking a stated accuracy figure.
+- **Closed-access papers yield title and abstract only**, and more of the relevant literature is closed than open: the gate keeps about a third of closed-access candidates against about 9% of open-access ones. Those papers are in the ledger as triaged and kept, not extracted.
+- **Some supplements and figures stay out of reach**: supplements the publisher hosts and PMC does not, bundles the Europe PMC endpoint fails to deliver (most requests; successes are kept and reused), scanned PDFs (detected and recorded, never guessed at), and TIFF figures, which the vision API does not accept. Figures are transcribed only for papers whose text does not already name its variants.
+- **No precision estimate exists**, for extraction or for review, because `data/curated/gold/` is empty. `col4a1a2 review` emits the queue; filling it is human work and the one thing blocking a stated accuracy figure.
 - **`missed_variants` needs a relevance filter** before its count can be read as recall: common SNPs from association sections ground correctly but should never be records.
+- **`variant_type` has no class for a copy-number gain**; `derive.py` flags gains typed `deletion_cnv`, and the fix waits for a prompt revision that is worth re-extracting for.
 - **Deduplication is designed but not built.** See `docs/methods.md`.
-- Non-open-access papers yield title and abstract only.
 - Reviews contribute pointers, never counts, by design.
 
 ## Later, optional

@@ -1,24 +1,23 @@
 """Deterministic checks and derivations over extracted records.
 
-Pure functions, no network, no model. Two honest caveats, measured over 177
-records, bound what this module can do:
+Pure functions, no network, no model. Two caveats bound what this module can
+do (measured over the current corpus of 233 records; docs/measurements.md):
 
-**The consistency checks fire zero times.** Every one of them -- inheritance
-sums, families against probands, carriers against probands, a phenotype marked
-present with no detail, a prior-report flag with no reason -- passes on all 177
-records. They are kept because they are free and will eventually catch
-something, not because they are catching anything now. They do *not* reduce
-what a human or an adversarial reviewer has to look at.
+**The consistency checks rarely fire.** Inheritance sums, families against
+probands and tested, carriers against probands, phenotype vocabulary, a
+prior-report flag with no reason, and a copy-number gain typed as a deletion
+together produce 4 findings over 233 records. They are kept because they are
+free, not because they shrink what a human or the adversarial reviewer has
+to look at.
 
-**Deriving `variant_type` is worse than asking the model, not better.** 63 of
-177 records carry no `hgvs_p`, and `hgvs_c` alone cannot separate missense from
-nonsense from synonymous: `c.164G>A` is any of the three without the transcript.
-A correct pure function returns `other` for 95 records where the model returns
-it for 36. So this is a *cross-check on the subset where the protein change is
-unambiguous*, never the primary, and the model's value remains what gets
-published. Predicate order matters: testing the glycine pattern first fires
-`missense_glycine` on seven records the model classified correctly, because
-`p.(Gly423Trpfs*19)` is a frameshift and `p.(Gly2=)` is synonymous.
+**Deriving `variant_type` is worse than asking the model, not better.** 71 of
+233 records carry no `hgvs_p`, and `hgvs_c` alone cannot separate missense from
+nonsense from synonymous: `c.164G>A` is any of the three without the
+transcript. The derivation has no opinion on 69 records, so it is a
+*cross-check on the subset where the protein change is unambiguous*, never the
+primary, and the model's value is what gets published. Predicate order
+matters: a glycine pattern tested first would call `p.(Gly423Trpfs*19)`, a
+frameshift, and `p.(Gly2=)`, synonymous, `missense_glycine`.
 """
 
 from __future__ import annotations
