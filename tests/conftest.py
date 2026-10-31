@@ -1,8 +1,7 @@
 """Shared fakes. The suite never touches the network and needs no API key.
 
-`FakeAnthropic` is the project's first stand-in for the Anthropic client, which
-is what has kept `triage_paper`, `transcribe_figure`, `extract_paper` and
-`challenge_paper` untested until now.
+`FakeAnthropic` stands in for the Anthropic client, so `triage_paper`,
+`transcribe_figure`, `extract_paper` and `challenge_paper` are tested offline.
 
 One non-obvious requirement: `extract/llm.py` decides which endpoint to use
 by inspecting `client.beta.messages.create` and `.stream` for `betas` and
@@ -207,9 +206,7 @@ def make_paper_extraction(pmid: str = "1", **over):
 
 #
 # Built through the real Pydantic models rather than written out by hand, so a
-# fixture cannot drift from the schema it is meant to represent. Hand-written
-# dicts here were missing nine required fields and only the writers' schema
-# validation noticed.
+# fixture cannot drift from the schema it is meant to represent.
 
 def make_variant(**over) -> dict:
     from col4a1a2.extract.schema import Confidence, Gene, VariantEvidence

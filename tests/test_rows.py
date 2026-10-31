@@ -29,7 +29,7 @@ def test_latest_extractions_supersedes_earlier_rows_and_drops_errors(tmp_path):
 
 
 def test_a_challenge_is_attached_only_to_the_records_it_reviewed():
-    """Matching on the PMID alone attached a verdict about superseded records."""
+    """Matching on the PMID alone would attach a verdict about superseded records."""
     st = make_settings()
     row = make_extraction_row("1", variants=[make_variant()])
     exact = make_challenge_row("1", text_sha256=row["text_sha256"], records_digest=records_digest_for(row))

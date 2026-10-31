@@ -71,7 +71,7 @@ def test_region_attribution_separates_supplement_from_figure_evidence():
 
 def test_a_body_quote_does_not_launder_figure_sourced_evidence():
     """Pairing a figure quote with a generic body sentence must not hide the
-    figure provenance: that is how 38 figure-derived records first slipped past."""
+    figure provenance, or figure-derived records pass as body text."""
     from col4a1a2.sources.fulltext import PaperText
 
     pt = PaperText(pmid="1", pmcid=None, title="T", abstract="",

@@ -45,7 +45,7 @@ def export_biocjson(client: PoliteClient, pmids: list[str], chunk: int = 100) ->
 
     A failed chunk is skipped so one bad response cannot abort a fetch, but it
     is logged, and the caller records requested against resolved in the
-    manifest: a chunk dropped silently once cost up to 100 papers their
+    manifest: a chunk dropped silently would cost up to 100 papers their
     PubTator triage signals with nothing to show for it.
     """
     docs: dict[str, dict] = {}
@@ -96,7 +96,7 @@ def gene_linked_variants(doc: dict, gene_ids: set[str] | set[int]) -> list[dict]
     PubTator's tmVar annotations carry `CorrespondingGene`, surfaced as the
     `gene_ids` infon. A variant mention tied to COL4A1 (1282) or COL4A2 (1284)
     is near-proof that the paper discusses a variant *in* that gene, rather
-    than merely mentioning the gene somewhere. Measured on the 2026-10-29
+    than merely mentioning the gene somewhere. Measured on a 20-paper
     snapshot: precision 1.00, recall 0.20 (PubTator usually annotates the
     title/abstract only), so this is a promoter, never a gate.
     """

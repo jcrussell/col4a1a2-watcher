@@ -1,8 +1,8 @@
 """Content hashes, defined once.
 
 Resume, the caches, the challenge key and the response archive all key on
-sha256 digests, and each used to spell the hash out inline. Two spellings of a
-key are two chances for them to disagree.
+sha256 digests, and all compute them here: two spellings of a key are two
+chances for them to disagree.
 """
 
 from __future__ import annotations

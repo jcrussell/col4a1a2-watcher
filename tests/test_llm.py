@@ -31,8 +31,8 @@ def test_a_response_is_archived_with_its_provenance(fake_anthropic, tmp_path):
 
 
 def test_a_response_that_fails_validation_is_still_archived(fake_anthropic, fake_response, tmp_path):
-    """The point of archiving before parsing: the SDK's parse() raised before
-    anything could be kept, leaving an error row with only an exception name."""
+    """The point of archiving before parsing: when parsing raises, the raw
+    answer is already kept, not just an error row with an exception name."""
     archive = ResponseArchive(tmp_path / "responses")
     client = fake_anthropic(fake_response(parsed_output='{"wrong": 1}'))
     with pytest.raises(ValidationError):

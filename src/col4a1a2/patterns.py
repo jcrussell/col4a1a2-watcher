@@ -2,10 +2,9 @@
 
 These are classifiers, versioned with the code that uses them and deliberately
 not config: they are immune to TOML string-literal hazards here, and a change
-to one is a change in behaviour that belongs in a commit. They used to be
-copied between the fetch command and the dev triage tool, and the copies had
-drifted -- the dev copy lacked eight clinical terms -- so the tool built to
-measure the deployed keyword rule could not score it.
+to one is a change in behaviour that belongs in a commit. The fetch command
+and the dev triage tool share these definitions, so the tool that measures the
+deployed keyword rule scores exactly that rule.
 
 Two of them change the assembled paper text when edited (`HGVS_LIKE` and
 `GENE_IN_CELL`, through supplement row filtering and the figure gate), and so

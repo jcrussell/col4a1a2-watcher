@@ -11,8 +11,7 @@ Two hazards this module exists to contain:
    supplement endpoint, which answers HTTP 500 at that rate. `rates` is
    therefore validated to be flat, with a test asserting the exact key set.
 2. **A settings object nobody passes is no better than a constant.** Every
-   command takes `Settings`, including `extract`, `show` and `list`, which
-   loaded no configuration at all before.
+   command takes `Settings`, including `extract`, `show` and `list`.
 """
 
 from __future__ import annotations

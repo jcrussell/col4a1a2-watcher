@@ -42,9 +42,8 @@ def make_client(settings: Settings) -> PoliteClient:
 def make_anthropic(settings: Settings) -> anthropic.Anthropic:
     """The one place an Anthropic client is constructed.
 
-    The SDK defaults to two retries with 0.5s/8s backoff, which we were taking
-    silently in five separate places. Worst case per call is
-    timeout x (retries + 1), so both come from config and stay bounded.
+    The SDK defaults to two retries with 0.5s/8s backoff. Worst case per call
+    is timeout x (retries + 1), so both come from config and stay bounded.
     """
     return anthropic.Anthropic(
         max_retries=settings.anthropic_max_retries,
@@ -298,9 +297,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         if m.pmid:
             by_pmid.setdefault(m.pmid, m)
         else:
-            # Write point 1. These vanished entirely before: no snapshot row, no
-            # triage decision, only an aggregate in a log line. Identity falls
-            # back to DOI, then to a title hash.
+            # Write point 1. These get no snapshot row and no triage decision,
+            # so the ledger is their only record. Identity falls back to DOI,
+            # then to a title hash.
             n_no_pmid += 1
             ledger.record_candidate(
                 pmid=None, doi=m.doi, title=m.title, journal=m.journal,
@@ -338,7 +337,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             # Nothing is known about this paper beyond PubTator's own row, so
             # `is_open_access=False` here means "not retrieved". `metadata_source`
             # carries that distinction to the open-access filter and the ledger,
-            # which used to record it as closed access on no evidence at all.
+            # so it is never recorded as closed access on no evidence.
             r = pubtator_hits[pmid]
             by_pmid[pmid] = europepmc.PaperMeta(pmid=pmid, pmcid=None, doi=r.get("doi"), title=r.get("title", ""),
                                                 journal=r.get("journal"), pub_year=None,
@@ -348,16 +347,15 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     n_lookup_requested, n_lookup_resolved = len(missing), len(resolved)
 
     metas = list(by_pmid.values())
-    # Captured before the filter reassigns `metas`: the manifest has been
-    # reporting a post-filter number under this name.
+    # Captured before the filter reassigns `metas`, so the manifest reports a
+    # pre-filter number under this name.
     n_candidates_before_filters = len(metas)
     if a.oa_only:
         kept_oa = [m for m in metas if m.is_open_access and m.pmcid]
         # Write point 2. The filter runs before the triage loop, so a paper cut
-        # here never gets a decision row and used to leave no trace at all.
+        # here never gets a decision row; this is its only trace.
         # Partitioned by object identity: `m not in kept_oa` compares dataclass
-        # fields down a list, which is quadratic and the candidate pool is now
-        # thousands of papers.
+        # fields down a list, which is quadratic over a pool of thousands.
         keep_ids = {id(m) for m in kept_oa}
         dropped = [m for m in metas if id(m) not in keep_ids]
         for m in dropped:
@@ -380,7 +378,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
 
     # The LLM gate runs on title + abstract only, before any full text is fetched.
     # Without a key (or with --no-llm-triage) we fall back to the keyword rule,
-    # which has the same recall on the 2026-10-29 snapshot but keeps 3x the noise.
+    # which measures the same recall but keeps 3x the noise (docs/measurements.md).
     use_llm = not a.no_llm_triage and has_api_key()
     if not use_llm and not a.no_llm_triage:
         log.warning("ANTHROPIC_API_KEY not set; falling back to keyword triage")
@@ -425,12 +423,12 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     log.info("triage: %d of %d papers kept (%s); cache hits %d, new calls %d",
              n_keep_all, len(metas), "llm" if use_llm else "keyword", tcache.hits, tcache.misses)
     # Write point 3. Recorded for every triaged candidate, including the ones
-    # `--limit` is about to discard, which previously survived only as a bare
-    # triage decision with no title, journal, date or identifier.
+    # `--limit` is about to discard, so each carries its title, journal, date
+    # and identifier rather than a bare triage decision.
     for m, _hints, tr in triaged:
         # No disposition: a paper `--limit` did not reach this run is still in
-        # play, and recording otherwise let a later limited run bury work
-        # already done. The per-run count goes in the manifest instead, and
+        # play, and recording otherwise would let a later, narrower run bury
+        # work already done. The per-run count goes in the manifest instead, and
         # `col4a1a2 ledger` derives the backlog from triage and stage.
         ledger.record_candidate(
             pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,
@@ -544,9 +542,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         "candidates_cut_by_limit": max(0, n_triaged - a.limit) if a.limit else 0,
         "candidates_before_filters": n_candidates_before_filters,
         "europepmc_hits_without_pmid": n_no_pmid,
-        # Requested against resolved, because the old lookup lost 98% of its
-        # PMIDs silently: the fallback invented metadata and nothing compared
-        # the two numbers. A drop here is the first sign of the next break.
+        # Requested against resolved: the fallback fills in metadata for every
+        # miss, so a lookup that quietly resolves almost nothing is visible only
+        # here. A drop in the ratio is the first sign of a break.
         "pmid_lookup_requested": n_lookup_requested,
         "pmid_lookup_resolved": n_lookup_resolved,
         "pubtator_export_requested": n_pubtator_requested,
@@ -623,19 +621,18 @@ def cmd_extract(a: argparse.Namespace) -> int:
         papers = papers[: a.limit]
     client = make_anthropic(st)
     out_path = snap / "extractions.jsonl"
-    # Resume on (prompt version, text hash). Keying on the prompt version alone
-    # silently skipped papers whose text had grown — e.g. once supplements and
-    # figure transcriptions were appended — making those additions a no-op.
+    # Resume on (prompt version, text hash), so a paper whose text has grown --
+    # supplements or figure transcriptions appended -- is extracted again rather
+    # than skipped.
     # Rows recording a failure are a log, not a result: including them would mark
     # a transiently refused paper done forever.
     # The requested model is part of the key, so `--model X` extracts alongside
     # the configured model's rows instead of finding them and skipping.
     done = {(r["pmid"], r["text_sha256"]) for r in jsonl.read(out_path)
             if rows_mod.is_current_extraction(r, model)}
-    # Resume across snapshots, not just within one. Without this a paper
-    # extracted in last month's snapshot is re-extracted in this month's at full
-    # price, which is the whole reason the bootstrap could not be split into
-    # affordable pieces. The ledger is the cross-snapshot index, and it tracks
+    # Resume across snapshots, not just within one, so a paper extracted in
+    # last month's snapshot is not re-extracted in this month's at full price,
+    # and a large backlog can be split into affordable runs. The ledger is the cross-snapshot index, and it tracks
     # the configured model only (see `is_current` above); `needs_extraction`
     # is the single statement of the rule.
     if a.no_llm_cache:
@@ -842,12 +839,12 @@ def cmd_review(a: argparse.Namespace) -> int:
     current = rows_mod.current_challenges(
         jsonl.read_tolerant(st.curated_dir / "challenges.jsonl", what="challenges"), st.extract_model)
     # The challenge that reviewed these records on this text, or none: matching
-    # on the PMID alone attached verdicts about superseded records.
+    # on the PMID alone would attach verdicts about superseded records.
     challenges = {r["pmid"]: c for r in rows if (c := rows_mod.challenge_for(r, current))}
 
     def clean(v) -> str:
-        # The measurement that justified TSV covered extraction fields only;
-        # challenge output adds free text, so reject separators rather than assume.
+        # Challenge output is free text that may contain separators, so
+        # collapse them rather than assume.
         return " ".join(str(v or "").split()).replace("\t", " ")
 
     out = []
@@ -886,15 +883,13 @@ def cmd_review(a: argparse.Namespace) -> int:
                 "CURATOR_VERDICT": "", "CURATOR_NOTE": "",
             })
     # Scoped to this snapshot's papers. Reading every challenge ever written
-    # would attribute corpus-wide counts to one snapshot, which is how the
-    # same 275 reports were printed under each of four snapshots.
+    # would attribute corpus-wide counts to one snapshot.
     in_snapshot = {r["pmid"] for r in rows}
     missed = [(p, m) for p, c in challenges.items() if p in in_snapshot
               for m in (c.get("report") or {}).get("missed_grounded", [])]
     # JSONL is the artefact; it has a schema and nothing downstream parses TSV.
     # Written even when empty -- a curator finding an empty queue and a curator
-    # finding no file are different situations, and deriving the columns from
-    # the first row crashed on the one snapshot that had nothing to review.
+    # finding no file are different situations.
     path = snap / "review.jsonl"
     jsonl.write(path, out)
     print(f"{len(out)} records across {len({r['pmid'] for r in out})} papers -> {path}")
@@ -1046,9 +1041,8 @@ def main(argv: list[str] | None = None) -> int:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", help="path to col4a1a2.toml (default config/col4a1a2.toml)")
     common.add_argument("--cache-dir", help="override the cache directory from config")
-    # Options shared by several verbs, defined once so their meaning and help
-    # text cannot drift apart (`--pmid` was a list for one verb and a string
-    # for two others; `--budget-usd` had two help texts).
+    # Options shared by several verbs, defined once so their meaning, type and
+    # help text cannot drift apart between verbs.
     snap_opt = argparse.ArgumentParser(add_help=False)
     snap_opt.add_argument("--snapshot", help="snapshot directory (default: the configured snapshot root/<today>)")
     pick_opt = argparse.ArgumentParser(add_help=False)

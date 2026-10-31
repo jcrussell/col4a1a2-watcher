@@ -38,8 +38,7 @@ class PaperMeta:
     # `is_open_access`/`pmcid` are facts; "pubtator_only" means the Europe PMC
     # lookup did not resolve the PMID and everything below the title was filled
     # in by hand, so absent OA and PMCID mean "not retrieved", not "not open
-    # access". Conflating the two cost this project 2,034 papers: see
-    # `lookup_pmids`.
+    # access". Conflating the two drops unexamined papers as closed access.
     metadata_source: str = "europepmc"
     extra: dict = field(default_factory=dict)
 
@@ -118,18 +117,14 @@ def lookup_pmids(client: PoliteClient, pmids: list[str], *, chunk: int = 50,
 
     **`EXT_ID`, never `PMID`.** Europe PMC does not index a `PMID` field, so a
     `PMID:11985779` query returns hitCount 0 while `EXT_ID:11985779` returns the
-    paper. This module asked the wrong question for the whole bootstrap: of
-    2,075 unique PMIDs sent through the old query, 41 resolved. The caller then
-    filled in the misses by hand with `is_open_access=False`, the open-access
-    filter dropped them, and the ledger recorded 2,034 papers as closed access
-    without ever having looked. Re-querying a random 100 of them with `EXT_ID`
-    resolved 97, of which 92 had a PMCID and 91 were flagged open access.
+    paper. A wrong field fails silently: the query succeeds, resolves almost
+    nothing, and the caller fills in every miss.
 
-    Two details. `EXT_ID` matches PMC-sourced records as well as MED ones -- one
-    response came back `source=PMC, pmid=null` -- so records without a PMID are
+    Two details. `EXT_ID` matches PMC-sourced records as well as MED ones --
+    which can come back `source=PMC, pmid=null` -- so records without a PMID are
     dropped rather than keyed wrongly. And the resolution rate is checked per
-    chunk and logged: the old failure was silent precisely because nothing
-    compared what was asked for against what came back.
+    chunk and logged, comparing what was asked for against what came back,
+    since nothing else would notice a collapse.
     """
     out: dict[str, PaperMeta] = {}
     for i in range(0, len(pmids), chunk):

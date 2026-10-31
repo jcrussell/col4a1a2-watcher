@@ -9,8 +9,7 @@ reasons:
   range against a fixed query string, so an immutable question -- is cached
   forever instead, and only the open window pays. Note that sealing changes the
   cache lifetime and not whether the slice is queried: skipping the query
-  outright would drop those papers from the candidate set, which an earlier
-  version of this did, shrinking a 744-candidate sweep to 260.
+  outright would drop those papers from the candidate set.
 - **Cursor chains invalidate wholesale.** Pagination embeds the previous page's
   cursor in each cache key, so one paper added to the result set shifts every
   later cursor and invalidates the chain. Slices bound the blast radius to one

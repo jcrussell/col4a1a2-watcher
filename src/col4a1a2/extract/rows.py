@@ -3,8 +3,8 @@
 `extractions.jsonl` and `challenges.jsonl` accumulate rows from retired
 prompts, comparison models (`extract --model X`), superseded text and
 `--no-llm-cache` re-runs. Every reader needs the same answer to "which of these
-is the result", and this project has twice shipped a bug that lived in two
-copies of one such rule. So `cli` and `check` import these and restate nothing.
+is the result", and two copies of one such rule drift apart. So `cli` and
+`check` import these and restate nothing.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def current_challenges(rows: list[dict], model: str) -> dict[tuple[str, str, str
 def challenge_for(extraction: dict, challenges: dict[tuple[str, str, str], dict]) -> dict | None:
     """The challenge that reviewed exactly these records on exactly this text.
 
-    Matching on the PMID alone attached a verdict about superseded records to
-    the current ones whenever a paper had been re-extracted.
+    Matching on the PMID alone would attach a verdict about superseded records
+    to the current ones whenever a paper is re-extracted.
     """
     return challenges.get((extraction["pmid"], extraction["text_sha256"], records_digest_for(extraction)))

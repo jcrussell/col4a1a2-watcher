@@ -1,11 +1,10 @@
 """JSON Lines reading and writing that survives real article text.
 
-Found the hard way on a 802-paper snapshot: one paper's full text contained
-U+2028 LINE SEPARATOR. `json.dumps` does not escape it, because it is valid
-inside a JSON string, but `str.splitlines()` treats it as a line break -- so the
-file had 802 rows by newline and 803 by `splitlines()`, and the reader died with
-"Unterminated string". The same applies to U+2029, U+0085, and the vertical tab
-and form feed.
+Article text can contain U+2028 LINE SEPARATOR. `json.dumps` does not escape
+it, because it is valid inside a JSON string, but `str.splitlines()` treats it
+as a line break, so a reader splitting that way sees one row as two and fails
+with "Unterminated string". The same applies to U+2029, U+0085, and the
+vertical tab and form feed.
 
 Two defences, because the files are read by other tools too:
 
@@ -143,7 +142,7 @@ def write(path: Path, rows: Iterable[Any], *, validate: bool = True) -> int:
 
 
 class TornTail(RuntimeError):
-    """The file's last line has no newline: an earlier writer died mid-line."""
+    """The file's last line has no newline: a writer died mid-line."""
 
 
 def has_torn_tail(path: Path) -> bool:

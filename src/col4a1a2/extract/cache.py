@@ -2,13 +2,10 @@
 
 Triage verdicts, figure transcriptions and challenge verdicts are each an
 append-only JSONL file keyed by what was asked: the input's identity, the
-prompt version, and the model requested. They used to be three hand-written
-classes that picked the latest row by *file position*, while `check`,
-`review` and the ledger picked it by `written_at`. Every curated file is
-merged with `merge=union`, which can reorder lines, and `--no-llm-cache`
-appends a second row under the same key, so the two orders could choose
-different answers. Here the newest `written_at` wins, the same as everywhere
-else.
+prompt version, and the model requested. The newest `written_at` per key
+wins, the same rule `check`, `review` and the ledger use. File position cannot
+decide it: every curated file is merged with `merge=union`, which can reorder
+lines, and `--no-llm-cache` appends a second row under the same key.
 """
 
 from __future__ import annotations

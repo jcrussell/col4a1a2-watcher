@@ -22,7 +22,7 @@ def normalise(s: str) -> str:
 
 
 def find_quote(quote: str, text_norm: str) -> int | None:
-    """Offset of a quote in normalised text, or None. Same tolerance as before."""
+    """Offset of a quote in normalised text, or None."""
     q = normalise(quote)
     if not q:
         return None
@@ -100,11 +100,11 @@ def ground(
 
     With `regions`, also records which region each quote matched, so a fact taken
     from a deterministically parsed supplement can be told apart from one taken
-    from a model-generated figure transcription. Passing no regions reproduces
-    the original behaviour exactly.
+    from a model-generated figure transcription. Without regions the whole text
+    is matched as one string.
 
     Note that region matching is marginally stricter: a quote spanning the seam
-    between two regions no longer grounds. That is correct, since such a quote is
+    between two regions does not ground. That is correct, since such a quote is
     not verbatim in either source.
     """
     if regions:
@@ -114,9 +114,9 @@ def ground(
 
     rep = GroundingReport(pmid=extraction.pmid)
     for idx, v in enumerate(extraction.variants):
-        # Functional evidence is now one sentence rather than a list of assay
-        # objects, and it is the model's own prose rather than a quote, so it is
-        # not grounded. Only `evidence_quotes` claims to be verbatim.
+        # Functional evidence is one sentence of the model's own prose rather
+        # than a quote, so it is not grounded. Only `evidence_quotes` claims to
+        # be verbatim.
         quotes = list(v.evidence_quotes)
         kinds: set[str] = set()
         for q in quotes:
@@ -137,8 +137,7 @@ def ground(
         # "Any figure support" is the flag the published provenance column wants.
         # Exclusivity is too strict to be useful on its own: a model can pair a
         # figure quote with a generic body sentence ("variants are shown in
-        # Figure 4") and escape it, which is exactly what happened on the first
-        # cohort paper where all 38 records came from a figure.
+        # Figure 4") and escape it, even when every record came from a figure.
         if "figure_transcript" in kinds:
             rep.figure_sourced.append(v.as_written)
             # The prompt asks for less than high confidence on figure evidence,

@@ -1,13 +1,10 @@
 """A durable record of every paper the project has considered.
 
 The published table is a numerator. Without a denominator nobody can tell
-"absent because nobody looked" from "looked and found nothing", and today most
-of what we process leaves no trace: of 742 candidates in the last batch only
-100 got a snapshot row, 642 had nothing but a bare triage decision, and 24 of
-those were papers the gate wanted that `--limit` discarded. Three classes
-vanished completely -- the 141 Europe PMC hits with no PMID, anything cut by
-`--max-search`, and everything the open-access filter dropped before triage
-ever ran.
+"absent because nobody looked" from "looked and found nothing". The ledger
+records every candidate, including the classes no other file sees: Europe PMC
+hits with no PMID, anything cut by `--max-search`, and everything the
+open-access filter drops before triage runs.
 
 Design choices and why:
 
@@ -51,19 +48,16 @@ LEDGER_VERSION = 1
 
 # Where a candidate left the pipeline. Empty means it is still in play.
 #
-# `limit` is deliberately absent. `--limit` is which papers a *run* selected,
-# not where a candidate left the pipeline, and storing it here made a later
-# limited run overwrite the disposition of papers already extracted: one
-# `--limit 100` idempotence check stamped `limit` onto 739 of them, so the fold
-# reported 652 papers cut by limit when the true number was 8, and 644 rows
-# carried the impossible pair `stage=fetched, dropped_at=limit`. `rank` and
-# `limit_at` were removed from this file for the same reason. Pending work is
-# derivable instead: triage kept it and no extraction exists.
+# `limit` is deliberately absent, as are `rank` and `limit_at`. `--limit` is
+# which papers a *run* selected, not where a candidate left the pipeline; stored
+# here, a later, narrower run would overwrite the dispositions of papers already
+# extracted. Pending work is derivable instead: triage kept it and no
+# extraction exists.
 #
-# `oa_filter` and `no_metadata` are separate because conflating them is how
-# 2,034 papers came to be recorded as closed access without ever being looked
-# up: `oa_filter` means Europe PMC says the paper is not open access,
-# `no_metadata` means its metadata was never retrieved, so nothing is known.
+# `oa_filter` and `no_metadata` are separate so that a paper nobody looked up is
+# never recorded as closed access: `oa_filter` means Europe PMC says the paper
+# is not open access, `no_metadata` means its metadata was never retrieved, so
+# nothing is known.
 DROPPED_AT = ("", "no_pmid", "oa_filter", "no_metadata")
 
 # Furthest point reached. Reporting only: a paper whose text later grows is
@@ -144,15 +138,14 @@ class Ledger:
         # and one bad line must not break every command that reads it.
         self.rows.extend(jsonl.read_tolerant(self.path, what="ledger"))
         # Folded once at load so writers can skip rows that would change
-        # nothing. Without it every fetch re-appends a row per candidate and the
-        # tracked file grows by about 3,400 rows a run; it reached 11 MB over a
-        # handful of runs before this existed.
+        # nothing; otherwise every fetch re-appends a row per candidate and the
+        # tracked file grows by thousands of rows a run.
         self._state = self.fold()
         # Resume is answered from the extraction events themselves, never from
         # the fold. The fold merges every event into one row per paper, so a
-        # later `fetched` event at a new text hash overwrote `text_sha256` while
-        # the stage and prompt version stayed from the old extraction, and a
-        # paper whose text had grown read as already extracted at the new hash.
+        # later `fetched` event at a new text hash overwrites `text_sha256` while
+        # the stage and prompt version stay from the old extraction, and a paper
+        # whose text has grown would read as already extracted at the new hash.
         self._extracted: set[tuple] = set()
         self._failures: dict[tuple, int] = {}
         for r in sorted(self.rows, key=lambda r: r.get("written_at", "")):
@@ -237,7 +230,7 @@ class Ledger:
     def record_triage(self, identity: str, triage: dict) -> dict:
         """Record a triage verdict, unless it is the verdict already recorded.
 
-        Unguarded, this appended one row per candidate per run -- 744 of them --
+        Without the check every run would append one row per candidate,
         whatever the decision cache said.
         """
         prev = self._state.get(identity) or {}
@@ -269,8 +262,7 @@ class Ledger:
             "with_records": sum(1 for r in state.values() if (r.get("n_variants") or 0) > 0),
             "needs_review": sum(1 for r in state.values() if r.get("needs_review")),
             # The silent loss class: the gate wanted the paper, we hold its
-            # text, and no extraction exists. One paper sat here for a day
-            # because its snapshot was never extracted and nothing reported it.
+            # text, and no extraction exists. Reported so it cannot go unnoticed.
             "kept_not_extracted": sum(
                 1 for r in state.values()
                 if (r.get("triage") or {}).get("keep") and not r.get("dropped_at")

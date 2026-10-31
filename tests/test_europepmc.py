@@ -1,12 +1,10 @@
 """Europe PMC metadata lookup by PMID.
 
-The whole bootstrap ran against the wrong query field. Europe PMC does not
-index `PMID`, so `PMID:11985779` returns hitCount 0 while `EXT_ID:11985779`
-returns the paper; of 2,075 PMIDs sent through the old query 41 resolved, and
-the caller invented `is_open_access=False` for the rest. Re-querying a random
-100 of the unresolved with `EXT_ID` resolved 97, 92 with a PMCID and 91 flagged
-open access -- so the project recorded roughly 1,850 open-access papers as
-closed without ever looking one up.
+Europe PMC does not index `PMID`, so `PMID:11985779` returns hitCount 0 while
+`EXT_ID:11985779` returns the paper. A query on the wrong field resolves almost
+nothing, and a caller that fills in every miss would then record open-access
+papers as closed without ever looking one up. These tests pin the query field,
+what a miss returns, and the requested-versus-resolved count.
 """
 
 import json
@@ -50,7 +48,7 @@ def _med(pmid, **kw):
 
 
 def test_lookup_uses_ext_id_not_pmid():
-    """The one-line cause of the whole miss."""
+    """The query field is `EXT_ID`; a `PMID:` query matches nothing."""
     c = FakeClient([_med("11985779")])
     out = lookup_pmids(c, ["11985779"])
     assert "EXT_ID:11985779" in c.queries[0]
@@ -70,15 +68,15 @@ def test_a_resolved_paper_carries_its_open_access_facts():
 
 def test_an_unresolved_pmid_is_absent_rather_than_closed_access():
     """It must not come back as a record claiming `is_open_access=False`: that
-    claim, made on no evidence, is what buried 2,034 papers."""
+    claim would be made on no evidence."""
     c = FakeClient([_med("1")])
     out = lookup_pmids(c, ["1", "2"], min_resolution=0.0)
     assert set(out) == {"1"}
 
 
 def test_a_pmc_keyed_duplicate_does_not_displace_the_med_record():
-    """`EXT_ID` matches PMC-sourced records too, and one real response came back
-    `source=PMC, pmid=null`, which would key a candidate under the wrong id."""
+    """`EXT_ID` matches PMC-sourced records too, which can come back
+    `source=PMC, pmid=null` and would key a candidate under the wrong id."""
     pmc_only = {"id": "PMC999", "pmid": None, "source": "PMC", "title": "dup",
                 "isOpenAccess": "N", "pmcid": "PMC999"}
     c = FakeClient([pmc_only, _med("999")])
@@ -88,8 +86,8 @@ def test_a_pmc_keyed_duplicate_does_not_displace_the_med_record():
 
 
 def test_a_low_resolution_chunk_warns(caplog):
-    """The old failure was silent because nothing compared what was asked for
-    against what came back."""
+    """A lookup that resolves little of its input is loud only if something
+    compares what was asked for against what came back."""
     c = FakeClient([_med("1")])
     with caplog.at_level("WARNING"):
         lookup_pmids(c, ["1", "2", "3", "4"])

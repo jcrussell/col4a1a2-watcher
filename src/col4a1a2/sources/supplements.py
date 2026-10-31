@@ -273,8 +273,8 @@ def load_cached(dest: Path) -> Bundle | None:
     # A marker beside no members would otherwise report a successful bundle with
     # nothing in it: `Bundle.ok` reads only the status, so `_enrich` would
     # proceed, rewrite the marker, and record the paper as having had its
-    # supplements and figures read. That can happen today if a write is
-    # interrupted part-way, so treat it as absent and re-fetch.
+    # supplements and figures read. That happens if a write is interrupted
+    # part-way, so treat it as absent and re-fetch.
     files = [p for p in dest.iterdir() if p.is_file() and p.name != MARKER]
     if not files:
         log.warning("%s: bundle marker with no members; ignoring and re-fetching", dest.name)

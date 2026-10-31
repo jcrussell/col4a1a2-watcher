@@ -72,8 +72,7 @@ def test_sealing_follows_the_measured_recency_window():
 
 def test_plan_partitions_into_open_and_sealed_without_losing_any(tmp_path):
     """Both lists get queried; sealing only changes the cache lifetime. Skipping
-    sealed slices outright drops their papers from the candidate set, which an
-    earlier version did -- shrinking a 744-candidate sweep to 260."""
+    sealed slices outright would drop their papers from the candidate set."""
     dlog = DiscoveryLog(tmp_path / "d.jsonl")
     todo, sealed = plan("2015-01-01", "2026-10-29", Q, dlog, today=TODAY)
     assert sealed == [] and todo, "nothing recorded yet, so everything is open"

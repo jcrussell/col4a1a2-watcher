@@ -5,7 +5,7 @@
 
 Needs a fetched snapshot and `data/curated/labels.json`. Keyword rules
 are scored offline from the snapshot. Pass --llm to also score the live Haiku
-gate, which costs about a tenth of a cent per paper and needs ANTHROPIC_API_KEY.
+gate, which costs about $0.0001 per paper and needs ANTHROPIC_API_KEY.
 
 Recall is the figure that matters: a false keep costs one full-text read, a
 false skip loses the evidence permanently.

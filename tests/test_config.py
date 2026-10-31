@@ -18,7 +18,7 @@ def test_committed_config_loads():
 
 
 def test_every_rate_key_is_quoted_and_numeric():
-    """The sharpest regression in the migration.
+    """The hazard this loader exists to refuse.
 
     TOML reads a bare dotted key as a nested table, so `www.ebi.ac.uk = 2`
     becomes {"www": {"ebi": {"ac": {"uk": 2}}}}. The rate limiter would then
@@ -31,7 +31,7 @@ def test_every_rate_key_is_quoted_and_numeric():
     for key, value in st.rates.items():
         assert isinstance(value, float), f"{key} must be numeric, got {value!r}"
         assert 0 < value <= 10, f"{key} rate {value} is implausible"
-    # Compare numerically: TOML distinguishes 2 from 0.25 where YAML did not.
+    # Compare numerically: TOML reads `2` as an int and `0.25` as a float.
     assert st.rates["europepmc:supplementaryFiles"] == pytest.approx(0.25)
     assert st.rates["www.ebi.ac.uk"] == pytest.approx(2.0)
 
@@ -82,8 +82,8 @@ def test_prices_cover_every_configured_model_and_compute_cost():
     st = load_settings(CONFIG)
     for model in (st.extract_model, st.triage_model, st.figure_model):
         assert st.price_for(model) is not None, f"no price for {model}"
-    # The measured triage spend: 515,607 in / 50,427 out over 742 decisions was
-    # $0.077 total. Docs quoted 10x that for months by using Haiku 4.5 prices.
+    # Measured triage spend: 515,607 in / 50,427 out over 742 decisions costs
+    # $0.077. Pricing it from the wrong model's table misstates it tenfold.
     haiku = st.price_for("claude-haiku-5-5")
     assert haiku.cost(input=515_607, output=50_427) == pytest.approx(0.0768, abs=0.001)
 

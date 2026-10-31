@@ -256,9 +256,9 @@ class PoliteClient:
 
         `request()` buffers the whole response, and its httpx timeout applies to
         each individual read rather than the transfer as a whole, so a server
-        that dribbles bytes holds the connection open indefinitely. One Europe
-        PMC supplement bundle does exactly that: it sends about 3 MB and then
-        never finishes. A per-read timeout cannot catch that; a total deadline
+        that dribbles bytes holds the connection open indefinitely. Some Europe
+        PMC supplement bundles do exactly that: about 3 MB arrives and the
+        transfer never finishes. A per-read timeout cannot catch that; a total deadline
         can, and streaming also lets an oversized body be abandoned rather than
         read into memory and then discarded.
 

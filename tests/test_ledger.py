@@ -1,8 +1,8 @@
 """The processing ledger: the project's denominator.
 
 Without it, a reader of the published table cannot distinguish "absent because
-nobody looked" from "looked and found nothing". Three classes of candidate used
-to leave no trace at all, and those are the cases most of these tests cover.
+nobody looked" from "looked and found nothing". Most of these tests cover
+candidates that would otherwise leave no trace at all.
 """
 
 import json
@@ -38,16 +38,15 @@ def test_record_candidate_covers_every_disposition(tmp_path):
 
 def test_limit_is_not_a_disposition():
     """`--limit` is which papers a run selected, not where a candidate left the
-    pipeline. Storing it let a later limited run bury 739 already-extracted
+    pipeline. Stored, it would let a later limited run bury already-extracted
     papers under `dropped_at=limit`."""
     assert "limit" not in DROPPED_AT
     assert "no_metadata" in DROPPED_AT
 
 
 def test_a_disposition_cannot_regress_a_paper_already_examined(tmp_path):
-    """The bug this guards: a `--limit 100` idempotence check ran after the real
-    sweep and stamped `limit` onto papers already triaged, fetched and
-    extracted, so the fold reported 652 cut by limit where the truth was 8."""
+    """A later, narrower run must not stamp a pre-triage drop onto a paper
+    already triaged, fetched and extracted, or the fold reports it as cut."""
     path = tmp_path / "l.jsonl"
     led = Ledger(path)
     kw = dict(doi=None, title="T", journal="J", first_pub_date="2020-01-01",
@@ -77,8 +76,8 @@ def test_a_disposition_still_applies_to_an_untouched_candidate(tmp_path):
 
 def test_summary_reports_kept_but_not_extracted(tmp_path):
     """The silent loss class: the gate wanted the paper, we hold its text, and
-    no extraction exists. One paper sat here because the snapshot it was fetched
-    into was never extracted, and nothing reported it."""
+    no extraction exists. A paper fetched into a snapshot that is never
+    extracted lands here, and must be reported."""
     led = Ledger(tmp_path / "l.jsonl")
     kw = dict(doi=None, title="T", journal="J", first_pub_date="2020-01-01",
               is_open_access=True, has_pmcid=True, found_by={"europepmc"})
@@ -130,7 +129,7 @@ def test_rows_may_not_carry_article_text(tmp_path):
 def test_needs_extraction_keys_on_freshness_not_stage(tmp_path):
     """A paper extracted last month whose bundle arrives this month has grown
     new text and must be selected again, even though its stage says extracted.
-    This is the resume bug already fixed once inside cmd_extract, one layer up.
+    The same rule as cmd_extract's resume, one layer up.
     """
     led = Ledger(tmp_path / "l.jsonl")
     led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v2", requested_model="m", attempts=0)
@@ -164,8 +163,7 @@ def test_summary_counts_sum_to_the_identity_total(tmp_path):
 
 def test_an_unchanged_candidate_is_not_re_appended(tmp_path):
     """Every fetch run would otherwise append a row per candidate whether or not
-    anything changed. The tracked file reached 11 MB over a handful of runs
-    before this guard existed."""
+    anything changed, and the tracked file would grow without bound."""
     path = tmp_path / "l.jsonl"
     kw = dict(pmid="1", doi=None, title="T", journal="J", first_pub_date="2020-01-01",
               is_open_access=True, has_pmcid=True, found_by={"europepmc"}, dropped_at="")
@@ -193,8 +191,8 @@ def test_in_memory_state_tracks_appends_within_one_run(tmp_path):
 
 
 def test_a_repeated_triage_verdict_is_not_re_appended(tmp_path):
-    """Unguarded this wrote one row per candidate per run -- 744 of them --
-    regardless of what the decision cache said."""
+    """Unguarded, this would write one row per candidate per run regardless of
+    what the decision cache says."""
     path = tmp_path / "l.jsonl"
     tr = {"keep": True, "llm_keep": True, "llm_reason": "case report"}
     first = Ledger(path)
@@ -209,8 +207,8 @@ def test_a_repeated_triage_verdict_is_not_re_appended(tmp_path):
 
 
 def test_run_scoped_fields_are_not_ledger_state(tmp_path):
-    """rank and limit_at describe a run, not a paper. Keeping them here meant
-    every candidate row was rewritten whenever --limit changed."""
+    """rank and limit_at describe a run, not a paper. Kept here, every
+    candidate row would be rewritten whenever --limit changes."""
     import inspect
 
     sig = inspect.signature(Ledger.record_candidate)
@@ -219,8 +217,8 @@ def test_run_scoped_fields_are_not_ledger_state(tmp_path):
 
 def test_a_challenged_paper_is_not_re_extracted(tmp_path):
     """The fold keeps the furthest stage, so after a challenge the paper reads
-    `challenged`. Resume keyed on `stage == "extracted"` missed every one of
-    them and would have re-extracted the whole corpus next month."""
+    `challenged`, and must still count as extracted; otherwise every challenged
+    paper is re-extracted."""
     led = Ledger(tmp_path / "l.jsonl")
     led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v1", requested_model="m", attempts=0)
     led.record(identity="1", stage="challenged")
@@ -229,8 +227,8 @@ def test_a_challenged_paper_is_not_re_extracted(tmp_path):
 
 
 def test_a_retired_disposition_is_rejected_on_write(tmp_path):
-    """`limit` was removed as a disposition yet 747 events still carried it,
-    and the summary kept printing it. The schema now refuses it outright."""
+    """`limit` is not a disposition, and the schema refuses it outright so no
+    event can carry it into the summary."""
     led = Ledger(tmp_path / "l.jsonl")
     with pytest.raises(ValidationError):
         led.record(identity="1", stage="candidate", dropped_at="limit")
@@ -241,9 +239,9 @@ def test_a_retired_disposition_is_rejected_on_write(tmp_path):
 
 def test_grown_text_is_re_extracted_even_after_a_challenge(tmp_path):
     """The fold merges every event, so a later `fetched` event at a new hash
-    overwrote `text_sha256` while stage and prompt version stayed from the old
-    extraction: a paper whose supplements had arrived read as extracted at the
-    new hash and was skipped. Resume now reads the extraction events."""
+    overwrites `text_sha256` while stage and prompt version stay from the old
+    extraction. Resume reads the extraction events, so a paper whose
+    supplements have arrived is not read as extracted at the new hash."""
     led = Ledger(tmp_path / "l.jsonl")
     led.record(identity="1", stage="extracted", text_sha256="old", prompt_version="v1",
                requested_model="m", attempts=0)

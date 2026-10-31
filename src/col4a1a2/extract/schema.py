@@ -8,22 +8,22 @@ The schema is scoped to the three questions this project exists to answer:
 3. **How many people are known to carry each?** -- probands, families, total
    carriers, and the denominator they came out of.
 
-Everything else was cut, deliberately, after measuring it over 206 records.
-Co-segregation counts were filled 12%, 11% and 2% of the time and are pure
-ACMG interpretation evidence, which this project decided not to produce.
-Per-assay functional structure was filled in 16 of 206 records; "is there
+Everything else is deliberately out of scope (fill rates measured over 206
+records). Co-segregation counts are filled 12%, 11% and 2% of the time and are
+pure ACMG interpretation evidence, which this project does not produce.
+Per-assay functional structure is filled in 16 of 206 records; "is there
 functional work on this variant" is the awareness that matters and one string
-carries it. Phenotype statuses were six enums with a present /
-absent_on_exam / not_assessed distinction; the three-way call is deep curation,
-so this keeps which systems were affected and loses the ability to record that
-an examination was done and normal. That loss is real and intentional.
+carries it. Phenotypes are recorded as the systems affected, with no present /
+absent_on_exam / not_assessed call per system: the three-way call is deep
+curation, so the schema cannot record that an examination was done and
+normal. That loss is real and intentional.
 
 **The structured-output grammar has a hard ceiling, and it is structural.**
 Measured with `col4a1a2-dev probe`: 45 properties accepted, 48 rejected, and
-cutting 1,300 bytes of description from the 48-property version did not help.
+cutting 1,300 bytes of description from the 48-property version does not help.
 Only removing properties does. This shape is about 30 properties with two
-objects and one nullable union, which leaves room for the next field instead of
-spending three minutes a time discovering the wall again.
+objects and one nullable union, which leaves room for the next field; a probe
+takes about three minutes to find the wall.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Every file we write has a declared schema, and the writers enforce it.
 
-The motivating failure is quiet rather than loud: a writer spelling a field
+The failure guarded against is quiet rather than loud: a writer spelling a field
 `n_variant` where every reader wants `n_variants` produces a file that parses,
 folds and reports cleanly, having lost the field. The ledger is the project's
 denominator; it cannot be where a typo hides. Validating on write turns that

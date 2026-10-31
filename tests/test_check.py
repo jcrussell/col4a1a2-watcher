@@ -97,8 +97,8 @@ def test_rewriting_a_log_needs_the_migration_switch(world):
 
 
 def test_a_migration_may_not_lose_a_paper(world):
-    """Replays the first squash attempt: dropping events that were the only
-    record of a paper. Allowed as a rewrite, refused as a loss."""
+    """Dropping the only events that record a paper: a rewrite is allowed, a
+    loss is refused."""
     st, repo, _ = world
     path = st.curated_dir / "ledger.jsonl"
     rows = jsonl.read(path)

@@ -22,7 +22,7 @@ disputes. So the measurement is a **fabrication rate**, never "precision", and
 the field is named accordingly.
 
 **`missed_variants` is the highest-value output**, because grounding it makes
-extraction *recall* computable for the first time: a verbatim variant string
+extraction *recall* computable: a verbatim variant string
 that appears in the text with no record is a real miss, and one that does not
 appear is an invention. It is also why zero-record papers are challenged rather
 than skipped — a zero-record extraction is either an empty paper or a total
@@ -282,10 +282,8 @@ class ChallengeCache(KeyedCache):
     paper text, so a verdict produced against pre-supplement text must not be
     served for post-supplement text, where that quote may no longer appear. And
     identical text can in principle yield different records, so the records are
-    keyed too. (An earlier draft keyed on records alone, justified by a belief
-    that extraction was non-deterministic. It is not: all six duplicate
-    extraction rows in the corpus differ in their text hash with growing input,
-    which is the resume key working correctly.)
+    keyed too. Records alone are not enough: a paper is re-extracted when its
+    text grows, so the text hash is what usually changes between rows.
     """
 
     KEY = ("text_sha256", "records_digest", "challenge_prompt_version", "requested_model")

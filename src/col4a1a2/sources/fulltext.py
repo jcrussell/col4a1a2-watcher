@@ -96,9 +96,9 @@ class PaperText:
         return "\n\n".join(out), regions
 
     def as_prompt_text(self) -> str:
-        """The exact string sent to the model. Byte-identical to the pre-supplement
-        output when `supplements` and `figures` are both empty, so earlier token
-        measurements stay comparable."""
+        """The exact string sent to the model. With `supplements` and `figures`
+        both empty it is title, abstract and body alone, so token measurements
+        of the article text stay comparable whether or not extras are attached."""
         return self._assemble()[0]
 
     def regions(self) -> list[TextRegion]:

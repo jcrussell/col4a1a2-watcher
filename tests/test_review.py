@@ -1,10 +1,9 @@
 """The spot-check queue.
 
-Two defects found by running it over every snapshot: it crashed on the one
-snapshot that had nothing to review, because the TSV columns were derived from
-the first queued record, and it read every challenge ever written rather than
-this snapshot's, so the same 275 missed-variant reports were printed under each
-of four snapshots as if each had produced them.
+A snapshot with nothing to review still gets its declared columns, which are
+never derived from the first queued record. The queue reads only this
+snapshot's challenges, so a missed-variant report is not repeated under every
+snapshot as if each had produced it.
 """
 
 from col4a1a2 import jsonl
@@ -67,8 +66,8 @@ def test_missed_variant_reports_are_scoped_to_this_snapshot(tmp_path, capsys):
 
 
 def test_a_challenge_of_superseded_records_is_not_attached(tmp_path, capsys):
-    """Matching on the PMID alone attached the verdict about a paper's earlier
-    records to its re-extracted ones."""
+    """Matching on the PMID alone would attach the verdict about a paper's
+    earlier records to its re-extracted ones."""
     row = make_extraction_row(variants=[make_variant(confidence="low")])
     st, snap = _snapshot(tmp_path, [row], [make_paper_row()])
     a = cmd_args(st, snap)

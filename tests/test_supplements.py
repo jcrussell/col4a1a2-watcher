@@ -61,7 +61,7 @@ def test_fetch_bundle_abandons_an_oversize_body_mid_stream():
 
 
 def test_fetch_bundle_gives_up_on_a_stalled_download():
-    """One real Europe PMC bundle sends ~3 MB and then never finishes. Without a
+    """A Europe PMC bundle can send ~3 MB and then never finish. Without a
     total deadline the whole run blocks on it forever."""
     b = sup.fetch_bundle(FakeClient(b"", stall=True), "PMC1")
     assert not b.ok and "stalled" in b.skip_reason
@@ -181,8 +181,8 @@ def test_marker_is_not_mistaken_for_a_member(tmp_path):
 
 
 def test_enrich_parses_supplements_end_to_end(tmp_path, fixtures):
-    """Exercises cli._enrich with a fake client, which is what would have caught
-    an unbound local in the supplement branch before it killed a 100-paper run."""
+    """Exercises cli._enrich with a fake client, so the supplement branch is run
+    offline rather than first reached in the middle of a real run."""
     import io
     import zipfile
 
@@ -233,9 +233,9 @@ def test_enrich_reports_an_unsupported_supplement_without_raising(tmp_path):
 
 
 def test_marker_without_members_is_not_a_successful_bundle(tmp_path):
-    """A marker beside no members used to report success with zero members:
+    """A marker beside no members must not report success with zero members:
     Bundle.ok reads only the status, so enrichment would proceed and record the
-    paper as having had its supplements read. Reachable today by interrupting a
+    paper as having had its supplements read. Reachable by interrupting a
     write, not only by eviction."""
     dest = tmp_path / "PMC1"
     dest.mkdir()
@@ -263,8 +263,8 @@ def _settings(**over):
 
 
 def test_enrich_honours_the_configured_supplement_cap(tmp_path):
-    """The supplement caps were parsed from config and then ignored: the code
-    read module constants, so editing the TOML changed nothing."""
+    """The supplement caps come from config, not module constants, so editing
+    the TOML changes what the code does."""
     import io
     import zipfile
 

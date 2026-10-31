@@ -15,8 +15,7 @@ Tracked files (always):
   every paper the ledger calls challenged has a current challenge row;
 - append-only: each log extends its `HEAD` version byte for byte, unless
   `COL4A1A2_ALLOW_REWRITE=1` declares a migration, and even then no ledger
-  identity and no triage verdict may disappear -- the check that would have
-  stopped the first attempt at squashing the prompt versions.
+  identity and no triage verdict may disappear.
 
 Snapshots under `data/raw/` (when present; a fresh clone has none):
 - every snapshot has a valid manifest, and its JSONL files validate;

@@ -7,9 +7,9 @@ grounded. Transcribing first keeps the whole grounding architecture intact and
 leaves the transcription on disk as an auditable artefact, clearly labelled as
 machine-generated.
 
-The output is structured rather than prose for two reasons. A probe showed the
-model willing to *infer* which panel of a schematic belonged to which gene,
-which would silently misassign every variant in it; the schema makes panel
+The output is structured rather than prose for two reasons. Given room, the
+model will *infer* which panel of a schematic belongs to which gene, which
+would silently misassign every variant in it; the schema makes panel
 labels something it reports or leaves empty rather than reasons about. And
 because the rendered text is what quotes are matched against, it must not
 depend on the model's prose style.

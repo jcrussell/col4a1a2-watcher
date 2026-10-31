@@ -1,9 +1,9 @@
 """Deterministic checks and the variant_type cross-check.
 
-The predicate order is the whole correctness story: an earlier draft tested the
-glycine pattern first and so flagged seven records the model had classified
-correctly, because p.(Gly423Trpfs*19) is a frameshift and p.(Gly2=) is
-synonymous. Those seven are pinned below.
+The predicate order is the whole correctness story: testing the glycine
+pattern first would flag records the model classified correctly, because
+p.(Gly423Trpfs*19) is a frameshift and p.(Gly2=) is synonymous. Seven such
+records are pinned below.
 """
 
 
@@ -15,7 +15,7 @@ from col4a1a2.extract.derive import check_extraction, check_record, derive_varia
 
 
 @pytest.mark.parametrize("hgvs_p,hgvs_c,expected", [
-    # The seven that a glycine-first rule order got wrong.
+    # Seven that a glycine-first rule order would get wrong.
     ("p.(Gly423Trpfs*19)", "c.1265dupC", "frameshift"),
     ("p.(Gly1426Argfs*30)", "c.4275dup", "frameshift"),
     ("p.(Gly835Aspfs*19)", "c.2502del", "frameshift"),

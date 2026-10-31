@@ -1,10 +1,10 @@
 """Cheap abstract-level triage: is this paper worth a full-text read?
 
-Measured on the 20-paper 2026-10-29 snapshot (5 papers truly report
-COL4A1/COL4A2 variants in named individuals):
+Measured on a 20-paper snapshot (5 papers truly report COL4A1/COL4A2 variants
+in named individuals):
 
     gate                                        kept  recall  precision
-    previous rule (gene + clinical keyword)       20    1.00     0.25
+    keyword rule (gene + clinical keyword)        20    1.00     0.25
     patient words outnumber method words           6    1.00     0.83
     this module (Haiku on title + abstract)        8    1.00     0.62
 
@@ -17,8 +17,7 @@ is decidable from the abstract, and the keyword rule excluded them by luck
 rather than by signal. Recall is what matters here, so we prefer the model.
 
 Cost: $0.000103 per paper measured over 742 decisions, so about 8 cents for
-the whole gate. (This said $0.0012 for some weeks by applying Haiku 4.5 prices
-to a Haiku 5.5 model.)
+the whole gate.
 Decisions are cached by (pmid, prompt version, requested model) so refetching
 is free and a second model's verdicts sit alongside instead of hiding behind
 the first's.

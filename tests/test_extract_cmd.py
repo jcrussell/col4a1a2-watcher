@@ -15,8 +15,8 @@ def _setup(tmp_path, monkeypatch, client):
 
 
 def test_a_second_model_extracts_alongside_and_leaves_the_ledger_alone(tmp_path, monkeypatch, fake_anthropic):
-    """`--model X` used to find the configured model's rows and skip every
-    paper, because nothing in the resume key named a model."""
+    """The resume key names the model, so `--model X` does not take the
+    configured model's rows as its own and skip every paper."""
     client = fake_anthropic(default_output=make_paper_extraction())
     st, snap = _setup(tmp_path, monkeypatch, client)
     assert cli.cmd_extract(cmd_args(st, snap)) == 0

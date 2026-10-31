@@ -14,8 +14,8 @@ from col4a1a2.extract.schema import SCHEMA_VERSION, PaperExtraction
 
 log = logging.getLogger(__name__)
 
-# A variant-dense cohort paper can need far more than the original 16k: 39
-# variants at a few hundred output tokens each straddles that cap, and the cap
+# A variant-dense cohort paper can need far more than 16k: 39 variants at a
+# few hundred output tokens each straddles that, and the cap
 # raises ExtractionTruncated rather than degrading. Large max_tokens needs
 # streaming to avoid request timeouts, so extract_paper streams.
 MAX_TOKENS = 64000

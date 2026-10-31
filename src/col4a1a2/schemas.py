@@ -1,12 +1,10 @@
 """Row schemas for every JSON Lines file this project writes.
 
-Why this exists. Everything downstream of a stage reads that stage's JSONL, and
-until now the only declared schema was the extraction payload's. The field names
-of the ledger, the discovery log, the snapshot rows and the caches lived in the
-code that wrote them and nowhere else, so a writer that said `n_variant` where a
-reader wanted `n_variants` would have produced a file that parsed cleanly,
-folded cleanly, and quietly lost the field. The ledger is the project's
-denominator; it cannot be the place where a typo hides.
+Why this exists. Everything downstream of a stage reads that stage's JSONL.
+Without a declared schema, a writer that said `n_variant` where a reader wanted
+`n_variants` would produce a file that parsed cleanly, folded cleanly, and
+quietly lost the field. The ledger is the project's denominator; it cannot be
+the place where a typo hides.
 
 Three rules hold here:
 
@@ -61,10 +59,8 @@ class Usage(Row):
 
 
 class ChallengeUsage(Usage):
-    """Usage as early challenge rows wrote it, with the effort level misfiled
-    among the token counts. Rows now carry `effort` at the top level with the
-    rest of their provenance and leave it out of here; the field stays so the
-    212 older rows still validate.
+    """Token usage on a challenge row; `effort` here is optional and superseded
+    by the row's top-level `effort`, which every row carries.
     """
 
     effort: str | None = None
@@ -192,7 +188,7 @@ class LedgerEvent(Row):
     is_open_access: bool | None = None
     has_pmcid: bool | None = None
     found_by: list[str] | None = None
-    # Closed vocabularies, so a retired value such as `limit` cannot return.
+    # Closed vocabularies, so an excluded value such as `limit` is rejected.
     dropped_at: Literal[DROPPED_AT] | None = None
     stage: Literal[STAGES] | None = None
     snapshot: str | None = None
@@ -370,9 +366,9 @@ class ManifestRow(Row):
     triage_keep_before_limit: int = 0
     candidates_triaged: int | None = None
     candidates_before_filters: int | None = None
-    # Superseded name, kept so the manifests written before the rename still
-    # validate; nothing writes it now: it was computed after the open-access filter had
-    # reassigned its own input, so it understated the pool roughly fourfold.
+    # Superseded name, accepted only so older manifests validate; nothing writes
+    # it. Its values were counted after the open-access filter had narrowed its
+    # own input, so they understate the pool roughly fourfold.
     candidates_before_limit: int | None = None
     candidates_cut_by_limit: int | None = None
     europepmc_hits_without_pmid: int | None = None

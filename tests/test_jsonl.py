@@ -1,10 +1,9 @@
 """JSON Lines round-tripping that survives real article text.
 
-Found on an 802-paper snapshot: one paper's text contained U+2028 LINE
-SEPARATOR. json.dumps leaves it raw, because it is valid inside a JSON string,
-but str.splitlines() treats it as a line break -- so the file held 802 rows by
-newline and 803 by splitlines(), and every reader died with "Unterminated
-string".
+Article text can contain U+2028 LINE SEPARATOR. json.dumps leaves it raw,
+because it is valid inside a JSON string, but str.splitlines() treats it as a
+line break -- so an unescaped file holds more rows by splitlines() than by
+newline, and every reader fails with "Unterminated string".
 """
 
 import json
@@ -87,8 +86,8 @@ def test_the_real_snapshot_that_exposed_this_parses(tmp_path):
 # ------------------------------------------------------------ crash safety
 
 def test_a_failed_rewrite_leaves_the_old_file(tmp_path, monkeypatch):
-    """`open("w")` truncates on open, so a crash mid-write used to leave half a
-    tracked file. The rewrite now goes to a temp file and is renamed over."""
+    """`open("w")` truncates on open, so a crash mid-write would leave half a
+    tracked file. The rewrite goes to a temp file and is renamed over."""
     import os
 
     p = tmp_path / "x.jsonl"
@@ -117,8 +116,8 @@ def test_append_refuses_to_glue_onto_a_torn_line(tmp_path):
 
 
 def test_every_appender_validates(tmp_path):
-    """Five writers used to append with `open("a")` directly, bypassing the
-    schema check that constraint 1 promises. Each must now refuse a bad row."""
+    """No writer may append with `open("a")` directly and bypass the schema
+    check that constraint 1 promises. Each must refuse a bad row."""
     from pydantic import ValidationError
 
     from col4a1a2.discovery import DiscoveryLog, Slice

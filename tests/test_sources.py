@@ -31,7 +31,7 @@ def test_a_failed_pubtator_chunk_is_logged_not_swallowed(caplog):
     lambda c: pubtator.search(c, "q"),
 ])
 def test_a_failed_response_raises(call):
-    """`hit_count` parsed whatever came back and `references` returned a
-    partial bibliography, which reads as "does not cite"."""
+    """Otherwise `hit_count` parses whatever came back and `references` returns
+    a partial bibliography, which reads as "does not cite"."""
     with pytest.raises(HttpError, match="HTTP 500"):
         call(Client(500))

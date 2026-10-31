@@ -1,7 +1,7 @@
 """Deterministic checks and derivations over extracted records.
 
-Pure functions, no network, no model. Two honest caveats measured over the 177
-records in the 2026-10-30 batch, both of which shrank this module's ambitions:
+Pure functions, no network, no model. Two honest caveats, measured over 177
+records, bound what this module can do:
 
 **The consistency checks fire zero times.** Every one of them -- inheritance
 sums, families against probands, carriers against probands, a phenotype marked
@@ -141,8 +141,8 @@ def check_record(pmid: str, v: dict) -> list[Finding]:
         add("prior_report_without_reason", "flagged as a prior report with no reason given")
 
     # The vocabulary has deletion_cnv and nothing for a copy-number gain, so a
-    # duplication or partial trisomy has nowhere to go but there. The c1
-    # reviewer disputed three records for exactly this, across two papers.
+    # duplication or partial trisomy has nowhere to go but there, and the
+    # challenge reviewer disputes records for exactly this.
     # Free to check here; fixing the vocabulary waits for the next prompt
     # revision, since any prompt bump re-extracts every paper.
     if v.get("variant_type") == "deletion_cnv":

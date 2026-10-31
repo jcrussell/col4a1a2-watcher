@@ -31,8 +31,8 @@ def _marker(row):
 
 @pytest.mark.parametrize("cls", [TriageCache, FigureCache, ChallengeCache])
 def test_the_newest_written_at_wins_whatever_the_line_order(tmp_path, cls):
-    """A union merge can put the older answer last. Picking by position then
-    disagreed with `check` and `review`, which pick by `written_at`."""
+    """A union merge can put the older answer last, so picking by position would
+    disagree with `check` and `review`, which pick by `written_at`."""
     path = tmp_path / "cache.jsonl"
     newer, key = _row(cls, "2026-11-01T00:00:00+00:00", "newer")
     older, _ = _row(cls, "2026-10-01T00:00:00+00:00", "older")

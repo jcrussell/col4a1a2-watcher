@@ -3,8 +3,8 @@
 The tables keep parsed results, which is enough to re-run grounding, the
 derive checks and the review queue for free. What they cannot keep is
 everything the parse throws away: thinking, stop details, the exact request
-parameters, and above all the text of a response that failed to parse, which
-left an error row holding only an exception name. So the raw response is
+parameters, and above all the text of a response that fails to parse, of
+which an error row holds only the exception name. So the raw response is
 archived *before* parsing, one JSON document per call under
 `data/responses/<YYYY-MM>/`.
 
@@ -62,15 +62,14 @@ class Reply:
                 "effort": self.effort, "written_at": self.written_at}
 
     def usage_row(self) -> dict:
-        """All four token counts. Three call sites once kept only three of
-        them and dropped cache writes, so their rows and spend under-counted."""
+        """All four token counts, so rows and spend include cache writes."""
         return dict(self.usage)
 
     def require(self, exc: type[Exception]) -> BaseModel:
         """The parsed output, or `exc` saying why there is none.
 
         Refusal and max_tokens are checked before the missing-output case, so
-        the reason survives: triage once raised a bare "no decision" for both.
+        the reason survives instead of collapsing into "no output".
         """
         if self.stop_reason == "refusal":
             raise exc(f"refused: {self.stop_details}")
@@ -96,7 +95,7 @@ def schema_shape(output_format: type[BaseModel]) -> dict:
     """The measures the structured-output grammar budget depends on.
 
     Measured: 45 properties accepted, 48 rejected, and cutting 1,300 bytes of
-    description from the 48-property schema did not help -- the ceiling is
+    description from the 48-property schema does not help -- the ceiling is
     structural, so property count is what binds.
     """
     s = output_schema(output_format)

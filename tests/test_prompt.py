@@ -16,7 +16,7 @@ def test_user_content_marks_abstract_only_and_hints():
 
 
 def test_schema_stays_within_structured_output_budget():
-    """Version 1 was rejected by the API as too complex; keep the shape small."""
+    """The API rejects an over-complex schema outright; keep the shape small."""
     from col4a1a2.extract.llm import schema_shape
     from col4a1a2.extract.schema import PaperExtraction
 
