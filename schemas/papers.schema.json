@@ -1,0 +1,667 @@
+{
+  "$defs": {
+    "FigureGate": {
+      "additionalProperties": false,
+      "properties": {
+        "deficit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deficit"
+        },
+        "forced": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Forced"
+        },
+        "largest_claim": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Largest Claim"
+        },
+        "n_cited": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Cited"
+        },
+        "n_hgvs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Hgvs"
+        },
+        "n_titled": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Titled"
+        },
+        "points_elsewhere": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Points Elsewhere"
+        },
+        "selected_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Reason"
+        }
+      },
+      "title": "FigureGate",
+      "type": "object"
+    },
+    "FigureMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "contains_variant_labels": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contains Variant Labels"
+        },
+        "fig_id": {
+          "default": "",
+          "title": "Fig Id",
+          "type": "string"
+        },
+        "figure_prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Figure Prompt Version"
+        },
+        "image_sha256": {
+          "default": "",
+          "title": "Image Sha256",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "legible": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legible"
+        },
+        "member": {
+          "default": "",
+          "title": "Member",
+          "type": "string"
+        },
+        "select_reason": {
+          "default": "",
+          "title": "Select Reason",
+          "type": "string"
+        },
+        "selected": {
+          "default": false,
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "skip_reason": {
+          "default": "",
+          "title": "Skip Reason",
+          "type": "string"
+        },
+        "transcribed": {
+          "default": false,
+          "title": "Transcribed",
+          "type": "boolean"
+        }
+      },
+      "title": "FigureMeta",
+      "type": "object"
+    },
+    "Loose": {
+      "additionalProperties": true,
+      "description": "Shapes owned by an upstream API or a parsed document.",
+      "properties": {},
+      "title": "Loose",
+      "type": "object"
+    },
+    "Region": {
+      "additionalProperties": false,
+      "description": "Where a span of the assembled text came from, which is what lets\ngrounding tell a figure transcript from the author's own words.",
+      "properties": {
+        "end": {
+          "title": "End",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "start",
+        "end"
+      ],
+      "title": "Region",
+      "type": "object"
+    },
+    "SupplementBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "default": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "members": {
+          "default": 0,
+          "title": "Members",
+          "type": "integer"
+        },
+        "n_unmatched_members": {
+          "default": 0,
+          "title": "N Unmatched Members",
+          "type": "integer"
+        },
+        "skip_reason": {
+          "default": "",
+          "title": "Skip Reason",
+          "type": "string"
+        },
+        "status": {
+          "default": 0,
+          "title": "Status",
+          "type": "integer"
+        }
+      },
+      "title": "SupplementBundle",
+      "type": "object"
+    },
+    "SupplementMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "default": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "ext": {
+          "default": "",
+          "title": "Ext",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "member": {
+          "title": "Member",
+          "type": "string"
+        },
+        "sheets": {
+          "items": {
+            "$ref": "#/$defs/Loose"
+          },
+          "title": "Sheets",
+          "type": "array"
+        },
+        "sheets_dropped_at_cap": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheets Dropped At Cap"
+        },
+        "skip_reason": {
+          "default": "",
+          "title": "Skip Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member"
+      ],
+      "title": "SupplementMeta",
+      "type": "object"
+    },
+    "TriageVerdict": {
+      "additionalProperties": false,
+      "description": "Both forms of the triage verdict.\n\n`papers.jsonl` stores all eleven fields; the ledger stores the four that\ndescribe the decision rather than the signals behind it. One model with\noptional fields covers both, and forbids a fifth spelling of either.",
+      "properties": {
+        "clinical_keyword": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clinical Keyword"
+        },
+        "keep": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keep"
+        },
+        "keyword_keep": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyword Keep"
+        },
+        "llm_keep": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Keep"
+        },
+        "llm_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Reason"
+        },
+        "pubtator_gene_linked_variant": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pubtator Gene Linked Variant"
+        },
+        "pubtator_gene_variant": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pubtator Gene Variant"
+        },
+        "pubtator_linked_hgvs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pubtator Linked Hgvs",
+          "type": "array"
+        },
+        "pubtator_search_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pubtator Search Hit"
+        },
+        "title_abstract_mention": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title Abstract Mention"
+        },
+        "triage_prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Triage Prompt Version"
+        }
+      },
+      "title": "TriageVerdict",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One row of papers.jsonl. A snapshot's record of one paper, including the assembled text that",
+  "properties": {
+    "abstract": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Abstract"
+    },
+    "abstract_only": {
+      "default": false,
+      "title": "Abstract Only",
+      "type": "boolean"
+    },
+    "affiliation": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Affiliation"
+    },
+    "author_string": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Author String"
+    },
+    "authors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Authors",
+      "type": "array"
+    },
+    "citation": {
+      "default": "",
+      "title": "Citation",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "figure_gate": {
+      "$ref": "#/$defs/FigureGate"
+    },
+    "figures": {
+      "items": {
+        "$ref": "#/$defs/FigureMeta"
+      },
+      "title": "Figures",
+      "type": "array"
+    },
+    "first_pub_date": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "First Pub Date"
+    },
+    "fulltext_source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fulltext Source"
+    },
+    "is_open_access": {
+      "default": false,
+      "title": "Is Open Access",
+      "type": "boolean"
+    },
+    "journal": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Journal"
+    },
+    "n_chars": {
+      "default": 0,
+      "title": "N Chars",
+      "type": "integer"
+    },
+    "n_chars_figures": {
+      "default": 0,
+      "title": "N Chars Figures",
+      "type": "integer"
+    },
+    "n_chars_supplements": {
+      "default": 0,
+      "title": "N Chars Supplements",
+      "type": "integer"
+    },
+    "n_tables": {
+      "default": 0,
+      "title": "N Tables",
+      "type": "integer"
+    },
+    "pmcid": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pmcid"
+    },
+    "pmid": {
+      "title": "Pmid",
+      "type": "string"
+    },
+    "pub_year": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pub Year"
+    },
+    "pubtator_hints": {
+      "items": {
+        "$ref": "#/$defs/Loose"
+      },
+      "title": "Pubtator Hints",
+      "type": "array"
+    },
+    "regions": {
+      "items": {
+        "$ref": "#/$defs/Region"
+      },
+      "title": "Regions",
+      "type": "array"
+    },
+    "source": {
+      "default": "",
+      "title": "Source",
+      "type": "string"
+    },
+    "supplement_bundle": {
+      "$ref": "#/$defs/SupplementBundle"
+    },
+    "supplements": {
+      "items": {
+        "$ref": "#/$defs/SupplementMeta"
+      },
+      "title": "Supplements",
+      "type": "array"
+    },
+    "text": {
+      "default": "",
+      "title": "Text",
+      "type": "string"
+    },
+    "text_sha256": {
+      "default": "",
+      "title": "Text Sha256",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+    },
+    "triage": {
+      "$ref": "#/$defs/TriageVerdict"
+    }
+  },
+  "required": [
+    "pmid"
+  ],
+  "title": "PaperRow",
+  "type": "object"
+}

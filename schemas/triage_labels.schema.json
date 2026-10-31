@@ -1,0 +1,57 @@
+{
+  "$defs": {
+    "TriageLabel": {
+      "additionalProperties": false,
+      "description": "`borderline` is a real class, not a hedge: it marks a paper where the\ngate's decision is defensible either way, so a disagreement there is not\ncounted as an error.",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "TriageLabel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The whole document triage_labels.json. Hand-assigned ground truth for the triage gate: one document, written",
+  "properties": {
+    "_about": {
+      "title": "About",
+      "type": "string"
+    },
+    "labels": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TriageLabel"
+      },
+      "title": "Labels",
+      "type": "object"
+    },
+    "snapshot": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Snapshot"
+    }
+  },
+  "required": [
+    "_about",
+    "labels"
+  ],
+  "title": "TriageLabels",
+  "type": "object"
+}

@@ -13,6 +13,12 @@ Two defences, because the files are read by other tools too:
   reader. The escapes are valid JSON and decode back to the original character,
   so nothing is lost.
 - **Reading splits on "\\n" only**, never `splitlines()`.
+
+Writers also validate. Every row goes through the schema registered for its
+filename in `schemas.py`, so a field name that no reader expects raises here
+rather than landing on disk and disappearing into a fold. `schemas` is imported
+inside the functions: it imports the extraction and challenge models, which
+import this module, and a top-level import would close that cycle.
 """
 
 from __future__ import annotations
@@ -33,6 +39,12 @@ _LINE_BREAKERS = {
     "\u001d": "\\u001d",
     "\u001e": "\\u001e",
 }
+
+
+def _validate(path: Path, row: Any) -> None:
+    from col4a1a2 import schemas
+
+    schemas.validate(path, row)
 
 
 def dumps(obj: Any) -> str:
@@ -79,7 +91,17 @@ def read_tolerant(path: Path, *, what: str = "file") -> list[dict]:
     return out
 
 
-def write(path: Path, rows: Iterable[Any]) -> int:
+def write(path: Path, rows: Iterable[Any], *, validate: bool = True) -> int:
+    """Write every row, validating each against the file's schema first.
+
+    Validation happens before the file is opened, so a bad row cannot truncate
+    a good file: `open("w")` truncates on open, and raising halfway through
+    would leave a partial file where a whole one was.
+    """
+    rows = list(rows)
+    if validate:
+        for r in rows:
+            _validate(path, r)
     n = 0
     with path.open("w", encoding="utf-8") as f:
         for r in rows:
@@ -88,7 +110,9 @@ def write(path: Path, rows: Iterable[Any]) -> int:
     return n
 
 
-def append(path: Path, row: Any) -> None:
+def append(path: Path, row: Any, *, validate: bool = True) -> None:
+    if validate:
+        _validate(path, row)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(dumps(row) + "\n")

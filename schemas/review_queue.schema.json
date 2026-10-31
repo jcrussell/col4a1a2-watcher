@@ -1,0 +1,121 @@
+{
+  "additionalProperties": false,
+  "description": "One row of review_queue.jsonl. One flagged record for a human to check.",
+  "properties": {
+    "CURATOR_NOTE": {
+      "default": "",
+      "title": "Curator Note",
+      "type": "string"
+    },
+    "CURATOR_VERDICT": {
+      "default": "",
+      "title": "Curator Verdict",
+      "type": "string"
+    },
+    "as_written": {
+      "default": "",
+      "title": "As Written",
+      "type": "string"
+    },
+    "citation": {
+      "default": "",
+      "title": "Citation",
+      "type": "string"
+    },
+    "confidence": {
+      "default": "",
+      "title": "Confidence",
+      "type": "string"
+    },
+    "flagged_because": {
+      "default": "",
+      "title": "Flagged Because",
+      "type": "string"
+    },
+    "gene": {
+      "default": "",
+      "title": "Gene",
+      "type": "string"
+    },
+    "hgvs_c": {
+      "default": "",
+      "title": "Hgvs C",
+      "type": "string"
+    },
+    "hgvs_p": {
+      "default": "",
+      "title": "Hgvs P",
+      "type": "string"
+    },
+    "n_families": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Families"
+    },
+    "n_probands": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Probands"
+    },
+    "pmid": {
+      "title": "Pmid",
+      "type": "string"
+    },
+    "problem": {
+      "default": "",
+      "title": "Problem",
+      "type": "string"
+    },
+    "proposed_n_probands": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "title": "Proposed N Probands"
+    },
+    "quote_1": {
+      "default": "",
+      "title": "Quote 1",
+      "type": "string"
+    },
+    "record_key": {
+      "title": "Record Key",
+      "type": "string"
+    },
+    "refuting_quote": {
+      "default": "",
+      "title": "Refuting Quote",
+      "type": "string"
+    },
+    "verdict": {
+      "default": "",
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pmid",
+    "record_key"
+  ],
+  "title": "ReviewRow",
+  "type": "object"
+}

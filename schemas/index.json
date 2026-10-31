@@ -1,0 +1,52 @@
+{
+  "challenges.jsonl": {
+    "format": "jsonl",
+    "model": "ChallengeRow",
+    "schema": "schemas/challenges.schema.json"
+  },
+  "discovery.jsonl": {
+    "format": "jsonl",
+    "model": "DiscoveryRow",
+    "schema": "schemas/discovery.schema.json"
+  },
+  "extractions.jsonl": {
+    "format": "jsonl",
+    "model": "ExtractionRow",
+    "schema": "schemas/extractions.schema.json"
+  },
+  "figure_transcripts.jsonl": {
+    "format": "jsonl",
+    "model": "FigureTranscriptRow",
+    "schema": "schemas/figure_transcripts.schema.json"
+  },
+  "ledger.jsonl": {
+    "format": "jsonl",
+    "model": "LedgerEvent",
+    "schema": "schemas/ledger.schema.json"
+  },
+  "manifest.json": {
+    "format": "json",
+    "model": "ManifestRow",
+    "schema": "schemas/manifest.schema.json"
+  },
+  "papers.jsonl": {
+    "format": "jsonl",
+    "model": "PaperRow",
+    "schema": "schemas/papers.schema.json"
+  },
+  "review_queue.jsonl": {
+    "format": "jsonl",
+    "model": "ReviewRow",
+    "schema": "schemas/review_queue.schema.json"
+  },
+  "triage_decisions.jsonl": {
+    "format": "jsonl",
+    "model": "TriageDecisionRow",
+    "schema": "schemas/triage_decisions.schema.json"
+  },
+  "triage_labels.json": {
+    "format": "json",
+    "model": "TriageLabels",
+    "schema": "schemas/triage_labels.schema.json"
+  }
+}

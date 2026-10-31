@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "ChallengeUsage": {
+      "additionalProperties": false,
+      "description": "The challenge writer records the request's effort level alongside the\ntoken counts. Misfiled -- effort is a request parameter, not usage -- but\n149 rows on disk say so, and a model describes the file it has rather than\nthe file it wishes it had.",
+      "properties": {
+        "cache_read": {
+          "default": 0,
+          "title": "Cache Read",
+          "type": "integer"
+        },
+        "cache_write": {
+          "default": 0,
+          "title": "Cache Write",
+          "type": "integer"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effort"
+        },
+        "input": {
+          "default": 0,
+          "title": "Input",
+          "type": "integer"
+        },
+        "output": {
+          "default": 0,
+          "title": "Output",
+          "type": "integer"
+        }
+      },
+      "title": "ChallengeUsage",
+      "type": "object"
+    },
+    "Loose": {
+      "additionalProperties": true,
+      "description": "Shapes owned by an upstream API or a parsed document.",
+      "properties": {},
+      "title": "Loose",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One row of challenges.jsonl.",
+  "properties": {
+    "challenge": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Loose"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "challenge_prompt_version": {
+      "title": "Challenge Prompt Version",
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detail"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "extract_prompt_version": {
+      "title": "Extract Prompt Version",
+      "type": "string"
+    },
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "pmid": {
+      "title": "Pmid",
+      "type": "string"
+    },
+    "records_digest": {
+      "title": "Records Digest",
+      "type": "string"
+    },
+    "report": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Loose"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "text_sha256": {
+      "title": "Text Sha256",
+      "type": "string"
+    },
+    "usage": {
+      "$ref": "#/$defs/ChallengeUsage"
+    }
+  },
+  "required": [
+    "pmid",
+    "text_sha256",
+    "records_digest",
+    "challenge_prompt_version",
+    "extract_prompt_version",
+    "model",
+    "usage"
+  ],
+  "title": "ChallengeRow",
+  "type": "object"
+}

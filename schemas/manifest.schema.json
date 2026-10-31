@@ -1,0 +1,303 @@
+{
+  "additionalProperties": false,
+  "description": "The whole document manifest.json. One row per fetch run. As JSONL rather than one JSON object per",
+  "properties": {
+    "abstract_only": {
+      "default": 0,
+      "title": "Abstract Only",
+      "type": "integer"
+    },
+    "cache_hits": {
+      "default": 0,
+      "title": "Cache Hits",
+      "type": "integer"
+    },
+    "candidates_before_filters": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidates Before Filters"
+    },
+    "candidates_before_limit": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidates Before Limit"
+    },
+    "candidates_cut_by_limit": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidates Cut By Limit"
+    },
+    "candidates_triaged": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidates Triaged"
+    },
+    "date_from": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Date From"
+    },
+    "date_to": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Date To"
+    },
+    "discovery_slices": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Discovery Slices"
+    },
+    "discovery_slices_sealed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Discovery Slices Sealed"
+    },
+    "europepmc_hits_without_pmid": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Europepmc Hits Without Pmid"
+    },
+    "europepmc_query": {
+      "default": "",
+      "title": "Europepmc Query",
+      "type": "string"
+    },
+    "fetched_at": {
+      "title": "Fetched At",
+      "type": "string"
+    },
+    "figure_cache_hits": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Figure Cache Hits"
+    },
+    "figure_vision_calls": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Figure Vision Calls"
+    },
+    "figure_vision_tokens": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Figure Vision Tokens"
+    },
+    "figures_transcribed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Figures Transcribed"
+    },
+    "full_text": {
+      "default": 0,
+      "title": "Full Text",
+      "type": "integer"
+    },
+    "ledger_events": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ledger Events"
+    },
+    "limit": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Limit"
+    },
+    "network_requests": {
+      "default": 0,
+      "title": "Network Requests",
+      "type": "integer"
+    },
+    "oa_only": {
+      "default": false,
+      "title": "Oa Only",
+      "type": "boolean"
+    },
+    "papers": {
+      "default": 0,
+      "title": "Papers",
+      "type": "integer"
+    },
+    "pmid_lookup_requested": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pmid Lookup Requested"
+    },
+    "pmid_lookup_resolved": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pmid Lookup Resolved"
+    },
+    "pubtator_queries": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Pubtator Queries",
+      "type": "array"
+    },
+    "rate_limiter_slept_s": {
+      "default": 0.0,
+      "title": "Rate Limiter Slept S",
+      "type": "number"
+    },
+    "snapshot": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Snapshot"
+    },
+    "supplement_files_parsed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supplement Files Parsed"
+    },
+    "triage_keep": {
+      "default": 0,
+      "title": "Triage Keep",
+      "type": "integer"
+    },
+    "triage_keep_before_limit": {
+      "default": 0,
+      "title": "Triage Keep Before Limit",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "fetched_at"
+  ],
+  "title": "ManifestRow",
+  "type": "object"
+}

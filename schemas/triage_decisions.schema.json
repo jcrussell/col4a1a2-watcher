@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "default": 0,
+          "title": "Cache Read",
+          "type": "integer"
+        },
+        "cache_write": {
+          "default": 0,
+          "title": "Cache Write",
+          "type": "integer"
+        },
+        "input": {
+          "default": 0,
+          "title": "Input",
+          "type": "integer"
+        },
+        "output": {
+          "default": 0,
+          "title": "Output",
+          "type": "integer"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One row of triage_decisions.jsonl.",
+  "properties": {
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "pmid": {
+      "title": "Pmid",
+      "type": "string"
+    },
+    "read_full_text": {
+      "title": "Read Full Text",
+      "type": "boolean"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "triage_prompt_version": {
+      "title": "Triage Prompt Version",
+      "type": "string"
+    },
+    "usage": {
+      "$ref": "#/$defs/Usage"
+    }
+  },
+  "required": [
+    "pmid",
+    "triage_prompt_version",
+    "model",
+    "read_full_text",
+    "reason",
+    "usage"
+  ],
+  "title": "TriageDecisionRow",
+  "type": "object"
+}

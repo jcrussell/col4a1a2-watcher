@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "One row of discovery.jsonl.",
+  "properties": {
+    "complete": {
+      "title": "Complete",
+      "type": "boolean"
+    },
+    "completed_at": {
+      "title": "Completed At",
+      "type": "string"
+    },
+    "date_from": {
+      "title": "Date From",
+      "type": "string"
+    },
+    "date_to": {
+      "title": "Date To",
+      "type": "string"
+    },
+    "hits_available": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hits Available"
+    },
+    "hits_fetched": {
+      "title": "Hits Fetched",
+      "type": "integer"
+    },
+    "query_hash": {
+      "title": "Query Hash",
+      "type": "string"
+    },
+    "slice": {
+      "title": "Slice",
+      "type": "string"
+    }
+  },
+  "required": [
+    "query_hash",
+    "slice",
+    "date_from",
+    "date_to",
+    "hits_fetched",
+    "complete",
+    "completed_at"
+  ],
+  "title": "DiscoveryRow",
+  "type": "object"
+}

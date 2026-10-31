@@ -19,7 +19,7 @@ from col4a1a2.config import ConfigError, Settings, load_settings
 from col4a1a2.discovery import DiscoveryLog, plan as plan_slices
 from col4a1a2.extract.prompt import PaperInput
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
-from col4a1a2 import jsonl
+from col4a1a2 import jsonl, schemas
 from col4a1a2.http import PoliteClient
 from col4a1a2.ledger import Ledger
 from col4a1a2.sources import europepmc, ncbi, pubtator
@@ -552,7 +552,12 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         "network_requests": client.network_requests, "cache_hits": client.cache_hits,
         "rate_limiter_slept_s": round(client.limiter.slept_total, 1),
     }
-    (snap / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    # One document per snapshot directory, so JSON rather than JSONL: JSONL is
+    # for records that accumulate, and `jq -s . data/raw/*/manifest.json` gives
+    # the cross-run table anyway. Schema-checked like everything else, and
+    # indented because this is the one artefact a person reads in a diff.
+    manifest["snapshot"] = snap.name
+    schemas.write_document(snap / "manifest.json", manifest)
     client.close()
     print(json.dumps(manifest, indent=2))
     return 0
@@ -869,18 +874,26 @@ def cmd_review(a: argparse.Namespace) -> int:
     in_snapshot = {r["pmid"] for r in rows}
     missed = [(p, m) for p, c in challenges.items() if p in in_snapshot
               for m in (c.get("report") or {}).get("missed_grounded", [])]
-    path = Path(a.tsv) if a.tsv else snap / "review_queue.tsv"
-    # Always write the file, with the declared columns, even when the queue is
-    # empty: a curator reading an empty queue and a curator finding no file at
-    # all are different situations, and deriving the columns from the first row
-    # crashed on the one snapshot that had nothing to review.
-    with path.open("w", newline="", encoding="utf-8") as f:
-        w = _csv.DictWriter(f, fieldnames=REVIEW_COLUMNS, delimiter="\t",
-                            extrasaction="raise",
-                            quoting=_csv.QUOTE_NONE, escapechar="\\")
-        w.writeheader()
-        w.writerows(out)
+    # JSONL is the artefact; it has a schema and nothing downstream parses TSV.
+    # Written even when empty -- a curator finding an empty queue and a curator
+    # finding no file are different situations, and deriving the columns from
+    # the first row crashed on the one snapshot that had nothing to review.
+    path = snap / "review_queue.jsonl"
+    write_jsonl(path, out)
     print(f"{len(out)} records across {len({r['pmid'] for r in out})} papers -> {path}")
+    if a.tsv:
+        # An export for a human to read in a spreadsheet, produced on request.
+        # Tabs and newlines are rejected rather than escaped: the measurement
+        # that justified TSV covered extraction fields only, and the challenge
+        # adds three free-text ones.
+        tsv = Path(a.tsv)
+        with tsv.open("w", newline="", encoding="utf-8") as f:
+            w = _csv.DictWriter(f, fieldnames=REVIEW_COLUMNS, delimiter="\t",
+                                extrasaction="raise",
+                                quoting=_csv.QUOTE_NONE, escapechar="\\")
+            w.writeheader()
+            w.writerows(out)
+        print(f"  exported {tsv}")
     if missed:
         print(f"{len(missed)} grounded missed-variant reports across {len({p for p, _ in missed})} papers:")
         for p, m in missed[:10]:
@@ -1050,7 +1063,9 @@ def main(argv: list[str] | None = None) -> int:
 
     r = sub.add_parser("review", parents=[common], help="emit the human spot-check queue as TSV")
     r.add_argument("--snapshot")
-    r.add_argument("--tsv", help="output path (default <snapshot>/review_queue.tsv)")
+    r.add_argument("--tsv", metavar="PATH",
+                   help="also export the queue as TSV for reading in a spreadsheet; "
+                        "the JSONL beside it is the artefact")
     r.set_defaults(func=cmd_review)
 
     g = sub.add_parser("ledger", parents=[common], help="summarise every candidate ever considered")
