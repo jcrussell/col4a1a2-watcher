@@ -12,7 +12,6 @@ so the cost is negligible. Needs ANTHROPIC_API_KEY.
 from __future__ import annotations
 
 import importlib
-import json
 import sys
 import time
 
@@ -30,16 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     module, name = argv[0].rsplit(":", 1)
     model_cls = getattr(importlib.import_module(module), name)
 
-    js = model_cls.model_json_schema()
-    schema = json.dumps(js)
-    props = len(js.get("properties", {})) + sum(
-        len(d.get("properties", {})) for d in js.get("$defs", {}).values())
-    # Property count is what binds: measured 2026-10-31, 45 accepted and 48
-    # rejected, while cutting 1,300 bytes of descriptions changed nothing.
-    print(f"{name}: {props} properties, {len(schema)} bytes, {schema.count('anyOf')} anyOf, "
-          f"{schema.count(chr(34) + 'object' + chr(34))} objects, "
-          f"{schema.count(chr(34) + 'enum' + chr(34))} enums, "
-          f"{schema.count(chr(34) + 'array' + chr(34))} arrays")
+    from col4a1a2.extract.llm import schema_shape
+
+    sh = schema_shape(model_cls)
+    print(f"{name}: {sh['properties']} properties, {sh['bytes']} bytes, {sh['anyOf']} anyOf, "
+          f"{sh['objects']} objects, {sh['enums']} enums, {sh['arrays']} arrays")
 
     from col4a1a2.cli import make_anthropic
     from col4a1a2.config import load_settings

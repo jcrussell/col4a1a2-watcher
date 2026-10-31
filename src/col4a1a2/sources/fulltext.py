@@ -156,9 +156,13 @@ def _table_to_text(tw) -> str:
     return rows_to_text(head, rows)
 
 
+def _parse(xml: bytes):
+    """JATS as published is often malformed and occasionally huge; recover and allow both."""
+    return etree.fromstring(xml, etree.XMLParser(recover=True, huge_tree=True))
+
+
 def jats_to_text(xml: bytes) -> PaperText:
-    parser = etree.XMLParser(recover=True, huge_tree=True)
-    root = etree.fromstring(xml, parser)
+    root = _parse(xml)
     if root is None:
         raise ValueError("could not parse XML")
 
@@ -252,8 +256,7 @@ def jats_inventory(xml: bytes) -> tuple[list[FigureRef], list[SupplementRef]]:
     "a patient with a COL4A1 variant", and some publishers emit no caption title
     at all.
     """
-    parser = etree.XMLParser(recover=True, huge_tree=True)
-    root = etree.fromstring(xml, parser)
+    root = _parse(xml)
     if root is None:
         return [], []
 

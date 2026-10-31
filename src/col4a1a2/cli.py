@@ -53,6 +53,35 @@ def make_anthropic(settings: Settings) -> anthropic.Anthropic:
     )
 
 
+def has_api_key() -> bool:
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def require_api_key() -> bool:
+    """For commands that cannot run without Claude: say so and let the caller exit 2."""
+    if has_api_key():
+        return True
+    print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
+    return False
+
+
+def select_pmids(items: list, pmids: list[str] | None, *, key=lambda x: x["pmid"]) -> list:
+    """Keep only the named papers, and say which names matched nothing.
+
+    Piloting a prompt change against papers whose answers are known is how this
+    project checks a change before paying for the corpus; a mistyped PMID that
+    silently matches nothing makes the pilot look clean.
+    """
+    if not pmids:
+        return items
+    wanted = set(pmids)
+    kept = [x for x in items if key(x) in wanted]
+    missing = wanted - {key(x) for x in kept}
+    if missing:
+        print(f"not in this snapshot or not current here: {', '.join(sorted(missing))}", file=sys.stderr)
+    return kept
+
+
 def snapshot_dir(arg: str | None, settings: Settings) -> Path:
     d = Path(arg) if arg else settings.snapshot_root / dt.date.today().isoformat()
     d.mkdir(parents=True, exist_ok=True)
@@ -353,7 +382,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     # The LLM gate runs on title + abstract only, before any full text is fetched.
     # Without a key (or with --no-llm-triage) we fall back to the keyword rule,
     # which has the same recall on the 2026-10-29 snapshot but keeps 3x the noise.
-    use_llm = not a.no_llm_triage and bool(os.environ.get("ANTHROPIC_API_KEY"))
+    use_llm = not a.no_llm_triage and has_api_key()
     if not use_llm and not a.no_llm_triage:
         log.warning("ANTHROPIC_API_KEY not set; falling back to keyword triage")
     tcache = TriageCache(st.triage_cache)
@@ -419,7 +448,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         triaged = triaged[: a.limit]
 
     want_supplements = not a.no_supplements
-    want_figures = not a.no_figures and bool(os.environ.get("ANTHROPIC_API_KEY"))
+    want_figures = not a.no_figures and has_api_key()
     if not a.no_figures and not want_figures:
         log.warning("ANTHROPIC_API_KEY not set; skipping figure transcription")
     acl = make_anthropic(st) if want_figures else None
@@ -573,8 +602,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
     from col4a1a2.extract.prompt import PROMPT_VERSION
     from col4a1a2.extract.verify import ground
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
+    if not require_api_key():
         return 2
     st: Settings = a.settings
     ledger = Ledger(st.curated_dir / "ledger.jsonl")
@@ -589,15 +617,9 @@ def cmd_extract(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, st)
     _paper_inputs.include_all = a.all
     papers = _paper_inputs(snap)
-    if a.pmid:
-        # Named papers only, for piloting a prompt or schema change against
-        # papers whose previous answers and challenge verdicts are known.
-        wanted = set(a.pmid)
-        papers = [p for p in papers if p.pmid in wanted]
-        missing = wanted - {p.pmid for p in papers}
-        if missing:
-            print(f"not in this snapshot or not kept by the gate: {', '.join(sorted(missing))}",
-                  file=sys.stderr)
+    # Named papers only, for piloting a prompt or schema change against papers
+    # whose previous answers and challenge verdicts are known.
+    papers = select_pmids(papers, a.pmid, key=lambda p: p.pmid)
     if a.limit:
         papers = papers[: a.limit]
     client = make_anthropic(st)
@@ -719,15 +741,13 @@ def cmd_challenge(a: argparse.Namespace) -> int:
 
     from col4a1a2.extract.challenge import ChallengeCache, ChallengeFailed, challenge_paper, check
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
+    if not require_api_key():
         return 2
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
     papers = {r["pmid"]: r for r in jsonl.read(snap / "papers.jsonl")}
     rows = rows_mod.latest_extractions(snap / "extractions.jsonl", st.extract_model)
-    if a.pmid:
-        rows = [r for r in rows if r["pmid"] == a.pmid]
+    rows = select_pmids(rows, a.pmid)
     # Every extracted paper, including those with no records: a zero-record
     # extraction is either an empty paper or a total miss, and only
     # missed_variants distinguishes them.
@@ -928,8 +948,7 @@ def cmd_check(a: argparse.Namespace) -> int:
 def cmd_show(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
     rows = rows_mod.latest_extractions(snap / "extractions.jsonl", a.settings.extract_model)
-    if a.pmid:
-        rows = [r for r in rows if r["pmid"] == a.pmid]
+    rows = select_pmids(rows, a.pmid)
     for r in rows:
         ex = r["extraction"]
         g = r["grounding"]
@@ -1028,10 +1047,25 @@ def main(argv: list[str] | None = None) -> int:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", help="path to col4a1a2.toml (default config/col4a1a2.toml)")
     common.add_argument("--cache-dir", help="override the cache directory from config")
+    # Options shared by several verbs, defined once so their meaning and help
+    # text cannot drift apart (`--pmid` was a list for one verb and a string
+    # for two others; `--budget-usd` had two help texts).
+    snap_opt = argparse.ArgumentParser(add_help=False)
+    snap_opt.add_argument("--snapshot", help="snapshot directory (default: the configured snapshot root/<today>)")
+    pick_opt = argparse.ArgumentParser(add_help=False)
+    pick_opt.add_argument("--pmid", action="append", help="only this paper; repeat for several")
+    pick_opt.add_argument("--limit", type=int, help="process at most this many papers")
+    fresh_opt = argparse.ArgumentParser(add_help=False)
+    fresh_opt.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
+    budget_opt = argparse.ArgumentParser(add_help=False)
+    budget_opt.add_argument("--budget-usd", type=float,
+                            help="stop once this much has been spent (may overshoot by one paper, "
+                                 "since a call's cost is unknown until it returns)")
+
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    f = sub.add_parser("fetch-papers", parents=[common], help="search Europe PMC + PubTator and fetch texts into a snapshot")
-    f.add_argument("--snapshot", help="snapshot directory (default data/raw/<today>)")
+    f = sub.add_parser("fetch-papers", parents=[common, snap_opt, fresh_opt],
+                       help="search Europe PMC + PubTator and fetch texts into a snapshot")
     f.add_argument("--date-from", help="YYYY-MM-DD")
     f.add_argument("--date-to", help="YYYY-MM-DD")
     f.add_argument("--limit", type=int, help="keep only the N most recent papers")
@@ -1049,41 +1083,26 @@ def main(argv: list[str] | None = None) -> int:
                    help="re-query every slice, including sealed ones")
     f.add_argument("--no-llm-triage", action="store_true",
                    help="use the keyword triage rule instead of the Haiku gate (offline / no API key)")
-    f.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
     f.set_defaults(func=cmd_fetch_papers)
 
-    e = sub.add_parser("extract", parents=[common], help="run Claude extraction over a snapshot's papers (synchronous)")
-    e.add_argument("--snapshot")
-    e.add_argument("--pmid", action="append",
-                   help="extract only this paper; repeat for several")
-    e.add_argument("--limit", type=int)
+    e = sub.add_parser("extract", parents=[common, snap_opt, pick_opt, fresh_opt, budget_opt],
+                       help="run Claude extraction over a snapshot's papers (synchronous)")
     e.add_argument("--model", default=None, help="default from config")
     e.add_argument("--effort", default=None,
                    help="low|medium|high|xhigh|max (default from config)")
     e.add_argument("--count-only", action="store_true", help="only count input tokens per paper")
-    e.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
     e.add_argument("--all", action="store_true", help="include papers the triage step rejected")
-    e.add_argument("--budget-usd", type=float,
-                   help="stop once this much has been spent (may overshoot by one paper, "
-                        "since a call's cost is unknown until it returns)")
     e.set_defaults(func=cmd_extract)
 
-    l = sub.add_parser("list", parents=[common], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
-    l.add_argument("--snapshot")
+    l = sub.add_parser("list", parents=[common, snap_opt], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
     l.set_defaults(func=cmd_list)
 
-    c = sub.add_parser("challenge", parents=[common],
+    c = sub.add_parser("challenge", parents=[common, snap_opt, pick_opt, fresh_opt, budget_opt],
                        help="adversarially review a snapshot's extracted records")
-    c.add_argument("--snapshot")
-    c.add_argument("--pmid")
-    c.add_argument("--limit", type=int)
     c.add_argument("--effort", default=None, help="override the record-count-scaled effort")
-    c.add_argument("--budget-usd", type=float, help="stop once this much has been spent")
-    c.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
     c.set_defaults(func=cmd_challenge)
 
-    r = sub.add_parser("review", parents=[common], help="emit the human spot-check queue as TSV")
-    r.add_argument("--snapshot")
+    r = sub.add_parser("review", parents=[common, snap_opt], help="emit the human spot-check queue")
     r.add_argument("--tsv", metavar="PATH",
                    help="also export the queue as TSV for reading in a spreadsheet; "
                         "the JSONL beside it is the artefact")
@@ -1098,9 +1117,8 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--json", action="store_true", help="one finding per line as JSON")
     k.set_defaults(func=cmd_check)
 
-    s = sub.add_parser("show", parents=[common], help="print extractions in a snapshot")
-    s.add_argument("--snapshot")
-    s.add_argument("--pmid")
+    s = sub.add_parser("show", parents=[common, snap_opt], help="print extractions in a snapshot")
+    s.add_argument("--pmid", action="append", help="only this paper; repeat for several")
     s.set_defaults(func=cmd_show)
 
     a = ap.parse_args(argv)

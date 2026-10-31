@@ -106,6 +106,3 @@ class PaperExtraction(BaseModel):
     variants: list[VariantEvidence] = Field(default_factory=list)
     extraction_notes: str = Field(default="", description="Anything the reviewer should know: data referred to but not provided, supplementary rows filtered out, an illegible figure transcription, numbering issues")
 
-
-def json_schema() -> dict:
-    return PaperExtraction.model_json_schema()

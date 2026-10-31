@@ -45,6 +45,21 @@ The files are a small database, so they get the few guarantees a database would 
 - **Every Claude call goes through `extract/llm.py`.** It archives the raw response under `data/responses/` before validating it, so a response that fails to parse can still be read, and an identical request is answered from disk for free. Responses from before 2026-10-31 were never kept; the archive starts there.
 - **Model-derived rows carry provenance** (`model` as served, `requested_model`, `effort`, `written_at`), and caches and resume key on `requested_model`. "Current" means this prompt version and the configured model; rows from `extract --model X` sit alongside without entering the table, and only the configured model writes extraction events to the ledger. `--no-llm-cache` calls again and appends; the newest row for a key wins.
 
+## Shared code: import, don't restate
+
+Twice now a bug has lived in two copies of one rule, so rules have one home each and callers import them.
+
+| Rule or helper | Home |
+|---|---|
+| Which extraction or challenge row is current; which challenge reviewed which records | `extract/rows.py` |
+| Calling Claude: system block, schema as sent and its grammar shape, stop-reason handling, usage, provenance, spend | `extract/llm.py` |
+| Caches of model answers (newest `written_at` wins) | `extract/cache.py` |
+| Resume and the ledger fold | `ledger.py` (`needs_extraction`, `is_extraction`, `fold_rows`) |
+| Content hashes | `digest.py` |
+| Classifier regexes | `patterns.py` |
+| Reading, writing and exporting our files | `jsonl.py`, `schemas.write_document` |
+| Defaults for tunables | the module that uses them; `config.py` reads and may override them |
+
 ## Decisions already made, with reasons
 
 Do not re-propose these without new evidence.

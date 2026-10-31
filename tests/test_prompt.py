@@ -17,19 +17,16 @@ def test_user_content_marks_abstract_only_and_hints():
 
 def test_schema_stays_within_structured_output_budget():
     """Version 1 was rejected by the API as too complex; keep the shape small."""
-    import json
-    from col4a1a2.extract.schema import json_schema
-    s = json.dumps(json_schema())
-    # Measured with col4a1a2-dev probe: 45 properties accepted, 48 rejected, and
-    # cutting 1,300 bytes of description from the 48-property version did not
-    # help -- the ceiling is structural. The goal-scoped schema is 30
-    # properties, 1 anyOf and 2 objects, accepted in 72s. These bounds leave
-    # room to add a field without another three-minute probe.
-    assert s.count("anyOf") <= 2
-    assert s.count('"object"') <= 3
-    props = sum(len(v.get("properties", {})) for v in json_schema().get("$defs", {}).values())
-    props += len(json_schema().get("properties", {}))
-    assert props <= 40, f"{props} properties; 48 was rejected by the API"
+    from col4a1a2.extract.llm import schema_shape
+    from col4a1a2.extract.schema import PaperExtraction
+
+    # Measured on the schema as sent, with col4a1a2-dev probe: the goal-scoped
+    # schema is 30 properties, 1 anyOf and 2 objects, accepted in 72s. These
+    # bounds leave room to add a field without another three-minute probe.
+    shape = schema_shape(PaperExtraction)
+    assert shape["anyOf"] <= 2
+    assert shape["objects"] <= 3
+    assert shape["properties"] <= 40, f"{shape['properties']} properties; 48 was rejected by the API"
 
 
 def test_citation_line_is_built_without_double_periods():

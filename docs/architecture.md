@@ -60,11 +60,15 @@ Rejected candidates are still recorded in the snapshot, with the reason, so a tr
 | `extract/schema.py` | The Pydantic record. Deliberately flat; see the note in `AGENTS.md`. |
 | `extract/prompt.py`, `extract/prompts/` | Versioned system prompt and the per-paper user message. |
 | `extract/client.py` | The Opus extraction call: streaming, prompt caching, usage accounting. |
+| `extract/cache.py` | `KeyedCache`, the shape of the three caches of model answers; the newest `written_at` per key wins. |
+| `extract/rows.py` | Which extraction and challenge rows are current, and which challenge reviewed which records. |
 | `extract/llm.py` | The one path every Claude call takes: sends the structured-output schema, archives the raw response before validating it, replays an identical request from the archive, and stamps provenance (served and requested model, effort, time). |
 | `extract/verify.py` | String-matches every quote against the source and decides whether a record needs human review. |
 | `extract/derive.py` | Deterministic consistency checks and the `variant_type` cross-check. No model, no network. |
 | `extract/challenge.py` | Adversarial review of records, and the verification of the reviewer's own claims. |
 | `config.py` | The one TOML file, resolved into a frozen `Settings` passed to every command. |
+| `patterns.py` | Classifier regexes: gene mentions, HGVS-like tokens, the clinical vocabulary of the keyword triage rule. |
+| `digest.py` | sha256 of bytes, text and canonical JSON, used by every resume and cache key. |
 | `ledger.py` | Append-only record of every candidate ever considered, folded on read. Resume reads the extraction events, never the fold. |
 | `check.py` | `col4a1a2 check`: parse and schema validity, duplicate rows, foreign keys, append-only logs and migration losses, and the links between tracked files and snapshots. Run by the pre-commit hook. |
 

@@ -81,6 +81,31 @@ class Reply:
         return self.parsed
 
 
+def output_schema(output_format: type[BaseModel]) -> dict:
+    """The JSON schema the API receives for `output_format`: what the grammar budget binds.
+
+    Identical to what the SDK's `parse()` would send, checked for all four
+    output models.
+    """
+    import anthropic
+
+    return anthropic.transform_schema(output_format)
+
+
+def schema_shape(output_format: type[BaseModel]) -> dict:
+    """The measures the structured-output grammar budget depends on.
+
+    Measured: 45 properties accepted, 48 rejected, and cutting 1,300 bytes of
+    description from the 48-property schema did not help -- the ceiling is
+    structural, so property count is what binds.
+    """
+    s = output_schema(output_format)
+    text = json.dumps(s)
+    props = len(s.get("properties", {})) + sum(len(d.get("properties", {})) for d in s.get("$defs", {}).values())
+    return {"properties": props, "anyOf": text.count("anyOf"), "objects": text.count('"object"'),
+            "enums": text.count('"enum"'), "arrays": text.count('"array"'), "bytes": len(text)}
+
+
 def system_block(text: str) -> list[dict]:
     """A system prompt marked for prompt caching, as every call site sends it."""
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
@@ -226,10 +251,8 @@ def call(client: Any, *, site: str, model: str, effort: str | None, max_tokens: 
     `request` is a small summary stored in place of the request text (prompt
     version, input hash, pmid). `stream` is required for large `max_tokens`.
     """
-    import anthropic
-
     output_config: dict[str, Any] = {
-        "format": {"type": "json_schema", "schema": anthropic.transform_schema(output_format)}}
+        "format": {"type": "json_schema", "schema": output_schema(output_format)}}
     if effort:
         output_config["effort"] = effort
     kwargs: dict[str, Any] = dict(model=model, max_tokens=max_tokens, system=system,
