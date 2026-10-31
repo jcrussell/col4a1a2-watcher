@@ -23,10 +23,13 @@ published. Predicate order matters: testing the glycine pattern first fires
 
 from __future__ import annotations
 
-from col4a1a2.extract.schema import PHENOTYPE_SYSTEMS
-
 import re
 from dataclasses import dataclass
+
+from col4a1a2.extract.schema import PHENOTYPE_SYSTEMS
+
+_CNV_GAIN = re.compile(r"\b(duplicat\w*|trisomy|triplicat\w*|copy[- ]number gain|gain)\b|\bx3\b", re.I)
+_CNV_LOSS = re.compile(r"\b(delet\w*|loss|monosomy)\b", re.I)
 
 # Ordered most-specific first. Order is the whole correctness story here.
 _FRAMESHIFT = re.compile(r"fs(\*|Ter|\d|$)", re.I)
@@ -136,6 +139,17 @@ def check_record(pmid: str, v: dict) -> list[Finding]:
 
     if v.get("same_family_as_prior_report") and not (v.get("prior_report_reason") or "").strip():
         add("prior_report_without_reason", "flagged as a prior report with no reason given")
+
+    # The vocabulary has deletion_cnv and nothing for a copy-number gain, so a
+    # duplication or partial trisomy has nowhere to go but there. The c2
+    # reviewer disputed three records for exactly this, across two papers.
+    # Free to check here; fixing the vocabulary waits for the next prompt
+    # revision, since any prompt bump re-extracts every paper.
+    if v.get("variant_type") == "deletion_cnv":
+        said = f"{v.get('as_written', '')} {v.get('notes', '')}"
+        if _CNV_GAIN.search(said) and not _CNV_LOSS.search(said):
+            add("cnv_gain_typed_as_deletion",
+                "described as a duplication or gain but typed deletion_cnv")
 
     derived = derive_variant_type(v.get("hgvs_p", ""), v.get("hgvs_c", ""))
     if derived is not None and derived != v.get("variant_type"):

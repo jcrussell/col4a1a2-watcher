@@ -73,6 +73,13 @@ def test_each_check_fires_on_a_synthetic_failure():
         _rec(n_probands=40, n_families=40, n_tested=500000, inh_inherited=40))
     assert "prior_report_without_reason" in fired(_rec(same_family_as_prior_report=True))
     assert "variant_type_disagreement" in fired(_rec(hgvs_p="p.Gly513Ser", variant_type="nonsense"))
+    assert "cnv_gain_typed_as_deletion" in fired(_rec(
+        hgvs_c="", variant_type="deletion_cnv",
+        as_written="41.7 Mb duplication of 13q (partial trisomy) including COL4A1"))
+    # A deletion described as a deletion is fine, and so is a small c.dup,
+    # which is a frameshift and never typed deletion_cnv in the first place.
+    assert "cnv_gain_typed_as_deletion" not in fired(_rec(
+        hgvs_c="", variant_type="deletion_cnv", as_written="1.9 Mb deletion of 13q34"))
 
 
 def test_clean_record_produces_nothing():

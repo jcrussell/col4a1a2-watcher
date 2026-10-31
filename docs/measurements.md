@@ -375,3 +375,44 @@ PMC rate, so the lookup fix added about 76 papers worth extracting rather than
 the ~300 projected from the old rate.
 
 LOVD was evaluated and rejected; see `AGENTS.md`. No LOVD data is stored.
+
+## First full run on prompt v4 (2026-10-31)
+
+All 209 open-access papers the gate kept, extracted on v4 and challenged on c2.
+
+| | |
+|---|---|
+| Extraction | 209 papers, 0 failures, **$17.58** ($0.084/paper; the pilot's $0.153 over-sampled big papers) |
+| Challenge (c2) | 209 papers, 0 failures, **$13.89** |
+| Papers with records | 101; 17 reviews, 13 functional and 10 "other" correctly yield none |
+| Records | 233 |
+| Distinct variants (crude key, before VEP) | **219** -- COL4A1 157, COL4A2 62 |
+| Variants reported in more than one paper | **12** |
+| Probands | 435, of which **187 (43%) come from 5 records in studies screening at least 1,000 people** |
+| `n_tested` stated | 214 of 233 |
+| Inheritance | de novo 45, inherited 46, unknown 344 |
+| Quotes grounded | 653 / 655 |
+| Reviewer verdicts | upheld 184, disputed 6, unverifiable 43; **fabricated 0 / 233** |
+| Missed-variant reports | 286 grounded, **1 invented** -- the first invention on that side |
+| Deterministic findings | 2 variant_type disagreements, 2 CNV-direction flags |
+
+The 43% is why `n_tested` exists: without it, "435 known carriers" would hide
+that nearly half were found by screening a population, one variant alone
+contributing 174 from UK Biobank.
+
+All six disputes are substantive. Three share a cause in our vocabulary, not
+the model: `variant_type` has `deletion_cnv` and no class for a copy-number
+gain, so a 41.7 Mb duplication had nowhere to go. `derive.py` now flags a gain
+typed as a deletion -- 2 of the 3, no false positives -- and the vocabulary
+fix waits for the next prompt revision, since any bump re-extracts every
+paper.
+
+## The papers we can see but cannot read (2026-10-31)
+
+The triage-only pass ran the gate over the 768 candidates that are not open
+access. It kept **265 (34.5%)**, against 209 of 2,371 open-access candidates
+(8.8%). **More of the relevant literature is closed than open.** Closed
+clinical journals -- Neurology, Stroke, Annals of Neurology -- are where case
+reports are published, so the open-access corpus is less than half of what
+the watcher should be aware of. These 265 are in the ledger as triaged and
+kept, so the denominator is honest; none has been extracted.
