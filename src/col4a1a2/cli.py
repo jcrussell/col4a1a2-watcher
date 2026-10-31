@@ -15,10 +15,13 @@ from pathlib import Path
 
 import anthropic
 
-from col4a1a2.config import ConfigError, Settings, load_settings
+from col4a1a2.config import REPO, ConfigError, Settings, load_settings
 from col4a1a2.discovery import DiscoveryLog, plan as plan_slices
 from col4a1a2.extract.prompt import PaperInput
-from col4a1a2.extract.llm import Policy, ResponseArchive
+from col4a1a2.extract import rows as rows_mod
+from col4a1a2.extract.challenge import records_digest
+from col4a1a2.digest import sha256_text
+from col4a1a2.extract.llm import Policy, ResponseArchive, SpendMeter
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
 from col4a1a2 import jsonl, schemas
 from col4a1a2.http import PoliteClient
@@ -28,21 +31,11 @@ from col4a1a2.sources.europepmc import citation
 from col4a1a2.sources.fulltext import TextRegion, jats_inventory, jats_to_text
 
 log = logging.getLogger("col4a1a2")
-REPO = Path(__file__).resolve().parents[2]
-# Bundle members live outside any snapshot. The endpoint they come from fails or
-# stalls for most requests, so a successful download is valuable and must be
-# reused by every later snapshot rather than re-attempted per run.
-BUNDLE_STORE = REPO / "data" / "cache" / "bundles"   # default; settings.bundle_store wins
 CLINICAL_DEFAULT = (
     r"variant|mutation|pathogenic|de novo|heterozygous|c\.\d|p\.\(?[A-Z][a-z]{2}\d|Gould|HANAC|porencephal|"
     r"schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|"
     r"Axenfeld|tortuosity|hematuria|haematuria|nephropath|cramps|myopath|cerebral palsy|stroke|proband|famil"
 )
-
-
-def load_config(path: Path | None = None) -> Settings:
-    """Back-compatible name; returns Settings now rather than a raw dict."""
-    return load_settings(path)
 
 
 def make_client(settings: Settings) -> PoliteClient:
@@ -66,19 +59,10 @@ def make_anthropic(settings: Settings) -> anthropic.Anthropic:
     )
 
 
-def snapshot_dir(arg: str | None, settings: Settings | None = None) -> Path:
-    root = settings.snapshot_root if settings else (REPO / "data" / "raw")
-    d = Path(arg) if arg else root / dt.date.today().isoformat()
+def snapshot_dir(arg: str | None, settings: Settings) -> Path:
+    d = Path(arg) if arg else settings.snapshot_root / dt.date.today().isoformat()
     d.mkdir(parents=True, exist_ok=True)
     return d
-
-
-def write_jsonl(path: Path, rows) -> int:
-    return jsonl.write(path, rows)
-
-
-def read_jsonl(path: Path) -> list[dict]:
-    return jsonl.read(path)
 
 
 # ---------------------------------------------------------------- fetch-papers
@@ -202,11 +186,11 @@ def _enrich(
                 continue
             digest = fig_cache.digest(member.data)
             meta["image_sha256"] = digest
-            cached = None if fig_llm.refresh else fig_cache.get(digest, fig_llm.model)
+            cached = fig_cache.get(digest, fig_llm.model, refresh=fig_llm.refresh)
             if cached is None:
                 try:
                     tr, usage, prov = figmod.transcribe_figure(acl, member.data, mt, fig,
-                                                               **fig_llm.kwargs())
+                                                               image_sha256=digest, **fig_llm.kwargs())
                     cached = fig_cache.put(pmcid=pmcid, fig=fig, image_sha256=digest,
                                            transcription=tr, usage=usage, provenance=prov)
                 except Exception as exc:
@@ -399,7 +383,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                         or (tr["title_abstract_mention"] and tr["clinical_keyword"]))
         tr["keyword_keep"] = keyword_keep
         if use_llm:
-            cached = None if triage_llm.refresh else tcache.get(m.pmid, triage_llm.model)
+            cached = tcache.get(m.pmid, triage_llm.model, refresh=triage_llm.refresh)
             if cached is None:
                 try:
                     decision, usage, prov = triage_paper(acl, m.title, m.abstract,
@@ -534,7 +518,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                           n_supplements=len([x for x in (r.get("supplements") or []) if x.get("sheets")]),
                           n_figures=len([x for x in (r.get("figures") or []) if x.get("transcribed")]))
     log.info("ledger: %d events appended to %s", ledger.appended, ledger.path)
-    n = write_jsonl(snap / "papers.jsonl", rows)
+    n = jsonl.write(snap / "papers.jsonl", rows)
     manifest = {
         "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "date_from": a.date_from, "date_to": a.date_to, "limit": a.limit, "oa_only": a.oa_only,
@@ -580,7 +564,7 @@ def _paper_inputs(snap: Path) -> list[PaperInput]:
                    abstract_only=r["abstract_only"], pubtator_hints=r.get("pubtator_hints", []),
                    journal=r.get("journal"), pub_date=r.get("first_pub_date"),
                    regions=[TextRegion(**d) for d in r.get("regions", [])])
-        for r in read_jsonl(snap / "papers.jsonl")
+        for r in jsonl.read(snap / "papers.jsonl")
         if r.get("triage", {}).get("keep", True) or getattr(_paper_inputs, "include_all", False)
     ]
 
@@ -633,12 +617,8 @@ def cmd_extract(a: argparse.Namespace) -> int:
     # a transiently refused paper done forever.
     # The requested model is part of the key, so `--model X` extracts alongside
     # the configured model's rows instead of finding them and skipping.
-    done = {
-        (r["pmid"], r.get("text_sha256"))
-        for r in read_jsonl(out_path)
-        if r.get("prompt_version") == PROMPT_VERSION and not r.get("error")
-        and r.get("requested_model") == model
-    }
+    done = {(r["pmid"], r["text_sha256"]) for r in jsonl.read(out_path)
+            if rows_mod.is_current_extraction(r, model)}
     # Resume across snapshots, not just within one. Without this a paper
     # extracted in last month's snapshot is re-extracted in this month's at full
     # price, which is the whole reason the bootstrap could not be split into
@@ -662,23 +642,22 @@ def cmd_extract(a: argparse.Namespace) -> int:
     n_failed = 0
     n_ok = 0
     n_skipped = 0
-    spent = 0.0
-    price = st.price_for(model)
+    meter = SpendMeter(st.price_for(model), archive, a.budget_usd)
     for p in papers:
-        text_hash = hashlib.sha256(p.text.encode("utf-8")).hexdigest()
+        text_hash = sha256_text(p.text)
         if (p.pmid, text_hash) in done or (
                 is_current and not a.no_llm_cache
                 and not ledger.needs_extraction(p.pmid, text_hash, PROMPT_VERSION, model)):
             log.info("skip %s (already extracted at %s on identical text)", p.pmid, PROMPT_VERSION)
             n_skipped += 1
             continue
-        if a.budget_usd and spent >= a.budget_usd:
+        if meter.over_budget():
             log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_ok)
             break
         log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
-        hits_before = archive.hits
+        meter.begin()
         try:
-            res = extract_paper(client, p, model=model, effort=effort,
+            res = extract_paper(client, p, model=model, effort=effort, text_sha256=text_hash,
                                 archive=archive, refresh=a.no_llm_cache)
         except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
             # One unusable paper must not abort the batch; record why and move on.
@@ -698,12 +677,12 @@ def cmd_extract(a: argparse.Namespace) -> int:
                           attempts=ledger.failures(p.pmid, text_hash, PROMPT_VERSION, model) + 1)
             continue
         rep = ground(res.extraction, texts[p.pmid], regions_by_pmid.get(p.pmid, []))
+        reply = res.reply
         row = {
-            "pmid": p.pmid, "pmcid": p.pmcid, **res.provenance(), "prompt_version": res.prompt_version,
+            "pmid": p.pmid, "pmcid": p.pmcid, **reply.provenance(), "prompt_version": res.prompt_version,
             "text_sha256": text_hash,
-            "schema_version": res.schema_version, "stop_reason": res.stop_reason,
-            "usage": {"input": res.input_tokens, "output": res.output_tokens,
-                      "cache_read": res.cache_read_tokens, "cache_write": res.cache_write_tokens},
+            "schema_version": res.schema_version, "stop_reason": reply.stop_reason,
+            "usage": reply.usage_row(),
             "grounding": {"total": rep.total_quotes, "grounded": rep.grounded_quotes,
                           "ungrounded": rep.ungrounded, "low_confidence": rep.low_confidence_variants,
                           "region_counts": rep.region_counts,
@@ -720,24 +699,21 @@ def cmd_extract(a: argparse.Namespace) -> int:
         jsonl.append(out_path, row)
         ex = res.extraction
         n_ok += 1
-        # An answer replayed from the response archive cost nothing this run.
-        if price and archive.hits == hits_before:
-            spent += price.cost(input=res.input_tokens, output=res.output_tokens,
-                                cache_read=res.cache_read_tokens,
-                                cache_write=res.cache_write_tokens)
+        meter.charge(reply.usage)
         if is_current:
             ledger.record(identity=p.pmid, stage="extracted", snapshot=snap.name,
                           text_sha256=text_hash, prompt_version=res.prompt_version,
-                          requested_model=res.requested_model,
+                          requested_model=reply.requested_model,
                           n_variants=len(ex.variants), n_grounded=rep.grounded_quotes,
                           n_ungrounded=len(rep.ungrounded), needs_review=rep.needs_review,
                           n_figure_sourced=len(rep.figure_sourced),
                           last_error=None, attempts=0)
         print(f"{p.pmid}: {ex.paper_type.value}, variants={len(ex.variants)}, "
               f"quotes grounded {rep.grounded_quotes}/{rep.total_quotes}, "
-              f"tokens in={res.input_tokens} out={res.output_tokens} cache_read={res.cache_read_tokens}"
+              f"tokens in={reply.usage['input']} out={reply.usage['output']} "
+              f"cache_read={reply.usage['cache_read']}"
               + ("  [REVIEW]" if rep.needs_review else ""))
-    print(f"\n{n_ok} extracted, {n_skipped} already done, {n_failed} failed, ${spent:.2f} spent")
+    print(f"\n{n_ok} extracted, {n_skipped} already done, {n_failed} failed, ${meter.spent:.2f} spent")
     if ledger.appended:
         log.info("ledger: %d events appended", ledger.appended)
     return 0
@@ -749,22 +725,15 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     """Adversarially review extracted records, and verify the reviewer's output."""
     import anthropic  # noqa: F401  (imported for its exceptions via make_anthropic)
 
-    from col4a1a2.extract.challenge import (
-        ChallengeCache,
-        ChallengeFailed,
-        challenge_paper,
-        check,
-        records_digest,
-        slim_records,
-    )
+    from col4a1a2.extract.challenge import ChallengeCache, ChallengeFailed, challenge_paper, check
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
         return 2
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
-    papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
-    rows = latest_extractions(snap / "extractions.jsonl", st)
+    papers = {r["pmid"]: r for r in jsonl.read(snap / "papers.jsonl")}
+    rows = rows_mod.latest_extractions(snap / "extractions.jsonl", st.extract_model)
     if a.pmid:
         rows = [r for r in rows if r["pmid"] == a.pmid]
     # Every extracted paper, including those with no records: a zero-record
@@ -780,27 +749,31 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     archive = ResponseArchive(st.responses_dir)
     # The reviewer runs on the extraction model, and reviews only current rows.
     model = st.extract_model
-    spent = 0.0
-    price = st.price_for(model)
+    meter = SpendMeter(st.price_for(model), archive, a.budget_usd)
     n_done = n_failed = 0
 
     for r in rows:
         pmid = r["pmid"]
         paper = papers[pmid]
         text = paper["text"]
-        recs = slim_records(pmid, r["extraction"].get("variants") or [],
-                            (r.get("grounding") or {}).get("figure_sourced") or [])
+        # The reviewer grounds against the text the records were extracted
+        # from. If the paper's text has grown since, the records are stale:
+        # re-extract first, then challenge what that produces.
+        if paper.get("text_sha256") != r["text_sha256"]:
+            log.warning("skip %s: text changed since extraction; re-extract before challenging", pmid)
+            continue
+        recs = rows_mod.review_records(r)
         digest = records_digest(recs)
-        cached = None if a.no_llm_cache else cache.get(paper.get("text_sha256", ""), digest, model)
+        cached = cache.get(r["text_sha256"], digest, model, refresh=a.no_llm_cache)
         if cached is not None:
             log.info("skip %s (challenged at %s on identical text and records)", pmid,
                      cached.get("challenge_prompt_version"))
             continue
-        if a.budget_usd and spent >= a.budget_usd:
+        if meter.over_budget():
             log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_done)
             break
         log.info("challenging %s (%d records)", pmid, len(recs))
-        hits_before = archive.hits
+        meter.begin()
         try:
             ch, usage, prov = challenge_paper(client, pmid=pmid, source_text=text, records=recs,
                                               model=model, effort=a.effort,
@@ -813,11 +786,9 @@ def cmd_challenge(a: argparse.Namespace) -> int:
             continue
         rep = check(ch, recs, text)
         # Data before index, as in `cmd_extract`.
-        cache.put(pmid=pmid, text_sha256=paper.get("text_sha256", ""), records_digest=digest,
+        cache.put(pmid=pmid, text_sha256=r["text_sha256"], records_digest=digest,
                   challenge=ch, report=rep, usage=usage, provenance=prov)
-        if price and archive.hits == hits_before:
-            spent += price.cost(input=usage["input"], output=usage["output"],
-                                cache_read=usage["cache_read"])
+        meter.charge(usage)
         ledger.record(identity=pmid, stage="challenged", snapshot=snap.name,
                       challenge={k: rep.as_dict()[k] for k in
                                  ("n_records", "n_upheld", "n_disputed", "n_unverifiable",
@@ -830,9 +801,9 @@ def cmd_challenge(a: argparse.Namespace) -> int:
             flags.append(f"{len(rep.fabricated)} FABRICATED")
         print(f"{pmid}: {len(recs)} records -> upheld={len(rep.upheld)} disputed={len(rep.disputed)} "
               f"unverifiable={len(rep.unverifiable)} missed={len(rep.missed_grounded)}"
-              f"{'  ' + ' '.join(flags) if flags else ''}  [{usage['effort']}]")
+              f"{'  ' + ' '.join(flags) if flags else ''}  [{prov['effort']}]")
 
-    print(f"\n{n_done} challenged, {n_failed} failed, cache hits {cache.hits}, ${spent:.2f} spent")
+    print(f"\n{n_done} challenged, {n_failed} failed, cache hits {cache.hits}, ${meter.spent:.2f} spent")
     return 0
 
 
@@ -851,22 +822,17 @@ REVIEW_COLUMNS = [
 
 def cmd_review(a: argparse.Namespace) -> int:
     """Emit the human spot-check queue as TSV, from both review signals."""
-    import csv as _csv
-
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
-    papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
-    rows = latest_extractions(snap / "extractions.jsonl", st)
+    papers = {r["pmid"]: r for r in jsonl.read(snap / "papers.jsonl")}
+    rows = rows_mod.latest_extractions(snap / "extractions.jsonl", st.extract_model)
 
     from col4a1a2.extract.challenge import record_key
-    challenges: dict[str, dict] = {}
-    cpath = st.curated_dir / "challenges.jsonl"
-    from col4a1a2.extract.challenge import CHALLENGE_PROMPT_VERSION
-
-    for c in sorted(jsonl.read_tolerant(cpath, what="challenges"), key=lambda c: c.get("written_at", "")):
-        if (c.get("challenge_prompt_version") == CHALLENGE_PROMPT_VERSION
-                and c.get("requested_model") == st.extract_model):
-            challenges[c["pmid"]] = c
+    current = rows_mod.current_challenges(
+        jsonl.read_tolerant(st.curated_dir / "challenges.jsonl", what="challenges"), st.extract_model)
+    # The challenge that reviewed these records on this text, or none: matching
+    # on the PMID alone attached verdicts about superseded records.
+    challenges = {r["pmid"]: c for r in rows if (c := rows_mod.challenge_for(r, current))}
 
     def clean(v) -> str:
         # The measurement that justified TSV covered extraction fields only;
@@ -919,21 +885,12 @@ def cmd_review(a: argparse.Namespace) -> int:
     # finding no file are different situations, and deriving the columns from
     # the first row crashed on the one snapshot that had nothing to review.
     path = snap / "review.jsonl"
-    write_jsonl(path, out)
+    jsonl.write(path, out)
     print(f"{len(out)} records across {len({r['pmid'] for r in out})} papers -> {path}")
     if a.tsv:
         # An export for a human to read in a spreadsheet, produced on request.
-        # Tabs and newlines are rejected rather than escaped: the measurement
-        # that justified TSV covered extraction fields only, and the challenge
-        # adds three free-text ones.
-        tsv = Path(a.tsv)
-        with tsv.open("w", newline="", encoding="utf-8") as f:
-            w = _csv.DictWriter(f, fieldnames=REVIEW_COLUMNS, delimiter="\t",
-                                extrasaction="raise",
-                                quoting=_csv.QUOTE_NONE, escapechar="\\")
-            w.writeheader()
-            w.writerows(out)
-        print(f"  exported {tsv}")
+        jsonl.write_tsv(Path(a.tsv), REVIEW_COLUMNS, out)
+        print(f"  exported {a.tsv}")
     if missed:
         print(f"{len(missed)} grounded missed-variant reports across {len({p for p, _ in missed})} papers:")
         for p, m in missed[:10]:
@@ -959,52 +916,16 @@ def cmd_ledger(a: argparse.Namespace) -> int:
     print("  by stage:       " + ", ".join(f"{k}={v}" for k, v in sorted(s["by_stage"].items())))
     print("  by disposition: " + ", ".join(f"{k}={v}" for k, v in sorted(s["by_disposition"].items())))
     if a.tsv:
-        import csv as _csv
         cols = ["identity", "identity_kind", "pmid", "stage", "dropped_at",
                 "is_open_access", "has_pmcid", "n_variants", "needs_review", "attempts",
                 "last_error", "first_pub_date", "journal", "title"]
-        out = Path(a.tsv)
-        with out.open("w", newline="", encoding="utf-8") as f:
-            w = _csv.DictWriter(f, fieldnames=cols, delimiter="\t", extrasaction="ignore",
-                                quoting=_csv.QUOTE_NONE, escapechar="\\")
-            w.writeheader()
-            for r in sorted(ledger.fold().values(), key=lambda x: (x.get("stage") or "", x.get("identity"))):
-                row = {k: r.get(k, "") for k in cols}
-                row["title"] = " ".join(str(row["title"]).split())[:160]
-                w.writerow(row)
-        print(f"  wrote {out}")
+        rows = sorted(ledger.fold().values(), key=lambda x: (x.get("stage") or "", x.get("identity")))
+        jsonl.write_tsv(Path(a.tsv), cols, ({**r, "title": str(r.get("title") or "")[:160]} for r in rows))
+        print(f"  wrote {a.tsv}")
     return 0
 
 
 # ---------------------------------------------------------------- show
-
-def is_current_extraction(row: dict, st: Settings) -> bool:
-    """The one definition of "current": this prompt, the configured model, not a failure.
-
-    Rows from a comparison model (`extract --model X`) or a retired prompt sit in
-    the same file and must never leak into the table, the review queue or the
-    challenge.
-    """
-    from col4a1a2.extract.prompt import PROMPT_VERSION
-
-    return (not row.get("error") and row.get("prompt_version") == PROMPT_VERSION
-            and row.get("requested_model") == st.extract_model)
-
-
-def latest_extractions(path: Path, st: Settings) -> list[dict]:
-    """One current row per PMID, keeping the newest.
-
-    `extractions.jsonl` is append-only, so a paper re-extracted after its text
-    grew (a supplement or figure transcription arriving), or re-run with
-    `--no-llm-cache`, has more than one row. Readers want the newest current
-    result, not a superseded one.
-    """
-    by_pmid: dict[str, dict] = {}
-    for r in sorted(read_jsonl(path), key=lambda r: r.get("written_at", "")):
-        if is_current_extraction(r, st):
-            by_pmid[r["pmid"]] = r
-    return list(by_pmid.values())
-
 
 def cmd_check(a: argparse.Namespace) -> int:
     from col4a1a2 import check
@@ -1014,7 +935,7 @@ def cmd_check(a: argparse.Namespace) -> int:
 
 def cmd_show(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
-    rows = latest_extractions(snap / "extractions.jsonl", a.settings)
+    rows = rows_mod.latest_extractions(snap / "extractions.jsonl", a.settings.extract_model)
     if a.pmid:
         rows = [r for r in rows if r["pmid"] == a.pmid]
     for r in rows:
@@ -1049,7 +970,7 @@ def cmd_show(a: argparse.Namespace) -> int:
 
 def cmd_list(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
-    for r in read_jsonl(snap / "papers.jsonl"):
+    for r in jsonl.read(snap / "papers.jsonl"):
         tr = r.get("triage", {})
         flags = "".join(["T" if tr.get("title_abstract_mention") else "-", "C" if tr.get("clinical_keyword") else "-",
                          "P" if tr.get("pubtator_gene_variant") else "-", "S" if tr.get("pubtator_search_hit") else "-",

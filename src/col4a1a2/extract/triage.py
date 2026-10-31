@@ -27,14 +27,12 @@ the first's.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from col4a1a2 import jsonl
+from col4a1a2.digest import sha256_text
+from col4a1a2.extract.cache import KeyedCache
 from pydantic import BaseModel, Field
 
 TRIAGE_PROMPT_VERSION = "t1"
-TRIAGE_MODEL = "claude-haiku-5-5"
-TRIAGE_EFFORT = "low"
 MAX_TRIAGE_TOKENS = 2000
 
 log = logging.getLogger("col4a1a2")
@@ -55,63 +53,43 @@ class TriageDecision(BaseModel):
     reason: str = Field(description="One short clause naming the deciding feature of the abstract")
 
 
-class TriageCache:
-    """Append-only JSONL cache of decisions, keyed by (pmid, prompt version, requested model).
+class TriageCache(KeyedCache):
+    """Decisions keyed by (pmid, prompt version, requested model)."""
 
-    A later row with the same key wins, which is what a `--no-llm-cache` re-run
-    relies on.
-    """
+    KEY = ("pmid", "triage_prompt_version", "requested_model")
+    WHAT = "triage cache"
 
-    def __init__(self, path: Path):
-        self.path = path
-        self.entries: dict[tuple[str, str, str], dict] = {}
-        for r in jsonl.read_tolerant(path, what="triage cache"):
-            self.entries[(r["pmid"], r.get("triage_prompt_version", ""), r.get("requested_model", ""))] = r
-        self.hits = 0
-        self.misses = 0
-
-    def get(self, pmid: str, requested_model: str) -> dict | None:
-        r = self.entries.get((pmid, TRIAGE_PROMPT_VERSION, requested_model))
-        if r is not None:
-            self.hits += 1
-        return r
+    def get(self, pmid: str, requested_model: str, *, refresh: bool = False) -> dict | None:
+        return self.lookup((pmid, TRIAGE_PROMPT_VERSION, requested_model), refresh=refresh)
 
     def put(self, pmid: str, decision: TriageDecision, usage: dict, provenance: dict) -> dict:
-        r = {
+        return self.store({
             "pmid": pmid,
             "triage_prompt_version": TRIAGE_PROMPT_VERSION,
             **provenance,
             "read_full_text": decision.read_full_text,
             "reason": decision.reason,
             "usage": usage,
-        }
-        jsonl.append(self.path, r)
-        self.entries[(pmid, TRIAGE_PROMPT_VERSION, provenance["requested_model"])] = r
-        self.misses += 1
-        return r
+        })
 
 
-def triage_paper(client, title: str, abstract: str | None, *, model: str = TRIAGE_MODEL,
-                 effort: str = TRIAGE_EFFORT, archive=None,
-                 refresh: bool = False) -> tuple[TriageDecision, dict, dict]:
-    """One Haiku call on title + abstract. Raises on API failure; caller decides.
+class TriageFailed(RuntimeError):
+    pass
+
+
+def triage_paper(client, title: str, abstract: str | None, *, model: str, effort: str,
+                 archive=None, refresh: bool = False) -> tuple[TriageDecision, dict, dict]:
+    """One call on title + abstract. Raises on API failure; caller decides.
 
     Returns the decision, its usage, and the provenance every cached row carries.
     """
-    import hashlib
-
-    from col4a1a2.extract.llm import call
+    from col4a1a2.extract.llm import call, system_block
 
     user = f"TITLE: {title or ''}\n\nABSTRACT: {abstract or '(no abstract available)'}"
     reply = call(
         client, site="triage", model=model, effort=effort, max_tokens=MAX_TRIAGE_TOKENS,
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": user}],
+        system=system_block(SYSTEM), messages=[{"role": "user", "content": user}],
         output_format=TriageDecision, fallbacks=False, archive=archive, refresh=refresh,
-        request={"prompt_version": TRIAGE_PROMPT_VERSION,
-                 "input_sha256": hashlib.sha256(user.encode("utf-8")).hexdigest()},
+        request={"prompt_version": TRIAGE_PROMPT_VERSION, "input_sha256": sha256_text(user)},
     )
-    if reply.parsed is None:
-        raise RuntimeError(f"no triage decision (stop_reason={reply.stop_reason})")
-    usage = {k: reply.usage[k] for k in ("input", "output", "cache_read")}
-    return reply.parsed, usage, reply.provenance()
+    return reply.require(TriageFailed), reply.usage_row(), reply.provenance()

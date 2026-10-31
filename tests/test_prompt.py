@@ -52,7 +52,7 @@ def test_citation_line_is_built_without_double_periods():
 def test_latest_extractions_supersedes_earlier_rows_and_drops_errors(tmp_path):
     import json
 
-    from col4a1a2.cli import latest_extractions
+    from col4a1a2.extract.rows import latest_extractions
     from col4a1a2.config import load_settings
     from col4a1a2.extract.prompt import PROMPT_VERSION
 
@@ -70,6 +70,6 @@ def test_latest_extractions_supersedes_earlier_rows_and_drops_errors(tmp_path):
         {**cur, "prompt_version": "v0", "pmid": "3", "text_sha256": "e", "written_at": "5",
          "extraction": {"variants": []}},
     ]) + "\n")
-    rows = latest_extractions(p, st)
+    rows = latest_extractions(p, st.extract_model)
     assert [r["pmid"] for r in rows] == ["1"]
     assert rows[0]["text_sha256"] == "c", "the newer current row must win"

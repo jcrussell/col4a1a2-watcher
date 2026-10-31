@@ -47,16 +47,15 @@ recorded as "nothing to refute".
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from col4a1a2 import jsonl
+from col4a1a2.digest import sha256_json, sha256_text
+from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.extract.prompt import PROMPT_VERSION
 from col4a1a2.extract.verify import find_quote, normalise
 
@@ -133,7 +132,7 @@ def record_key(pmid: str, index: int, variant: dict) -> str:
     plus a short content hash.
     """
     blob = json.dumps({k: variant.get(k) for k in SLIM_FIELDS}, sort_keys=True, ensure_ascii=False)
-    return f"{pmid}:{index}:{hashlib.sha256(blob.encode('utf-8')).hexdigest()[:8]}"
+    return f"{pmid}:{index}:{sha256_text(blob)[:8]}"
 
 
 def slim_records(pmid: str, variants: list[dict], figure_sourced: list[str]) -> list[dict]:
@@ -153,9 +152,7 @@ def slim_records(pmid: str, variants: list[dict], figure_sourced: list[str]) -> 
 
 
 def records_digest(records: list[dict]) -> str:
-    return hashlib.sha256(
-        json.dumps(records, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
+    return sha256_json(records)
 
 
 def effort_for(n_records: int) -> str:
@@ -256,9 +253,10 @@ def challenge_paper(client, *, pmid: str, source_text: str, records: list[dict],
                     refresh: bool = False) -> tuple[PaperChallenge, dict, dict]:
     """One call per paper. Raises ChallengeFailed rather than returning nothing.
 
-    Returns the challenge, its usage, and the provenance its cached row carries.
+    `effort` defaults to one scaled by the number of records. Returns the
+    challenge, its usage, and the provenance its cached row carries.
     """
-    from col4a1a2.extract.llm import call
+    from col4a1a2.extract.llm import call, system_block
 
     eff = effort or effort_for(len(records))
     payload = json.dumps(records, ensure_ascii=False, indent=1)
@@ -269,26 +267,15 @@ def challenge_paper(client, *, pmid: str, source_text: str, records: list[dict],
     )
     reply = call(
         client, site="challenge", model=model, effort=eff, max_tokens=max_tokens,
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": user}],
+        system=system_block(SYSTEM), messages=[{"role": "user", "content": user}],
         output_format=PaperChallenge, archive=archive, refresh=refresh,
         request={"prompt_version": CHALLENGE_PROMPT_VERSION, "pmid": pmid,
-                 "input_sha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest(),
-                 "records_digest": records_digest(records)},
+                 "input_sha256": sha256_text(source_text), "records_digest": records_digest(records)},
     )
-    stop = reply.stop_reason
-    if stop == "refusal":
-        raise ChallengeFailed(f"refused: {reply.stop_details}")
-    if stop == "max_tokens":
-        raise ChallengeFailed("output hit max_tokens before the review was complete")
-    if reply.parsed is None:
-        raise ChallengeFailed(f"no parsed output (stop_reason={stop})")
-    usage = {k: reply.usage[k] for k in ("input", "output", "cache_read")}
-    usage["effort"] = eff
-    return reply.parsed, usage, reply.provenance()
+    return reply.require(ChallengeFailed), reply.usage_row(), reply.provenance()
 
 
-class ChallengeCache:
+class ChallengeCache(KeyedCache):
     """Keyed on the text *and* the records, plus the prompt version.
 
     Both halves are load-bearing. The reviewer's quotes are grounded against the
@@ -301,26 +288,18 @@ class ChallengeCache:
     which is the resume key working correctly.)
     """
 
-    def __init__(self, path: Path):
-        self.path = path
-        self.entries: dict[tuple[str, str, str, str], dict] = {}
-        # A later row with the same key wins: that is a `--no-llm-cache` re-run.
-        for r in jsonl.read_tolerant(path, what="challenge cache"):
-            self.entries[(r.get("text_sha256", ""), r.get("records_digest", ""),
-                          r.get("challenge_prompt_version", ""), r.get("requested_model", ""))] = r
-        self.hits = 0
-        self.misses = 0
+    KEY = ("text_sha256", "records_digest", "challenge_prompt_version", "requested_model")
+    WHAT = "challenge cache"
 
-    def get(self, text_sha256: str, records_digest: str, requested_model: str) -> dict | None:
-        r = self.entries.get((text_sha256, records_digest, CHALLENGE_PROMPT_VERSION, requested_model))
-        if r is not None:
-            self.hits += 1
-        return r
+    def get(self, text_sha256: str, records_digest: str, requested_model: str, *,
+            refresh: bool = False) -> dict | None:
+        return self.lookup((text_sha256, records_digest, CHALLENGE_PROMPT_VERSION, requested_model),
+                           refresh=refresh)
 
     def put(self, *, pmid: str, text_sha256: str, records_digest: str,
             challenge: PaperChallenge, report: ChallengeReport, usage: dict,
             provenance: dict) -> dict:
-        row = {
+        return self.store({
             "pmid": pmid,
             "text_sha256": text_sha256,
             "records_digest": records_digest,
@@ -330,9 +309,4 @@ class ChallengeCache:
             "usage": usage,
             "challenge": challenge.model_dump(mode="json"),
             "report": report.as_dict(),
-        }
-        jsonl.append(self.path, row)
-        self.entries[(text_sha256, records_digest, CHALLENGE_PROMPT_VERSION,
-                      provenance["requested_model"])] = row
-        self.misses += 1
-        return row
+        })

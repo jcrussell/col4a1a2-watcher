@@ -26,7 +26,6 @@ model the API says served it, the model we asked for, the effort, and when.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import inspect
 import json
 import logging
@@ -36,6 +35,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from col4a1a2.digest import sha256_json
 from col4a1a2.schemas import RESPONSE_SUFFIX as SUFFIX
 
 log = logging.getLogger("col4a1a2")
@@ -61,6 +61,59 @@ class Reply:
         return {"model": self.model, "requested_model": self.requested_model,
                 "effort": self.effort, "written_at": self.written_at}
 
+    def usage_row(self) -> dict:
+        """All four token counts. Three call sites once kept only three of
+        them and dropped cache writes, so their rows and spend under-counted."""
+        return dict(self.usage)
+
+    def require(self, exc: type[Exception]) -> BaseModel:
+        """The parsed output, or `exc` saying why there is none.
+
+        Refusal and max_tokens are checked before the missing-output case, so
+        the reason survives: triage once raised a bare "no decision" for both.
+        """
+        if self.stop_reason == "refusal":
+            raise exc(f"refused: {self.stop_details}")
+        if self.stop_reason == "max_tokens":
+            raise exc("output hit max_tokens before a complete answer was produced")
+        if self.parsed is None:
+            raise exc(f"no parsed output (stop_reason={self.stop_reason})")
+        return self.parsed
+
+
+def system_block(text: str) -> list[dict]:
+    """A system prompt marked for prompt caching, as every call site sends it."""
+    return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
+
+class SpendMeter:
+    """What a run has spent, and whether it may spend more.
+
+    Call `begin()` before each model call and `charge(usage)` after it. A reply
+    served from the response archive cost nothing this run, and the meter tells
+    by whether the archive's hit count moved in between.
+    """
+
+    def __init__(self, price, archive: ResponseArchive | None, budget_usd: float | None):
+        self.price = price
+        self.archive = archive
+        self.budget_usd = budget_usd
+        self.spent = 0.0
+        self._hits = 0
+
+    def over_budget(self) -> bool:
+        return bool(self.budget_usd) and self.spent >= self.budget_usd
+
+    def begin(self) -> None:
+        self._hits = self.archive.hits if self.archive is not None else 0
+
+    def charge(self, usage: dict) -> None:
+        replayed = self.archive is not None and self.archive.hits > self._hits
+        if self.price and not replayed:
+            self.spent += self.price.cost(input=usage.get("input", 0), output=usage.get("output", 0),
+                                          cache_read=usage.get("cache_read", 0),
+                                          cache_write=usage.get("cache_write", 0))
+
 
 @dataclass
 class Policy:
@@ -85,8 +138,7 @@ def _now() -> str:
 
 
 def request_digest(kwargs: dict) -> str:
-    blob = json.dumps(kwargs, sort_keys=True, ensure_ascii=False, default=str)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+    return sha256_json(kwargs)
 
 
 class ResponseArchive:

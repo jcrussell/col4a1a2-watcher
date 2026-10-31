@@ -41,6 +41,7 @@ from pydantic import ValidationError
 
 from col4a1a2 import jsonl, schemas
 from col4a1a2.config import Settings
+from col4a1a2.extract import rows as rows_mod
 
 APPEND_ONLY = ("ledger.jsonl", "triage.jsonl", "figures.jsonl", "challenges.jsonl", "discovery.jsonl")
 ALLOW_REWRITE = "COL4A1A2_ALLOW_REWRITE"
@@ -153,13 +154,11 @@ class Checker:
             self.add("WARN", "duplicate-row", path, f"{dup} byte-identical duplicate rows (an accidental re-append?)")
 
     def current_challenges(self, rows: list[dict]) -> dict[str, dict]:
-        from col4a1a2.extract.challenge import CHALLENGE_PROMPT_VERSION
-
+        """The newest current challenge per PMID, by the shared rule in `extract.rows`."""
         out: dict[str, dict] = {}
-        for r in sorted(rows, key=lambda r: r.get("written_at", "")):
-            if (r.get("challenge_prompt_version") == CHALLENGE_PROMPT_VERSION
-                    and r.get("requested_model") == self.st.extract_model):
-                out[r["pmid"]] = r
+        for c in sorted(rows_mod.current_challenges(rows, self.st.extract_model).values(),
+                        key=lambda r: r.get("written_at", "")):
+            out[c["pmid"]] = c
         return out
 
     def append_only(self, path: Path) -> None:
@@ -187,7 +186,7 @@ class Checker:
         """A migration may reshape events; it may not lose a paper or a verdict."""
         from col4a1a2.ledger import fold_rows
 
-        a = fold_rows([json.loads(line) for line in head.decode("utf-8").split("\n") if line.strip()])
+        a = fold_rows(jsonl.loads_lines(head.decode("utf-8"), tolerant=True, what="HEAD ledger"))
         b = fold_rows(jsonl.read_tolerant(path))
         gone = sorted(set(a) - set(b))
         if gone:
@@ -206,8 +205,8 @@ class Checker:
     # ------------------------------------------------------------ snapshots
 
     def snapshots(self, ledger_rows: list[dict], current_ch: dict[str, dict]) -> None:
-        from col4a1a2.extract.challenge import records_digest, slim_records
         from col4a1a2.extract.prompt import PROMPT_VERSION
+        from col4a1a2.ledger import is_extraction
 
         root = self.st.snapshot_root
         dirs = sorted(d for d in root.iterdir() if d.is_dir()) if root.exists() else []
@@ -226,16 +225,15 @@ class Checker:
             for p in self.rows(d / "papers.jsonl"):
                 papers_hash.setdefault(p["pmid"], set()).add(p.get("text_sha256", ""))
             for r in self.rows(d / "extractions.jsonl"):
-                if (not r.get("error") and r.get("prompt_version") == PROMPT_VERSION
-                        and r.get("requested_model") == model):
+                if rows_mod.is_current_extraction(r, model):
                     current[(r["pmid"], r["text_sha256"])] = r
             review += [(d / "review.jsonl", r) for r in self.rows(d / "review.jsonl")]
 
         newest: dict[str, dict] = {}
         indexed: set[tuple[str, str]] = set()
-        for e in sorted(ledger_rows, key=lambda e: e["written_at"]):
-            if (e.get("stage") == "extracted" and e.get("prompt_version") == PROMPT_VERSION
-                    and e.get("requested_model") == model and not e.get("last_error")):
+        for e in sorted(ledger_rows, key=lambda e: e.get("written_at", "")):
+            if (is_extraction(e) and e.get("prompt_version") == PROMPT_VERSION
+                    and e.get("requested_model") == model):
                 newest[e["identity"]] = e
                 indexed.add((e["identity"], e["text_sha256"]))
         missing = sorted(i for i, e in newest.items() if (i, e["text_sha256"]) not in current)
@@ -254,9 +252,7 @@ class Checker:
             if row is None:
                 stale.append(pmid)
                 continue
-            recs = slim_records(pmid, row["extraction"].get("variants") or [],
-                                (row.get("grounding") or {}).get("figure_sourced") or [])
-            if records_digest(recs) != c["records_digest"]:
+            if rows_mod.records_digest_for(row) != c["records_digest"]:
                 stale.append(pmid)
         if stale:
             self.add("ERROR", "challenge-of-missing-records", "data/curated/challenges.jsonl",

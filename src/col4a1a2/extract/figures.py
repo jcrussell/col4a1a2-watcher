@@ -18,21 +18,18 @@ depend on the model's prose style.
 from __future__ import annotations
 
 import base64
-import hashlib
 import logging
-from pathlib import Path
 
-from col4a1a2 import jsonl
 from pydantic import BaseModel, Field
 
+from col4a1a2.digest import sha256_bytes
+from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.sources.fulltext import FigureRef, rows_to_text, text_deficit
 
 
 log = logging.getLogger("col4a1a2")
 
 FIGURE_PROMPT_VERSION = "f1"
-FIGURE_MODEL = "claude-opus-5-5"
-FIGURE_EFFORT = "low"          # transcription, not reasoning
 MAX_FIGURES_PER_PAPER = 3
 MAX_FIGURE_TOKENS = 4000
 
@@ -109,8 +106,10 @@ def transcribe_figure(
     media_type: str,
     fig: FigureRef,
     *,
-    model: str = FIGURE_MODEL,
-    effort: str = FIGURE_EFFORT,
+    model: str,
+    effort: str,
+    max_tokens: int = MAX_FIGURE_TOKENS,
+    image_sha256: str | None = None,
     archive=None,
     refresh: bool = False,
 ) -> tuple[FigureTranscription, dict, dict]:
@@ -118,7 +117,7 @@ def transcribe_figure(
 
     Returns the transcription, its usage, and the provenance its cached row carries.
     """
-    from col4a1a2.extract.llm import call
+    from col4a1a2.extract.llm import call, system_block
 
     caption = fig.caption_title or fig.caption
     prompt = (
@@ -127,8 +126,8 @@ def transcribe_figure(
         "Transcribe this figure."
     )
     reply = call(
-        client, site="figure", model=model, effort=effort, max_tokens=MAX_FIGURE_TOKENS,
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
+        client, site="figure", model=model, effort=effort, max_tokens=max_tokens,
+        system=system_block(SYSTEM),
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                          "data": base64.standard_b64encode(image).decode()}},
@@ -136,21 +135,12 @@ def transcribe_figure(
         ]}],
         output_format=FigureTranscription, archive=archive, refresh=refresh,
         request={"prompt_version": FIGURE_PROMPT_VERSION, "fig_id": fig.fig_id,
-                 "image_sha256": hashlib.sha256(image).hexdigest()},
+                 "image_sha256": image_sha256 or sha256_bytes(image)},
     )
     # Thinking is always on for this model and counts against max_tokens, so a
     # dense figure can spend the whole budget before emitting a text block, and a
-    # safety decline emits none either. In both cases there is nothing to parse,
-    # so check the stop reason before trusting the output.
-    stop = reply.stop_reason
-    if stop == "refusal":
-        raise TranscriptionFailed(f"refused: {reply.stop_details}")
-    if stop == "max_tokens":
-        raise TranscriptionFailed("output hit max_tokens before a transcription was produced")
-    if reply.parsed is None:
-        raise TranscriptionFailed(f"no parsed output (stop_reason={stop})")
-    usage = {k: reply.usage[k] for k in ("input", "output", "cache_read")}
-    return reply.parsed, usage, reply.provenance()
+    # safety decline emits none either; `require` checks the stop reason first.
+    return reply.require(TranscriptionFailed), reply.usage_row(), reply.provenance()
 
 
 def transcription_to_text(fig: FigureRef, t: FigureTranscription) -> str:
@@ -160,8 +150,7 @@ def transcription_to_text(fig: FigureRef, t: FigureTranscription) -> str:
     output, and it sits *inside* the region so a quote that accidentally includes
     it still attributes to the figure.
     """
-    label = t.figure_label or fig.label or fig.fig_id or "figure"
-    head = f"=== FIGURE TRANSCRIPTION (MODEL-GENERATED, NOT AUTHOR TEXT): {label} ==="
+    head = f"=== FIGURE TRANSCRIPTION (MODEL-GENERATED, NOT AUTHOR TEXT): {transcript_label(fig, t)} ==="
     lines = [head]
     caption = fig.caption_title or fig.caption
     if caption:
@@ -181,36 +170,27 @@ def transcript_label(fig: FigureRef, t: FigureTranscription) -> str:
     return t.figure_label or fig.label or fig.fig_id or "figure"
 
 
-class FigureCache:
-    """Append-only JSONL of transcriptions, keyed by image content.
+class FigureCache(KeyedCache):
+    """Transcriptions keyed by image content, prompt version and requested model.
 
     Keyed on the image sha256 rather than its filename, so a publisher replacing
     a figure invalidates correctly. Lives outside the snapshot so new snapshots
     and re-fetches reuse it, the same reasoning as the triage decision log.
     """
 
-    def __init__(self, path: Path):
-        self.path = path
-        self.entries: dict[tuple[str, str, str], dict] = {}
-        for r in jsonl.read_tolerant(path, what="figure cache"):
-            self.entries[(r["image_sha256"], r.get("figure_prompt_version", ""),
-                          r.get("requested_model", ""))] = r
-        self.hits = 0
-        self.misses = 0
+    KEY = ("image_sha256", "figure_prompt_version", "requested_model")
+    WHAT = "figure cache"
 
     @staticmethod
     def digest(image: bytes) -> str:
-        return hashlib.sha256(image).hexdigest()
+        return sha256_bytes(image)
 
-    def get(self, image_sha256: str, requested_model: str) -> dict | None:
-        r = self.entries.get((image_sha256, FIGURE_PROMPT_VERSION, requested_model))
-        if r is not None:
-            self.hits += 1
-        return r
+    def get(self, image_sha256: str, requested_model: str, *, refresh: bool = False) -> dict | None:
+        return self.lookup((image_sha256, FIGURE_PROMPT_VERSION, requested_model), refresh=refresh)
 
     def put(self, *, pmcid: str, fig: FigureRef, image_sha256: str,
             transcription: FigureTranscription, usage: dict, provenance: dict) -> dict:
-        r = {
+        return self.store({
             "pmcid": pmcid,
             "fig_id": fig.fig_id,
             "label": fig.label,
@@ -219,8 +199,4 @@ class FigureCache:
             **provenance,
             "transcription": transcription.model_dump(),
             "usage": usage,
-        }
-        jsonl.append(self.path, r)
-        self.entries[(image_sha256, FIGURE_PROMPT_VERSION, provenance["requested_model"])] = r
-        self.misses += 1
-        return r
+        })

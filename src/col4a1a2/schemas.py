@@ -61,10 +61,10 @@ class Usage(Row):
 
 
 class ChallengeUsage(Usage):
-    """The challenge writer records the request's effort level alongside the
-    token counts. Misfiled -- effort is a request parameter, not usage -- but
-    149 rows on disk say so, and a model describes the file it has rather than
-    the file it wishes it had.
+    """Usage as early challenge rows wrote it, with the effort level misfiled
+    among the token counts. Rows now carry `effort` at the top level with the
+    rest of their provenance and leave it out of here; the field stays so the
+    212 older rows still validate.
     """
 
     effort: str | None = None

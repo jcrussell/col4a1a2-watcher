@@ -449,3 +449,7 @@ These timestamps are when the ledger recorded the result, within seconds of the 
 Raw API responses were not kept before this date. The archive under `data/responses/` starts with the next paid call.
 
 Two resume bugs surfaced while doing it. A paper whose text grew after it was challenged (a supplement arriving) read as already extracted at the new hash, because resume consulted the merged ledger fold, where a later `fetched` event overwrites the hash but not the stage. And `extract --model X` would have skipped every paper, because no key named a model. Both are fixed and tested.
+
+## Cache writes went unrecorded on three call sites (fixed 2026-10-31)
+
+Triage, figure and challenge rows kept `input`, `output` and `cache_read` and dropped `cache_write`, although all three send a cached system prompt; the spend total in `cmd_challenge` dropped it too, so `--budget-usd` stopped late. Extraction always recorded all four. The challenge cost reported above ($13.89) is therefore a slight underestimate: each call writes at most one short system prompt to the cache, so the error is bounded by that prompt's size at the cache-write rate, and it cannot be corrected after the fact because no raw responses were archived before today. All four counts are recorded from now on, through one `Reply.usage_row()`.

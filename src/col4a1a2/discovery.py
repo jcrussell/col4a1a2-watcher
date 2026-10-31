@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,15 +124,7 @@ class DiscoveryLog:
 
     def __init__(self, path: Path):
         self.path = path
-        self.rows: list[dict] = []
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").split("\n"):
-                if not line.strip():
-                    continue
-                try:
-                    self.rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    log.warning("discovery log: skipping malformed line in %s", path)
+        self.rows: list[dict] = jsonl.read_tolerant(path, what="discovery log")
         self.appended = 0
 
     def fold(self) -> dict[tuple[str, str], dict]:

@@ -184,7 +184,8 @@ def test_challenge_sends_the_records_and_the_fallback_beta(fake_anthropic):
     assert sent["output_config"]["effort"] == "medium"
     assert recs[0]["record_key"] in sent["messages"][0]["content"]
     assert "PAPER TEXT START" in sent["messages"][0]["content"]
-    assert usage["effort"] == "medium"
+    assert "effort" not in usage, "effort is provenance, not usage"
+    assert set(usage) == {"input", "output", "cache_read", "cache_write"}
 
 
 def test_the_fake_client_exercises_the_beta_branch(fake_anthropic):
@@ -205,10 +206,10 @@ def test_extract_paper_is_now_covered_at_all(fake_anthropic, fake_response):
     p = PaperInput(pmid="1", pmcid=None, title="T", text="TITLE: T", abstract_only=False)
     ex = PaperExtraction(pmid="1", paper_type=PaperType.case_report,
                          input_was_abstract_only=False, has_variant_level_data=False)
-    res = extract_paper(fake_anthropic(default_output=ex), p, model="m")
-    assert res.extraction == ex and res.stop_reason == "end_turn"
-    assert res.requested_model == "m" and res.written_at
+    res = extract_paper(fake_anthropic(default_output=ex), p, model="m", effort="high")
+    assert res.extraction == ex and res.reply.stop_reason == "end_turn"
+    assert res.reply.requested_model == "m" and res.reply.written_at
 
     client = fake_anthropic(fake_response(parsed_output=None, stop_reason="refusal"))
     with pytest.raises(ExtractionRefused):
-        extract_paper(client, p, model="m")
+        extract_paper(client, p, model="m", effort="high")

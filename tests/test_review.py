@@ -13,6 +13,7 @@ from pathlib import Path
 from col4a1a2 import jsonl
 from col4a1a2.cli import REVIEW_COLUMNS, cmd_review
 from col4a1a2.config import load_settings
+from col4a1a2.extract.rows import records_digest_for
 from conftest import (
     make_challenge_row,
     make_extraction_row,
@@ -63,10 +64,12 @@ def test_a_flagged_record_is_queued_with_the_declared_columns(tmp_path):
 
 
 def test_missed_variant_reports_are_scoped_to_this_snapshot(tmp_path, capsys):
-    snap = _snapshot(tmp_path, "s1", [make_extraction_row()], [make_paper_row()])
+    row = make_extraction_row()
+    snap = _snapshot(tmp_path, "s1", [row], [make_paper_row()])
     a, st = _args(tmp_path, snap)
     jsonl.write(st.curated_dir / "challenges.jsonl", [
-        make_challenge_row("1", report={"missed_grounded": ["mine"]}),
+        make_challenge_row("1", records_digest=records_digest_for(row),
+                           report={"missed_grounded": ["mine"]}),
         make_challenge_row("999", report={"missed_grounded": ["not in this snapshot",
                                                               "nor this"]}),
     ])
@@ -74,3 +77,20 @@ def test_missed_variant_reports_are_scoped_to_this_snapshot(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "1 grounded missed-variant reports" in out
     assert "nor this" not in out
+
+
+def test_a_challenge_of_superseded_records_is_not_attached(tmp_path, capsys):
+    """Matching on the PMID alone attached the verdict about a paper's earlier
+    records to its re-extracted ones."""
+    row = make_extraction_row(variants=[make_variant(confidence="low")])
+    snap = _snapshot(tmp_path, "s1", [row], [make_paper_row()])
+    a, st = _args(tmp_path, snap)
+    jsonl.write(st.curated_dir / "challenges.jsonl", [
+        make_challenge_row("1", records_digest="digest-of-earlier-records",
+                           report={"missed_grounded": ["stale"]}),
+    ])
+    assert cmd_review(a) == 0
+    out = capsys.readouterr().out
+    assert "stale" not in out
+    queued = jsonl.read(snap / "review.jsonl")
+    assert len(queued) == 1 and queued[0]["verdict"] == "", "no verdict from a stale challenge"

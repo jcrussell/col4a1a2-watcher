@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable
 
 # Characters that are legal raw inside a JSON string but that Python's
 # str.splitlines() treats as line boundaries.
@@ -56,39 +56,57 @@ def dumps(obj: Any) -> str:
     return s
 
 
-def iter_lines(path: Path) -> Iterator[dict]:
-    """Yield each row, splitting on newline only and skipping blank lines."""
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").split("\n"):
-        if line.strip():
-            yield json.loads(line)
+def loads_lines(text: str, *, tolerant: bool = False, what: str = "file",
+                where: object = None) -> list[dict]:
+    """Parse JSON Lines text, splitting on newline only and skipping blank lines.
 
-
-def read(path: Path) -> list[dict]:
-    return list(iter_lines(path))
-
-
-def read_tolerant(path: Path, *, what: str = "file") -> list[dict]:
-    """Like `read`, but skips malformed lines rather than raising.
-
-    For tracked append-only logs, which can be hand-edited or badly
-    merge-resolved: one bad line must not break every command that reads them.
+    Strict by default. `tolerant` skips malformed lines with a warning instead,
+    for tracked logs that a hand edit or a bad merge can damage: one bad line
+    must not break every command that reads them.
     """
-    import logging
-
-    log = logging.getLogger("col4a1a2")
     out: list[dict] = []
-    if not path.exists():
-        return out
-    for line in path.read_text(encoding="utf-8").split("\n"):
+    for line in text.split("\n"):
         if not line.strip():
             continue
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError:
-            log.warning("%s: skipping malformed line in %s", what, path)
+            if not tolerant:
+                raise
+            import logging
+
+            logging.getLogger("col4a1a2").warning("%s: skipping malformed line in %s", what, where)
     return out
+
+
+def read(path: Path) -> list[dict]:
+    return loads_lines(path.read_text(encoding="utf-8")) if path.exists() else []
+
+
+def read_tolerant(path: Path, *, what: str = "file") -> list[dict]:
+    """Like `read`, but skips malformed lines rather than raising."""
+    if not path.exists():
+        return []
+    return loads_lines(path.read_text(encoding="utf-8"), tolerant=True, what=what, where=path)
+
+
+def write_tsv(path: Path, columns: list[str], rows: Iterable[dict]) -> None:
+    """A terminal export for a person reading a spreadsheet; nothing downstream parses it.
+
+    Cell whitespace, tabs and newlines included, is collapsed to single spaces,
+    so a free-text field can never split a row.
+    """
+    import csv
+
+    def cell(v: Any) -> str:
+        return " ".join(str("" if v is None else v).split())
+
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=columns, delimiter="\t", quoting=csv.QUOTE_NONE,
+                           escapechar="\\", extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            w.writerow({c: cell(r.get(c)) for c in columns})
 
 
 def _replace_atomically(path: Path, data: str) -> None:

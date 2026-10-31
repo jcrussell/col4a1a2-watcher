@@ -12,16 +12,15 @@ ever ran.
 Design choices and why:
 
 **Append-only, folded on read.** Every JSONL in this project works that way.
-Three commands read-modify-rewriting one unlocked file loses rows on interleave,
-and `write_jsonl` truncates on open, so a crash would destroy the file rather
-than appending a bad line.
+Three commands read-modify-rewriting one file loses rows on interleave, and a
+rewrite is a migration, not an update (`col4a1a2 check` enforces that).
 
 **Folded by `written_at`, not by position.** The file is tracked, and
 `.gitattributes` gives it a union merge driver so an end-of-file conflict
 resolves by concatenation. But git's union driver orders lines by which side is
 "ours", so a position-based last-wins fold would give different state depending
-on merge direction. The existing caches fold by position safely only because
-their values are immutable per key; these mutate.
+on merge direction. The model-answer caches (`extract/cache.py`) fold by
+`written_at` for the same reason.
 
 **Identity has a fallback.** The class this exists for has no PMID, so "one row
 per PMID" would be structurally unable to record it. Falls back to DOI, then to
@@ -40,7 +39,6 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -107,18 +105,31 @@ def fold_rows(rows: list[dict]) -> dict[str, dict]:
     """
     out: dict[str, dict] = {}
     for row in sorted(rows, key=lambda r: (r.get("written_at", ""), r.get("identity", ""))):
-        ident = row.get("identity")
-        if not ident:
-            continue
-        cur = out.setdefault(ident, {})
-        stage_new, stage_old = row.get("stage"), cur.get("stage")
-        cur.update({k: v for k, v in row.items() if k not in ("stage", "written_at")})
-        cur["written_at"] = row.get("written_at")
-        if stage_new and _STAGE_RANK.get(stage_new, -1) >= _STAGE_RANK.get(stage_old or "", -1):
-            cur["stage"] = stage_new
-        elif stage_old:
-            cur["stage"] = stage_old
+        if row.get("identity"):
+            _merge_event(out.setdefault(row["identity"], {}), row)
     return out
+
+
+def _merge_event(cur: dict, row: dict) -> None:
+    """Fold one event into a paper's state: its fields overwrite, its stage only advances."""
+    stage_old = cur.get("stage")
+    cur.update({k: v for k, v in row.items() if k != "stage"})
+    if row.get("stage") and _STAGE_RANK.get(row["stage"], -1) >= _STAGE_RANK.get(stage_old or "", -1):
+        cur["stage"] = row["stage"]
+    elif stage_old:
+        cur["stage"] = stage_old
+
+
+def extraction_key(r: dict) -> tuple | None:
+    """(identity, text hash, prompt version, requested model): what resume asks about."""
+    if not (r.get("identity") and r.get("text_sha256") and r.get("prompt_version")):
+        return None
+    return (r["identity"], r["text_sha256"], r["prompt_version"], r.get("requested_model") or "")
+
+
+def is_extraction(r: dict) -> bool:
+    """A successful extraction event: the only kind resume may treat as done."""
+    return r.get("stage") == "extracted" and not r.get("last_error") and extraction_key(r) is not None
 
 
 @dataclass
@@ -129,16 +140,9 @@ class Ledger:
     skipped_unchanged: int = 0
 
     def __post_init__(self) -> None:
-        if self.path.exists():
-            for line in self.path.read_text(encoding="utf-8").split("\n"):
-                if not line.strip():
-                    continue
-                try:
-                    self.rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    # A tracked file can be hand-edited or merge-resolved badly.
-                    # One bad line must not break every command that reads it.
-                    log.warning("ledger: skipping malformed line in %s", self.path)
+        # Tolerant: a tracked file can be hand-edited or merge-resolved badly,
+        # and one bad line must not break every command that reads it.
+        self.rows.extend(jsonl.read_tolerant(self.path, what="ledger"))
         # Folded once at load so writers can skip rows that would change
         # nothing. Without it every fetch re-appends a row per candidate and the
         # tracked file grows by about 3,400 rows a run; it reached 11 MB over a
@@ -154,17 +158,11 @@ class Ledger:
         for r in sorted(self.rows, key=lambda r: r.get("written_at", "")):
             self._index_extraction(r)
 
-    @staticmethod
-    def _extraction_key(r: dict) -> tuple | None:
-        if not (r.get("text_sha256") and r.get("prompt_version")):
-            return None
-        return (r["identity"], r["text_sha256"], r["prompt_version"], r.get("requested_model") or "")
-
     def _index_extraction(self, r: dict) -> None:
-        key = self._extraction_key(r)
+        key = extraction_key(r)
         if key is None:
             return
-        if r.get("stage") == "extracted" and not r.get("last_error"):
+        if is_extraction(r):
             self._extracted.add(key)
         elif r.get("last_error"):
             self._failures[key] = self._failures.get(key, 0) + 1
@@ -194,13 +192,7 @@ class Ledger:
         jsonl.append(self.path, row, validate=False)
         self.rows.append(row)
         self._index_extraction(row)
-        cur = self._state.setdefault(row["identity"], {})
-        stage_old = cur.get("stage")
-        cur.update({k: v for k, v in row.items() if k != "stage"})
-        if row.get("stage") and _STAGE_RANK.get(row["stage"], -1) >= _STAGE_RANK.get(stage_old or "", -1):
-            cur["stage"] = row["stage"]
-        elif stage_old:
-            cur["stage"] = stage_old
+        _merge_event(self._state.setdefault(row["identity"], {}), row)
         self.appended += 1
         return row
 
@@ -282,7 +274,7 @@ class Ledger:
             "kept_not_extracted": sum(
                 1 for r in state.values()
                 if (r.get("triage") or {}).get("keep") and not r.get("dropped_at")
-                and r.get("stage") not in ("extracted", "challenged")
+                and not has_extraction(r)
             ),
             "wedged": sum(1 for r in state.values() if (r.get("attempts") or 0) >= 3),
         }

@@ -2,7 +2,7 @@
   "$defs": {
     "ChallengeUsage": {
       "additionalProperties": false,
-      "description": "The challenge writer records the request's effort level alongside the\ntoken counts. Misfiled -- effort is a request parameter, not usage -- but\n149 rows on disk say so, and a model describes the file it has rather than\nthe file it wishes it had.",
+      "description": "Usage as early challenge rows wrote it, with the effort level misfiled\namong the token counts. Rows now carry `effort` at the top level with the\nrest of their provenance and leave it out of here; the field stays so the\n212 older rows still validate.",
       "properties": {
         "cache_read": {
           "default": 0,
