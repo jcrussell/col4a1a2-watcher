@@ -44,8 +44,8 @@ def test_an_empty_queue_writes_a_header_not_a_crash(tmp_path):
     snap = _snapshot(tmp_path, "s1", rows, [make_paper_row()])
     a, _ = _args(tmp_path, snap)
     assert cmd_review(a) == 0
-    assert (snap / "review_queue.jsonl").read_text() == ""
-    assert not (snap / "review_queue.tsv").exists()
+    assert (snap / "review.jsonl").read_text() == ""
+    assert not (snap / "review.tsv").exists()
 
 
 def test_a_flagged_record_is_queued_with_the_declared_columns(tmp_path):
@@ -56,7 +56,7 @@ def test_a_flagged_record_is_queued_with_the_declared_columns(tmp_path):
     snap = _snapshot(tmp_path, "s1", [row], [make_paper_row()])
     a, _ = _args(tmp_path, snap)
     assert cmd_review(a) == 0
-    queued = jsonl.read(snap / "review_queue.jsonl")
+    queued = jsonl.read(snap / "review.jsonl")
     assert len(queued) == 1
     assert set(queued[0]) == set(REVIEW_COLUMNS)
     assert queued[0]["flagged_because"] == "low-confidence"

@@ -104,26 +104,12 @@ def fake_response():
 # validation noticed.
 
 def make_variant(**over) -> dict:
-    from col4a1a2.extract.schema import (
-        Confidence,
-        Gene,
-        InheritanceCounts,
-        Phenotypes,
-        PhenotypeStatus,
-        Segregation,
-        VariantEvidence,
-    )
+    from col4a1a2.extract.schema import Confidence, Gene, VariantEvidence
 
-    absent = PhenotypeStatus.not_assessed
     v = VariantEvidence(
         gene=Gene.COL4A1, as_written="p.Gly1Arg", hgvs_c="c.1G>A", hgvs_p="p.Gly1Arg",
         variant_type="missense_glycine", n_probands=1, n_families=1,
-        inheritance=InheritanceCounts(de_novo_confirmed=0, de_novo_assumed=0,
-                                      inherited=0, unknown=1),
-        segregation=Segregation(),
-        phenotypes=Phenotypes(cerebrovascular=absent, small_vessel=absent,
-                              renal_hanac=absent, ocular=absent, muscle=absent,
-                              other=absent),
+        inh_de_novo_confirmed=0, inh_de_novo_assumed=0, inh_inherited=0, inh_unknown=1,
         same_family_as_prior_report=False,
         evidence_quotes=["a quote"], confidence=Confidence.high,
     )
@@ -131,12 +117,13 @@ def make_variant(**over) -> dict:
 
 
 def make_extraction_row(pmid="1", variants=None, **over) -> dict:
+    from col4a1a2.extract.prompt import PROMPT_VERSION
     from col4a1a2.extract.schema import PaperExtraction, PaperType
 
     ex = PaperExtraction(pmid=pmid, paper_type=PaperType.case_report,
                          input_was_abstract_only=False, has_variant_level_data=True)
     row = {
-        "pmid": pmid, "pmcid": f"PMC{pmid}", "model": "test", "prompt_version": "v2",
+        "pmid": pmid, "pmcid": f"PMC{pmid}", "model": "test", "prompt_version": PROMPT_VERSION,
         "text_sha256": "h", "schema_version": "1", "stop_reason": "end_turn",
         "usage": {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0},
         "grounding": {"total": 1, "grounded": 1, "ungrounded": [], "low_confidence": [],

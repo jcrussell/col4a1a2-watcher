@@ -13,11 +13,11 @@ attribution; their licence statements are inside the XML.
 ## Generated fixtures
 
 `supplement_variants.{xlsx,docx,csv,pdf}` are **ours**, written by
-`tools/make_test_fixtures.py`, so the supplement parsers can be tested offline
+`tools/fixtures.py`, so the supplement parsers can be tested offline
 without redistributing any publisher file. Regenerate them with:
 
 ```
-uv run python tools/make_test_fixtures.py
+uv run python tools/fixtures.py
 ```
 
 Supplementary files downloaded from publishers must never become fixtures: they

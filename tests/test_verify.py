@@ -1,6 +1,5 @@
 from col4a1a2.extract.schema import (
-    Confidence, Gene, InheritanceCounts, PaperExtraction, PaperType, PhenotypeStatus, Phenotypes, Segregation,
-    VariantEvidence,
+    Confidence, Gene, PaperExtraction, PaperType, VariantEvidence,
 )
 from col4a1a2.extract.verify import ground, normalise, quote_in_text
 
@@ -11,12 +10,9 @@ def _variant(quotes, conf=Confidence.high):
     return VariantEvidence(
         gene=Gene.COL4A1, as_written="c.1537G>A", variant_type="missense_glycine",
         n_probands=1, n_families=1,
-        inheritance=InheritanceCounts(de_novo_confirmed=0, de_novo_assumed=0, inherited=1, unknown=0),
-        segregation=Segregation(), same_family_as_prior_report=False,
-        phenotypes=Phenotypes(cerebrovascular=PhenotypeStatus.present, small_vessel=PhenotypeStatus.not_assessed,
-                              renal_hanac=PhenotypeStatus.absent_on_exam, ocular=PhenotypeStatus.not_assessed,
-                              muscle=PhenotypeStatus.not_assessed, other=PhenotypeStatus.not_assessed),
-        evidence_quotes=quotes, confidence=conf,
+        inh_de_novo_confirmed=0, inh_de_novo_assumed=0, inh_inherited=1, inh_unknown=0,
+        same_family_as_prior_report=False, phenotype_systems="cerebrovascular",
+        phenotype_details="porencephaly", evidence_quotes=quotes, confidence=conf,
     )
 
 

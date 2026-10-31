@@ -1,15 +1,25 @@
+# Environment and build detritus.
 .venv/
 __pycache__/
 *.pyc
-.env
-data/raw/
-data/built/
-reports/*/html/
 .pytest_cache/
 *.egg-info/
-/*.pdf
+
+# The API key.
+.env
+
+# Somebody else's bytes, and re-fetchable: snapshots hold whole article texts,
+# JATS XML, supplementary files and figure images; the cache holds the HTTP
+# responses they came from. data/curated/ IS tracked -- it is model output we
+# paid for, and the ledger is the denominator.
+data/raw/
 data/cache/
+
+# Derived outputs.
+data/built/
+reports/*/html/
+
+# Reference papers, and planning scratch that became AGENTS.md and docs/.
+/*.pdf
 docs/refs/
 plan.md
-docs/PLAN.md
-!data/curated/

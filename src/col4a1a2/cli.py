@@ -371,7 +371,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     use_llm = not a.no_llm_triage and bool(os.environ.get("ANTHROPIC_API_KEY"))
     if not use_llm and not a.no_llm_triage:
         log.warning("ANTHROPIC_API_KEY not set; falling back to keyword triage")
-    tcache = TriageCache(st.triage_decisions)
+    tcache = TriageCache(st.triage_cache)
     acl = make_anthropic(st) if use_llm else None
 
     triaged: list[tuple[europepmc.PaperMeta, list[dict], dict]] = []
@@ -447,7 +447,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     fig_cache = None
     if want_figures:
         from col4a1a2.extract.figures import FigureCache
-        fig_cache = FigureCache(st.figure_transcripts)
+        fig_cache = FigureCache(st.figure_cache)
 
     rows = []
     n_full = 0
@@ -878,7 +878,7 @@ def cmd_review(a: argparse.Namespace) -> int:
     # Written even when empty -- a curator finding an empty queue and a curator
     # finding no file are different situations, and deriving the columns from
     # the first row crashed on the one snapshot that had nothing to review.
-    path = snap / "review_queue.jsonl"
+    path = snap / "review.jsonl"
     write_jsonl(path, out)
     print(f"{len(out)} records across {len({r['pmid'] for r in out})} papers -> {path}")
     if a.tsv:
@@ -970,11 +970,15 @@ def cmd_show(a: argparse.Namespace) -> int:
               f"{f'  [{figs} FIGURE-SOURCED]' if figs else ''}"
               f"{' REVIEW' if g['needs_review'] else ''}")
         for v in ex["variants"]:
-            ph = ", ".join(f"{k}={v['phenotypes'][k]}" for k in ("cerebrovascular", "small_vessel", "renal_hanac", "ocular", "muscle", "other"))
-            inh = "; ".join(f"{k}×{n}" for k, n in v["inheritance"].items() if n) or "unknown"
+            ph = v.get("phenotype_systems") or "none reported"
+            inh = "; ".join(f"{k.removeprefix('inh_')}×{v[k]}" for k in
+                            ("inh_de_novo_confirmed", "inh_de_novo_assumed", "inh_inherited", "inh_unknown")
+                            if v.get(k)) or "unknown"
             mark = " [MODEL-TRANSCRIBED]" if v["as_written"] in (g.get("figure_sourced") or []) else ""
             print(f"  {v['gene']} {v['as_written']} ({v.get('hgvs_c') or '-'} / {v.get('hgvs_p') or '-'}) type={v['variant_type']} "
-                  f"probands={v['n_probands']} families={v['n_families']} inh={inh} conf={v['confidence']}{mark}")
+                  f"probands={v['n_probands']} families={v['n_families']}"
+                  f"{'/' + str(v['n_tested']) + ' tested' if v.get('n_tested') else ''} "
+                  f"inh={inh} conf={v['confidence']}{mark}")
             print(f"    {ph}")
             if v.get("notes"):
                 print(f"    notes: {v['notes']}")

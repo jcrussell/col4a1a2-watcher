@@ -67,10 +67,12 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_CHALLENGE_TOKENS = 32000
 
 # Fields the reviewer needs to judge a record. Dropping the free-text phenotype
-# prose roughly halves the records payload; everything a verdict depends on stays.
+# prose roughly halves the records payload; everything a verdict depends on stays,
+# including `n_tested`, since a count is only judgeable against its denominator.
 SLIM_FIELDS = (
     "gene", "as_written", "hgvs_c", "hgvs_p", "transcript_if_stated", "variant_type",
-    "n_probands", "n_families", "n_total_carriers", "inheritance", "segregation",
+    "n_probands", "n_families", "n_total_carriers", "n_tested",
+    "inh_de_novo_confirmed", "inh_de_novo_assumed", "inh_inherited", "inh_unknown",
     "reported_classification", "same_family_as_prior_report", "confidence",
     "evidence_quotes", "notes",
 )

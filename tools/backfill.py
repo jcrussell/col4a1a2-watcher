@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Backfill ledger extraction outcomes from snapshots that predate the ledger.
 
-    uv run python tools/backfill_ledger.py data/raw/2026-10-30-batch100 [...]
+    uv run python tools/backfill.py data/raw/2026-10-30-batch100 [...]
 
 The ledger was added after 100 papers had already been extracted, and `extract`
 correctly skips work it has already done, so those outcomes would never appear.

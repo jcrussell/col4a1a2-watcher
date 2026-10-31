@@ -1,0 +1,4 @@
+Hand-checked records go here, one JSONL file per curator pass, and they are
+tracked: a human reading a paper is the one thing in this project that cannot
+be reproduced by re-running something. While this directory is empty, no output
+may state a precision or recall figure.

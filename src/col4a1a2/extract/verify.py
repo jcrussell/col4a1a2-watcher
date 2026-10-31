@@ -114,7 +114,10 @@ def ground(
 
     rep = GroundingReport(pmid=extraction.pmid)
     for idx, v in enumerate(extraction.variants):
-        quotes = list(v.evidence_quotes) + [fa.evidence_quote for fa in v.functional_assays]
+        # Functional evidence is now one sentence rather than a list of assay
+        # objects, and it is the model's own prose rather than a quote, so it is
+        # not grounded. Only `evidence_quotes` claims to be verbatim.
+        quotes = list(v.evidence_quotes)
         kinds: set[str] = set()
         for q in quotes:
             rep.total_quotes += 1

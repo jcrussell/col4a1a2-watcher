@@ -23,6 +23,8 @@ published. Predicate order matters: testing the glycine pattern first fires
 
 from __future__ import annotations
 
+from col4a1a2.extract.schema import PHENOTYPE_SYSTEMS
+
 import re
 from dataclasses import dataclass
 
@@ -84,11 +86,6 @@ def derive_variant_type(hgvs_p: str, hgvs_c: str) -> str | None:
     return None
 
 
-def _phenotype_present(ph: dict) -> bool:
-    return any(
-        ph.get(k) == "present"
-        for k in ("cerebrovascular", "small_vessel", "renal_hanac", "ocular", "muscle", "other")
-    )
 
 
 def check_record(pmid: str, v: dict) -> list[Finding]:
@@ -99,8 +96,8 @@ def check_record(pmid: str, v: dict) -> list[Finding]:
     def add(check: str, detail: str) -> None:
         out.append(Finding(pmid=pmid, as_written=w, check=check, detail=detail))
 
-    inh = v.get("inheritance") or {}
-    total = sum(int(x) for x in inh.values())
+    inh_fields = ("inh_de_novo_confirmed", "inh_de_novo_assumed", "inh_inherited", "inh_unknown")
+    total = sum(int(v.get(k) or 0) for k in inh_fields)
     if total != v.get("n_probands"):
         add("inheritance_sum", f"inheritance sums to {total}, n_probands is {v.get('n_probands')}")
 
@@ -115,13 +112,27 @@ def check_record(pmid: str, v: dict) -> list[Finding]:
             add("families_equal_probands_at_scale",
                 f"{probands} probands recorded as {families} distinct families")
 
+    tested = v.get("n_tested")
+    if isinstance(tested, int) and tested > 0 and isinstance(probands, int) and probands > tested:
+        add("probands_gt_tested", f"{probands} probands out of {tested} tested")
+    # The error this field exists for: carriers found by screening a large
+    # cohort are not that many independent families.
+    if isinstance(tested, int) and tested >= 1000 and isinstance(families, int) and families >= 20:
+        add("many_families_from_a_cohort",
+            f"{families} families claimed from a {tested}-person screen")
+
     carriers = v.get("n_total_carriers")
     if isinstance(carriers, int) and isinstance(probands, int) and carriers < probands:
         add("carriers_lt_probands", f"{carriers} total carriers below {probands} probands")
 
-    ph = v.get("phenotypes") or {}
-    if _phenotype_present(ph) and not (ph.get("details") or "").strip():
-        add("present_without_details", "a phenotype is present with no details")
+    systems = [t.strip() for t in (v.get("phenotype_systems") or "").split(",") if t.strip()]
+    if systems and not (v.get("phenotype_details") or "").strip():
+        add("present_without_details", "a phenotype system is listed with no details")
+    unknown = [t for t in systems if t not in PHENOTYPE_SYSTEMS]
+    if unknown:
+        # A token list buys a property back from the grammar budget at the cost
+        # of free-text drift, so the vocabulary is checked here instead.
+        add("unknown_phenotype_system", f"not in the vocabulary: {', '.join(unknown)}")
 
     if v.get("same_family_as_prior_report") and not (v.get("prior_report_reason") or "").strip():
         add("prior_report_without_reason", "flagged as a prior report with no reason given")

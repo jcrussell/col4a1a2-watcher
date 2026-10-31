@@ -23,10 +23,10 @@ def test_every_jsonl_and_json_file_we_write_has_a_model():
     written = set()
     for src in (REPO / "src").rglob("*.py"):
         text = src.read_text(encoding="utf-8")
-        for name in ("ledger.jsonl", "discovery.jsonl", "triage_decisions.jsonl",
-                     "figure_transcripts.jsonl", "challenges.jsonl", "papers.jsonl",
-                     "extractions.jsonl", "review_queue.jsonl", "manifest.json",
-                     "triage_labels.json"):
+        for name in ("ledger.jsonl", "discovery.jsonl", "triage.jsonl",
+                     "figures.jsonl", "challenges.jsonl", "papers.jsonl",
+                     "extractions.jsonl", "review.jsonl", "manifest.json",
+                     "labels.json"):
             if name in text:
                 written.add(name)
     assert written, "found no artefact names in src/, so this test proves nothing"
@@ -108,15 +108,15 @@ def test_the_committed_schemas_match_the_models():
     """`schemas/` is documentation someone outside this repo will rely on, so a
     model change without re-exporting is a failure, not stale documentation.
 
-        uv run python tools/export_schemas.py
+        uv run python tools/export.py
     """
     import sys
 
     sys.path.insert(0, str(REPO / "tools"))
-    from export_schemas import build
+    from export import build
 
     for rel, doc in build().items():
         path = REPO / "schemas" / rel
-        assert path.is_file(), f"{rel} missing; run tools/export_schemas.py"
+        assert path.is_file(), f"{rel} missing; run tools/export.py"
         on_disk = json.loads(path.read_text(encoding="utf-8"))
-        assert on_disk == doc, f"{rel} is stale; run tools/export_schemas.py"
+        assert on_disk == doc, f"{rel} is stale; run tools/export.py"

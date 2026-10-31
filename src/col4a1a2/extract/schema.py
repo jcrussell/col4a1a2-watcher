@@ -1,18 +1,44 @@
-"""Structured-output schema for per-paper variant evidence extraction.
+"""What we ask Claude to extract from a paper, and nothing more.
 
-The shape is deliberately flat: structured outputs compile the schema into a
-grammar, and a first draft with 12 nullable unions plus two extra nested
-objects was rejected by the API with "Schema is too complex". Optional strings
-therefore use "" for "not stated"; the three segregation counts and
-n_total_carriers keep null, because 0 and unknown mean different things there.
-See tests/test_prompt.py for the guard that keeps the shape within budget.
+The schema is scoped to the three questions this project exists to answer:
+
+1. **Is this paper new and relevant?** -- `paper_type`, `has_variant_level_data`.
+2. **What variants exist?** -- gene, the variant as published, HGVS, the
+   transcript that makes a `c.` number mean one thing, and the variant class.
+3. **How many people are known to carry each?** -- probands, families, total
+   carriers, and the denominator they came out of.
+
+Everything else was cut, deliberately, after measuring it over 206 records.
+Co-segregation counts were filled 12%, 11% and 2% of the time and are pure
+ACMG interpretation evidence, which this project decided not to produce.
+Per-assay functional structure was filled in 16 of 206 records; "is there
+functional work on this variant" is the awareness that matters and one string
+carries it. Phenotype statuses were six enums with a present /
+absent_on_exam / not_assessed distinction; the three-way call is deep curation,
+so this keeps which systems were affected and loses the ability to record that
+an examination was done and normal. That loss is real and intentional.
+
+**The structured-output grammar has a hard ceiling, and it is structural.**
+Measured with `tools/probe.py`: 45 properties accepted, 48 rejected, and
+cutting 1,300 bytes of description from the 48-property version did not help.
+Only removing properties does. This shape is about 30 properties with two
+objects and one nullable union, which leaves room for the next field instead of
+spending three minutes a time discovering the wall again.
 """
 
 from __future__ import annotations
+
 from enum import Enum
+
 from pydantic import BaseModel, Field
 
+# Deliberately not bumped for the v2 -> v3 reshaping. `PROMPT_VERSION` already
+# discriminates the two shapes exactly -- v2 rows nest inheritance,
+# segregation and phenotypes, v3 rows are flat -- and it is the key that gates
+# re-extraction, so a second version alongside it would be decoration. Bump
+# this only if something ever stores it and depends on it.
 SCHEMA_VERSION = "1"
+
 
 class PaperType(str, Enum):
     case_report = "case_report"
@@ -21,65 +47,56 @@ class PaperType(str, Enum):
     review = "review"
     functional = "functional"
     other = "other"
+
+
 class Gene(str, Enum):
     COL4A1 = "COL4A1"
     COL4A2 = "COL4A2"
-class PhenotypeStatus(str, Enum):
-    present = "present"
-    absent_on_exam = "absent_on_exam"
-    not_assessed = "not_assessed"
+
+
 class Confidence(str, Enum):
     low = "low"
     medium = "medium"
     high = "high"
 
-class InheritanceCounts(BaseModel):
-    de_novo_confirmed: int = Field(description="Probands whose parents were both tested negative")
-    de_novo_assumed: int = Field(description="Probands called de novo without described parental testing")
-    inherited: int = Field(description="Probands with a carrier parent")
-    unknown: int = Field(description="Probands with no inheritance information")
 
-class Segregation(BaseModel):
-    affected_carriers: int | None = Field(default=None, description="Relatives who carry the variant and are affected, excluding probands; null if not stated")
-    unaffected_carriers: int | None = Field(default=None, description="Relatives who carry the variant and are reported unaffected; null if not stated")
-    non_carrier_affected: int | None = Field(default=None, description="Affected relatives shown not to carry the variant; null if not stated")
+# The closed vocabulary for `phenotype_systems`. A token list rather than six
+# enum fields: it costs 1 property instead of 7 and stays machine-queryable.
+PHENOTYPE_SYSTEMS = (
+    "cerebrovascular",   # porencephaly, ICH/IVH, schizencephaly, stroke, perinatal brain injury
+    "small_vessel",      # leukoencephalopathy, microbleeds, lacunes, PADMAL
+    "renal_hanac",       # hematuria, cysts, nephropathy, HANAC features
+    "ocular",            # cataract, anterior segment dysgenesis, retinal arterial tortuosity
+    "muscle",            # cramps, raised CK, myopathy
+    "other",
+)
 
-class Phenotypes(BaseModel):
-    cerebrovascular: PhenotypeStatus = Field(description="Porencephaly, intracerebral or intraventricular haemorrhage, schizencephaly, stroke, perinatal brain injury")
-    small_vessel: PhenotypeStatus = Field(description="Leukoencephalopathy, microbleeds, lacunes, PADMAL, white-matter disease on imaging")
-    renal_hanac: PhenotypeStatus = Field(description="Hematuria, cysts, nephropathy, HANAC features")
-    ocular: PhenotypeStatus = Field(description="Cataract, anterior segment dysgenesis, Axenfeld-Rieger, retinal arterial tortuosity")
-    muscle: PhenotypeStatus = Field(description="Cramps, elevated CK, myopathy")
-    other: PhenotypeStatus = Field(description="Any other organ-system finding; describe in details")
-    details: str = Field(default="", description="Free-text summary of the phenotype(s) as reported, including age at onset if stated")
-
-class FunctionalAssay(BaseModel):
-    assay_type: str = Field(description="e.g. collagen IV secretion, intracellular retention, ER stress, splicing minigene, mouse model")
-    result: str = Field(description="What the assay showed for this variant")
-    evidence_quote: str = Field(description="Verbatim sentence from the paper supporting the result")
 
 class VariantEvidence(BaseModel):
     gene: Gene
     as_written: str = Field(description="The variant exactly as written in the paper (first occurrence)")
-    hgvs_c: str = Field(default="", description="Coding HGVS if given or unambiguously derivable, e.g. c.1537G>A; empty if not")
+    hgvs_c: str = Field(default="", description="Coding HGVS if given or derivable, e.g. c.1537G>A; empty if not")
     hgvs_p: str = Field(default="", description="Protein HGVS if given, e.g. p.Gly513Ser; empty if not")
-    transcript_if_stated: str = Field(default="", description="Reference transcript if the paper states it, e.g. NM_001845.6")
-    genome_build_if_stated: str = Field(default="", description="GRCh37/hg19 or GRCh38/hg38 if stated")
+    transcript_if_stated: str = Field(default="", description="Reference transcript if stated, e.g. NM_001845.6")
     variant_type: str = Field(description="missense_glycine, missense_other, splice, nonsense, frameshift, inframe_indel, intronic, utr, deletion_cnv, other")
-    n_probands: int = Field(description="Number of unrelated probands reported with this variant in THIS paper")
-    n_families: int = Field(description="Number of families reported with this variant in THIS paper")
-    n_total_carriers: int | None = Field(default=None, description="All reported carriers including relatives; null if not stated")
-    inheritance: InheritanceCounts = Field(description="Proband counts by inheritance mode; must sum to n_probands")
-    segregation: Segregation
-    phenotypes: Phenotypes
-    functional_assays: list[FunctionalAssay] = Field(default_factory=list)
-    reported_classification: str = Field(default="", description="The authors' own classification (pathogenic, likely pathogenic, VUS) if stated")
-    same_family_as_prior_report: bool = Field(description="True if the paper indicates this family or proband was reported before")
-    prior_report_pmid: str = Field(default="", description="PMID of the prior report if cited")
+    n_probands: int = Field(description="Unrelated probands with this variant in THIS paper")
+    n_families: int = Field(description="Families with this variant in THIS paper")
+    n_total_carriers: int | None = Field(default=None, description="All carriers including relatives; null if not stated")
+    n_tested: int = Field(default=0, description="Individuals the study screened in total, the denominator this variant came out of, e.g. cohort or biobank size; 0 if not stated")
+    inh_de_novo_confirmed: int = Field(description="Probands with both parents tested negative")
+    inh_de_novo_assumed: int = Field(description="Probands called de novo with no parental testing described")
+    inh_inherited: int = Field(description="Probands with a carrier parent")
+    inh_unknown: int = Field(description="Probands with no inheritance information")
+    phenotype_systems: str = Field(default="", description="Comma-separated from exactly: cerebrovascular, small_vessel, renal_hanac, ocular, muscle, other. List only systems reported as affected in a carrier of THIS variant; empty if none reported")
+    phenotype_details: str = Field(default="", description="Phenotype as reported, including age at onset if stated")
+    functional_evidence: str = Field(default="", description="Functional work on this variant in this paper, one sentence, e.g. reduced collagen IV secretion in transfected cells; empty if none")
+    reported_classification: str = Field(default="", description="The authors' own classification verbatim; never your own")
+    same_family_as_prior_report: bool = Field(description="True if this family or proband was reported before")
     prior_report_reason: str = Field(default="", description="Why you think it is the same family")
-    evidence_quotes: list[str] = Field(description="2-5 verbatim sentences from the paper that support the counts and phenotypes above")
-    confidence: Confidence = Field(description="Your confidence that the counts and phenotype statuses are correct")
-    notes: str = Field(default="", description="Ambiguities, e.g. numbering convention unclear, table only, abstract only")
+    evidence_quotes: list[str] = Field(description="2-5 verbatim sentences supporting the counts and phenotypes")
+    confidence: Confidence = Field(description="Your confidence that the counts are correct")
+    notes: str = Field(default="", description="Ambiguities, e.g. numbering unclear, table only, abstract only")
+
 
 class PaperExtraction(BaseModel):
     pmid: str

@@ -27,8 +27,13 @@ their values are immutable per key; these mutate.
 per PMID" would be structurally unable to record it. Falls back to DOI, then to
 a hash of the title, with `identity_kind` saying which.
 
-**No article text.** This file is tracked, and redistributing article content is
-forbidden, so identity and metadata only -- no abstracts, no body, no quotes.
+**No article text.** Identity and metadata only -- no abstracts, no body, no
+quotes -- for size and purpose rather than licence. This is the denominator,
+one row per candidate over thousands of candidates, and the evidence lives in
+the extraction and challenge files. Those are tracked too and do carry verbatim
+quotes, because a single sentence with its citation is exactly what this
+project publishes; what is never tracked is a whole article text, which is both
+somebody else's bytes and three orders of magnitude larger.
 """
 
 from __future__ import annotations

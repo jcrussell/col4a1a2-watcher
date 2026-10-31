@@ -105,12 +105,12 @@ class Settings:
         return self.cache_dir / "bundles"
 
     @property
-    def triage_decisions(self) -> Path:
-        return self.curated_dir / "triage_decisions.jsonl"
+    def triage_cache(self) -> Path:
+        return self.curated_dir / "triage.jsonl"
 
     @property
-    def figure_transcripts(self) -> Path:
-        return self.curated_dir / "figure_transcripts.jsonl"
+    def figure_cache(self) -> Path:
+        return self.curated_dir / "figures.jsonl"
 
     def price_for(self, model: str) -> Prices | None:
         return self.prices.get(model)

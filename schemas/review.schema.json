@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "One row of review_queue.jsonl. One flagged record for a human to check.",
+  "description": "One row of review.jsonl. One flagged record for a human to check.",
   "properties": {
     "CURATOR_NOTE": {
       "default": "",

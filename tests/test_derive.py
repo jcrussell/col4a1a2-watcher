@@ -51,11 +51,9 @@ def test_no_opinion_is_none_not_other(hgvs_p, hgvs_c):
 
 def _rec(**kw):
     base = dict(as_written="c.1A>T", hgvs_c="c.1A>T", hgvs_p="", variant_type="other",
-                n_probands=1, n_families=1, n_total_carriers=None,
-                inheritance={"de_novo_confirmed": 0, "de_novo_assumed": 0, "inherited": 1, "unknown": 0},
-                phenotypes={"cerebrovascular": "not_assessed", "small_vessel": "not_assessed",
-                            "renal_hanac": "not_assessed", "ocular": "not_assessed",
-                            "muscle": "not_assessed", "other": "not_assessed", "details": ""},
+                n_probands=1, n_families=1, n_total_carriers=None, n_tested=0,
+                inh_de_novo_confirmed=0, inh_de_novo_assumed=0, inh_inherited=1, inh_unknown=0,
+                phenotype_systems="", phenotype_details="",
                 same_family_as_prior_report=False, prior_report_reason="")
     base.update(kw)
     return base
@@ -66,8 +64,13 @@ def test_each_check_fires_on_a_synthetic_failure():
     assert "inheritance_sum" in fired(_rec(n_probands=3))
     assert "families_gt_probands" in fired(_rec(n_probands=1, n_families=2))
     assert "carriers_lt_probands" in fired(_rec(n_total_carriers=0))
-    assert "present_without_details" in fired(
-        _rec(phenotypes={**_rec()["phenotypes"], "ocular": "present"}))
+    assert "present_without_details" in fired(_rec(phenotype_systems="ocular"))
+    assert "unknown_phenotype_system" in fired(
+        _rec(phenotype_systems="kidney", phenotype_details="nephropathy"))
+    # The two checks the denominator makes possible.
+    assert "probands_gt_tested" in fired(_rec(n_probands=5, n_tested=3, inh_inherited=5))
+    assert "many_families_from_a_cohort" in fired(
+        _rec(n_probands=40, n_families=40, n_tested=500000, inh_inherited=40))
     assert "prior_report_without_reason" in fired(_rec(same_family_as_prior_report=True))
     assert "variant_type_disagreement" in fired(_rec(hgvs_p="p.Gly513Ser", variant_type="nonsense"))
 
@@ -104,6 +107,26 @@ def test_checks_are_quiet_on_the_real_corpus():
         r = json.loads(line)
         if not r.get("error"):
             rows[r["pmid"]] = r
+    # The snapshot was written by prompt v2, which nested inheritance,
+    # segregation and phenotypes. The checks read the v3 flat fields, so the
+    # rows are adapted here rather than teaching production code two shapes.
+    # The point of the test survives: the checks must stay quiet on 177 real
+    # records, and the one real error must still fire.
+    def to_v3(v: dict) -> dict:
+        inh = v.get("inheritance") or {}
+        ph = v.get("phenotypes") or {}
+        present = [k for k, val in ph.items() if val == "present" and k != "details"]
+        return {**v,
+                "inh_de_novo_confirmed": inh.get("de_novo_confirmed", 0),
+                "inh_de_novo_assumed": inh.get("de_novo_assumed", 0),
+                "inh_inherited": inh.get("inherited", 0),
+                "inh_unknown": inh.get("unknown", 0),
+                "phenotype_systems": ",".join(present),
+                "phenotype_details": ph.get("details", ""),
+                "n_tested": v.get("n_tested", 0)}
+
+    for r in rows.values():
+        r["extraction"]["variants"] = [to_v3(v) for v in r["extraction"]["variants"]]
     findings = [f for r in rows.values() for f in check_extraction(r["extraction"])]
     n_records = sum(len(r["extraction"]["variants"]) for r in rows.values())
     assert n_records == 177

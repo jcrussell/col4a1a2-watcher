@@ -17,10 +17,10 @@ So the bootstrap corpus is roughly two thousand papers and the monthly increment
 
 ## Triage (2026-10-29 window, 20 labelled papers)
 
-Five of the twenty genuinely report COL4A1/COL4A2 variants in named individuals. Labels are in `data/curated/triage_labels.json`. Reproduce with:
+Five of the twenty genuinely report COL4A1/COL4A2 variants in named individuals. Labels are in `data/curated/labels.json`. Reproduce with:
 
 ```
-uv run python tools/triage_eval.py --snapshot data/raw/2026-10-29
+uv run python tools/triage.py --snapshot data/raw/2026-10-29
 ```
 
 | Gate | Kept | Recall | Precision |
@@ -61,7 +61,7 @@ A character-count estimate made before measuring put the mean at 10.7k tokens, a
 
 ## Structured-output schema limit (2026-10-29)
 
-The first extraction schema was rejected with `400 Schema is too complex`. It carried twelve nullable unions and two more levels of nested object. Flattening optional strings to the empty string, collapsing an inheritance list into a fixed four-count object, and inlining a nested prior-report object brought it inside the budget, accepted in four seconds. `tools/probe_schema.py` checks a candidate against the live API; `tests/test_prompt.py` guards the shape offline.
+The first extraction schema was rejected with `400 Schema is too complex`. It carried twelve nullable unions and two more levels of nested object. Flattening optional strings to the empty string, collapsing an inheritance list into a fixed four-count object, and inlining a nested prior-report object brought it inside the budget, accepted in four seconds. `tools/probe.py` checks a candidate against the live API; `tests/test_prompt.py` guards the shape offline.
 
 ## Citation density between papers reporting the same variant (2026-10-30)
 
@@ -306,3 +306,72 @@ nor a disease name in its title or abstract and mentions the gene only in the
 body. PubTator is the mitigation, since it tags gene concepts by synonym across
 the full text -- which is also why the enrichment lookup silently dropping 98%
 of PubTator PMIDs mattered so much.
+
+## The structured-output grammar ceiling is structural (2026-10-31)
+
+Adding five fields to the v2 extraction schema was rejected. Three probes with
+`tools/probe.py`, each taking two to three minutes because the server compiles
+the grammar before it refuses:
+
+| Shape | Properties | anyOf | Bytes | Result |
+|---|---|---|---|---|
+| v2, as used for the first 206 records | 45 | 4 | ~7,900 | accepted |
+| v2 + 5 fields | 50 | 5 | 9,069 | **rejected** |
+| v2 + 5 fields, nullable replaced by a sentinel | 50 | 4 | 9,032 | **rejected** |
+| as above, minus two dead fields, descriptions cut by 1,300 bytes | 48 | 4 | 7,733 | **rejected** |
+| v3, scoped to the project's three questions | **30** | 1 | 5,190 | **accepted in 72s** |
+
+So the ceiling is between 45 and 48 properties for this nesting, union count is
+not the binding constraint, and prose descriptions barely matter. Only removing
+properties helps. `tests/test_prompt.py` now bounds properties at 40.
+
+## gnomAD is blind where this project looks (2026-10-31)
+
+ClinVar's COL4A1 variants, as reported by the gnomAD API, against their
+presence in gnomAD r4 exomes and genomes:
+
+| ClinVar significance | Variants | Absent from gnomAD |
+|---|---|---|
+| Pathogenic | 144 | **134 (93%)** |
+| Likely pathogenic | 248 | **220 (89%)** |
+| Pathogenic/Likely pathogenic | 28 | 21 (75%) |
+| Uncertain significance | 1,112 | 471 (42%) |
+
+COL4A1 constraint: pLI 1, o/e LoF 0.18. Nine in ten pathogenic variants have
+never been observed in a population reference, so allele frequency is negative
+evidence only -- "too common to be causal" -- and says nothing about the
+variants clinicians are actually asked about.
+
+## How ClinVar gets its data, for these genes (2026-10-31)
+
+60 pathogenic COL4A1/COL4A2 records via E-utilities, full provenance for 12:
+
+| | |
+|---|---|
+| Variants with exactly one submission | 56 of 60 |
+| Review status "criteria provided, single submitter" | 53 of 60 |
+| Reviewed by an expert panel | **0** |
+| `MethodType` of the 12 assertions | clinical testing 10, research 2, literature only 0 |
+| PubMed citations across the 12 assertions | 25 |
+
+Submitters are diagnostic laboratories reporting their own patients: Labcorp
+(formerly Invitae), GeneDx, PreventionGenetics, and hospital laboratories in
+Seattle, Cardiff, Kiel and London. ClinVar is a set of single-lab verdicts, not
+a synthesis of the published evidence, and no expert panel has curated either
+gene. The two datasets are disjoint in both directions: many lab-submitted
+variants were never published, and published variants no lab submitted are
+absent. Small sample; widen before quoting in a report.
+
+## The expanded corpus (2026-10-31 sweep)
+
+| | Before the lookup fix | After |
+|---|---|---|
+| PubTator PMIDs resolved by Europe PMC | 41 of 2,075 | 1,769 of 1,809 (97.8%) |
+| Open-access candidates triaged | 811 | 2,371 |
+| Kept by the gate | 133 (16.4%) | 209 (8.8%) |
+
+The recovered PubTator population keeps at roughly 5%, a third of the Europe
+PMC rate, so the lookup fix added about 76 papers worth extracting rather than
+the ~300 projected from the old rate.
+
+LOVD was evaluated and rejected; see `AGENTS.md`. No LOVD data is stored.

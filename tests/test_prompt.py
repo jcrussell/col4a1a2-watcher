@@ -3,7 +3,9 @@ from col4a1a2.extract.prompt import PaperInput, system_prompt, user_content
 
 def test_system_prompt_loads_and_mentions_rules():
     sp = system_prompt()
-    assert "not_assessed" in sp and "n_probands" in sp and "verbatim" in sp
+    assert "phenotype_systems" in sp and "n_probands" in sp and "verbatim" in sp
+    # The denominator is the field the prompt must argue for, not just name.
+    assert "n_tested" in sp and "denominator" in sp
 
 
 def test_user_content_marks_abstract_only_and_hints():
@@ -18,8 +20,16 @@ def test_schema_stays_within_structured_output_budget():
     import json
     from col4a1a2.extract.schema import json_schema
     s = json.dumps(json_schema())
-    assert s.count("anyOf") <= 4
-    assert s.count('"object"') <= 6
+    # Measured with tools/probe.py: 45 properties accepted, 48 rejected, and
+    # cutting 1,300 bytes of description from the 48-property version did not
+    # help -- the ceiling is structural. The goal-scoped schema is 30
+    # properties, 1 anyOf and 2 objects, accepted in 72s. These bounds leave
+    # room to add a field without another three-minute probe.
+    assert s.count("anyOf") <= 2
+    assert s.count('"object"') <= 3
+    props = sum(len(v.get("properties", {})) for v in json_schema().get("$defs", {}).values())
+    props += len(json_schema().get("properties", {}))
+    assert props <= 40, f"{props} properties; 48 was rejected by the API"
 
 
 def test_citation_line_is_built_without_double_periods():

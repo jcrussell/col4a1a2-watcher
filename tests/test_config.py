@@ -70,8 +70,8 @@ def test_paths_derive_from_the_cache_dir(tmp_path):
     assert st.http_cache == tmp_path / "c" / "http.sqlite"
     assert st.bundle_store == tmp_path / "c" / "bundles"
     # curated paths are independent of the cache override
-    assert st.triage_decisions.name == "triage_decisions.jsonl"
-    assert st.figure_transcripts.name == "figure_transcripts.jsonl"
+    assert st.triage_cache.name == "triage.jsonl"
+    assert st.figure_cache.name == "figures.jsonl"
 
 
 def test_missing_config_is_an_error_not_a_silent_default(tmp_path):

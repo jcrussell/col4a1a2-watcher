@@ -1,5 +1,12 @@
 {
   "$defs": {
+    "Loose": {
+      "additionalProperties": true,
+      "description": "Shapes owned by an upstream API or a parsed document.",
+      "properties": {},
+      "title": "Loose",
+      "type": "object"
+    },
     "Usage": {
       "additionalProperties": false,
       "properties": {
@@ -29,40 +36,49 @@
     }
   },
   "additionalProperties": false,
-  "description": "One row of triage_decisions.jsonl.",
+  "description": "One row of figures.jsonl.",
   "properties": {
+    "fig_id": {
+      "title": "Fig Id",
+      "type": "string"
+    },
+    "figure_prompt_version": {
+      "title": "Figure Prompt Version",
+      "type": "string"
+    },
+    "image_sha256": {
+      "title": "Image Sha256",
+      "type": "string"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
     "model": {
       "title": "Model",
       "type": "string"
     },
-    "pmid": {
-      "title": "Pmid",
+    "pmcid": {
+      "title": "Pmcid",
       "type": "string"
     },
-    "read_full_text": {
-      "title": "Read Full Text",
-      "type": "boolean"
-    },
-    "reason": {
-      "title": "Reason",
-      "type": "string"
-    },
-    "triage_prompt_version": {
-      "title": "Triage Prompt Version",
-      "type": "string"
+    "transcription": {
+      "$ref": "#/$defs/Loose"
     },
     "usage": {
       "$ref": "#/$defs/Usage"
     }
   },
   "required": [
-    "pmid",
-    "triage_prompt_version",
+    "pmcid",
+    "fig_id",
+    "label",
+    "image_sha256",
+    "figure_prompt_version",
     "model",
-    "read_full_text",
-    "reason",
+    "transcription",
     "usage"
   ],
-  "title": "TriageDecisionRow",
+  "title": "FigureTranscriptRow",
   "type": "object"
 }

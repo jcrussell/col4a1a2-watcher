@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Export JSON Schema for every artefact this project writes.
 
-    uv run python tools/export_schemas.py
+    uv run python tools/export.py
 
 `schemas/` is documentation for anyone consuming the published data without
 this codebase: one file per artefact plus an index naming the format. The

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from col4a1a2.extract.schema import PaperExtraction
 
@@ -301,9 +301,24 @@ class ExtractionRow(Row):
     stop_reason: str | None = None
     usage: Usage | None = None
     grounding: Grounding | None = None
-    extraction: PaperExtraction | None = None
+    # Permissive by type, strict by validator. Records written by an earlier
+    # prompt version have an earlier shape -- v2 nested inheritance,
+    # segregation and phenotypes as objects and carried functional_assays as a
+    # list -- and they are kept as the historical record rather than rewritten.
+    # Validating them against today's model would either fail or force the
+    # model to describe three shapes at once. So the current version is checked
+    # against `PaperExtraction` and older ones are accepted as they stand.
+    extraction: dict | None = None
     error: str | None = None
     detail: str | None = None
+
+    @model_validator(mode="after")
+    def _check_current_extraction(self):
+        from col4a1a2.extract.prompt import PROMPT_VERSION
+
+        if self.extraction is not None and self.prompt_version == PROMPT_VERSION:
+            PaperExtraction.model_validate(self.extraction)
+        return self
 
 
 class ChallengeRow(Row):
@@ -424,14 +439,14 @@ class ReviewRow(Row):
 MODELS: dict[str, type[BaseModel]] = {
     "ledger.jsonl": LedgerEvent,
     "discovery.jsonl": DiscoveryRow,
-    "triage_decisions.jsonl": TriageDecisionRow,
-    "figure_transcripts.jsonl": FigureTranscriptRow,
+    "triage.jsonl": TriageDecisionRow,
+    "figures.jsonl": FigureTranscriptRow,
     "challenges.jsonl": ChallengeRow,
     "papers.jsonl": PaperRow,
     "extractions.jsonl": ExtractionRow,
-    "review_queue.jsonl": ReviewRow,
+    "review.jsonl": ReviewRow,
     "manifest.json": ManifestRow,
-    "triage_labels.json": TriageLabels,
+    "labels.json": TriageLabels,
 }
 
 

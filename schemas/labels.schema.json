@@ -22,7 +22,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "The whole document triage_labels.json. Hand-assigned ground truth for the triage gate: one document, written",
+  "description": "The whole document labels.json. Hand-assigned ground truth for the triage gate: one document, written",
   "properties": {
     "_about": {
       "title": "About",

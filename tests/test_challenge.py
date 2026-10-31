@@ -28,8 +28,8 @@ def _variant(as_written="c.1537G>A", **kw):
     base = dict(gene="COL4A1", as_written=as_written, hgvs_c=as_written, hgvs_p="",
                 transcript_if_stated="", variant_type="other", n_probands=1, n_families=1,
                 n_total_carriers=None,
-                inheritance={"de_novo_confirmed": 0, "de_novo_assumed": 0, "inherited": 1, "unknown": 0},
-                segregation={}, reported_classification="", same_family_as_prior_report=False,
+                inh_de_novo_confirmed=0, inh_de_novo_assumed=0, inh_inherited=1, inh_unknown=0,
+                reported_classification="", same_family_as_prior_report=False,
                 confidence="high", evidence_quotes=["The proband carried c.1537G>A."], notes="")
     base.update(kw)
     return base
@@ -49,7 +49,7 @@ def test_slim_records_attach_provenance_rather_than_asking_for_it():
     assert "provenance_note" not in recs[0]
     assert "figure" in recs[1]["provenance_note"]
     # The free-text phenotype prose is deliberately absent; it halves the payload.
-    assert "phenotypes" not in recs[0]
+    assert "phenotype_details" not in recs[0] and "functional_evidence" not in recs[0]
 
 
 def test_effort_scales_with_record_count():

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Score triage rules against hand-labelled papers.
 
-    uv run python tools/triage_eval.py --snapshot data/raw/2026-10-29
+    uv run python tools/triage.py --snapshot data/raw/2026-10-29
 
-Needs a fetched snapshot and `data/curated/triage_labels.json`. Keyword rules
+Needs a fetched snapshot and `data/curated/labels.json`. Keyword rules
 are scored offline from the snapshot. Pass --llm to also score the live Haiku
 gate, which costs about a tenth of a cent per paper and needs ANTHROPIC_API_KEY.
 
@@ -52,7 +52,7 @@ def llm_decisions() -> dict[str, bool]:
     The log covers every candidate ever triaged, while a snapshot only holds the
     papers that window kept, so the log is the authoritative record.
     """
-    path = REPO / "data/curated/triage_decisions.jsonl"
+    path = REPO / "data/curated/triage.jsonl"
     out: dict[str, bool] = {}
     if path.exists():
         for line in path.read_text().splitlines():
@@ -67,7 +67,7 @@ def load(snapshot: Path) -> tuple[dict, dict]:
         r["pmid"]: r
         for r in (json.loads(l) for l in (snapshot / "papers.jsonl").read_text().splitlines() if l.strip())
     }
-    labels = json.loads((REPO / "data/curated/triage_labels.json").read_text())["labels"]
+    labels = json.loads((REPO / "data/curated/labels.json").read_text())["labels"]
     return papers, labels
 
 

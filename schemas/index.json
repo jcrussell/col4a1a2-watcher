@@ -14,10 +14,15 @@
     "model": "ExtractionRow",
     "schema": "schemas/extractions.schema.json"
   },
-  "figure_transcripts.jsonl": {
+  "figures.jsonl": {
     "format": "jsonl",
     "model": "FigureTranscriptRow",
-    "schema": "schemas/figure_transcripts.schema.json"
+    "schema": "schemas/figures.schema.json"
+  },
+  "labels.json": {
+    "format": "json",
+    "model": "TriageLabels",
+    "schema": "schemas/labels.schema.json"
   },
   "ledger.jsonl": {
     "format": "jsonl",
@@ -34,19 +39,14 @@
     "model": "PaperRow",
     "schema": "schemas/papers.schema.json"
   },
-  "review_queue.jsonl": {
+  "review.jsonl": {
     "format": "jsonl",
     "model": "ReviewRow",
-    "schema": "schemas/review_queue.schema.json"
+    "schema": "schemas/review.schema.json"
   },
-  "triage_decisions.jsonl": {
+  "triage.jsonl": {
     "format": "jsonl",
     "model": "TriageDecisionRow",
-    "schema": "schemas/triage_decisions.schema.json"
-  },
-  "triage_labels.json": {
-    "format": "json",
-    "model": "TriageLabels",
-    "schema": "schemas/triage_labels.schema.json"
+    "schema": "schemas/triage.schema.json"
   }
 }

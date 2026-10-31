@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Measure how often papers reporting the same variant cite each other.
 
-    uv run python tools/measure_citations.py "p.Gly773Arg" "G773R"
+    uv run python tools/citations.py "p.Gly773Arg" "G773R"
 
 Each argument is an alternative spelling of one variant. The script finds every
 paper whose full text mentions any of them, orders them by publication date, and
