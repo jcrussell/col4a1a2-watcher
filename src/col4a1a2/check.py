@@ -15,16 +15,17 @@ Tracked files (always):
   every paper the ledger calls challenged has a current challenge row;
 - append-only: each log extends its `HEAD` version byte for byte, unless
   `COL4A1A2_ALLOW_REWRITE=1` declares a migration, and even then no ledger
-  identity and no triage verdict may disappear.
+  identity and no triage verdict may disappear;
+- the newest current extraction the ledger records exists as a row in
+  `extractions.jsonl` (an index entry pointing at nothing makes resume skip a
+  paper with no result: ERROR), and a current row the ledger never heard of is
+  a WARN (the harmless orphan left by a crash between data and index);
+- each current challenge's `records_digest` matches the records it reviewed.
 
-Snapshots under `data/raw/` (when present; a fresh clone has none):
+Snapshots under `data/raw/` (when present; a fresh clone and CI have none):
 - every snapshot has a valid manifest, and its JSONL files validate;
-- the newest current extraction the ledger records exists as a row
-  (an index entry pointing at nothing makes resume skip a paper with no
-  result: ERROR), and a current row the ledger never heard of is a WARN
-  (the harmless orphan left by a crash between data and index);
-- each current challenge's `records_digest` matches the records it reviewed;
-- each review-queue row points at an existing extraction.
+- each review-queue row points at an existing extraction;
+- every extraction row's snapshot is present, or `challenge` cannot read its text.
 """
 
 from __future__ import annotations
@@ -42,7 +43,8 @@ from col4a1a2 import jsonl, schemas
 from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 
-APPEND_ONLY = ("ledger.jsonl", "triage.jsonl", "figures.jsonl", "challenges.jsonl", "discovery.jsonl")
+APPEND_ONLY = ("ledger.jsonl", "triage.jsonl", "figures.jsonl", "challenges.jsonl", "discovery.jsonl",
+               "extractions.jsonl")
 ALLOW_REWRITE = "COL4A1A2_ALLOW_REWRITE"
 
 
@@ -142,7 +144,8 @@ class Checker:
         for name in APPEND_ONLY:
             self.append_only(cur / name)
 
-        self.snapshots(data["ledger.jsonl"], current_ch)
+        self.extractions(data["ledger.jsonl"], data["extractions.jsonl"], current_ch)
+        self.snapshots(data["extractions.jsonl"])
         self.responses()
         return self.findings
 
@@ -203,30 +206,16 @@ class Checker:
 
     # ------------------------------------------------------------ snapshots
 
-    def snapshots(self, ledger_rows: list[dict], current_ch: dict[str, dict]) -> None:
+    def extractions(self, ledger_rows: list[dict], ext_rows: list[dict],
+                    current_ch: dict[str, dict]) -> None:
+        """The ledger, the extraction results and the challenges, against each other."""
         from col4a1a2.extract.prompt import PROMPT_VERSION
         from col4a1a2.ledger import is_extraction
 
-        root = self.st.snapshot_root
-        dirs = sorted(d for d in root.iterdir() if d.is_dir()) if root.exists() else []
-        if not dirs:
-            self.add("INFO", "no-snapshots", root, "skipped: no snapshots on this machine")
-            return
         model = self.st.extract_model
-        current: dict[tuple[str, str], dict] = {}
-        papers_hash: dict[str, set[str]] = {}
-        review: list[tuple[Path, dict]] = []
-        for d in dirs:
-            if not (d / "manifest.json").exists():
-                self.add("ERROR", "no-manifest", d, "snapshot has no manifest.json")
-            else:
-                self.document(d / "manifest.json")
-            for p in self.rows(d / "papers.jsonl"):
-                papers_hash.setdefault(p["pmid"], set()).add(p.get("text_sha256", ""))
-            for r in self.rows(d / "extractions.jsonl"):
-                if rows_mod.is_current_extraction(r, model):
-                    current[(r["pmid"], r["text_sha256"])] = r
-            review += [(d / "review.jsonl", r) for r in self.rows(d / "review.jsonl")]
+        where = self.st.curated_dir / "extractions.jsonl"
+        current = {(r["pmid"], r["text_sha256"]): r for r in ext_rows
+                   if rows_mod.is_current_extraction(r, model)}
 
         newest: dict[str, dict] = {}
         indexed: set[tuple[str, str]] = set()
@@ -237,33 +226,49 @@ class Checker:
                 indexed.add((e["identity"], e["text_sha256"]))
         missing = sorted(i for i, e in newest.items() if (i, e["text_sha256"]) not in current)
         if missing:
-            self.add("ERROR", "index-without-data", "data/curated/ledger.jsonl",
-                     f"{len(missing)} extractions the ledger records have no row in any snapshot, "
+            self.add("ERROR", "index-without-data", self.st.curated_dir / "ledger.jsonl",
+                     f"{len(missing)} extractions the ledger records have no row in extractions.jsonl, "
                      f"so resume would skip them: e.g. {', '.join(missing[:5])}")
         orphans = sorted({k[0] for k in current if k not in indexed})
         if orphans:
-            self.add("WARN", "data-without-index", root,
+            self.add("WARN", "data-without-index", where,
                      f"{len(orphans)} current extraction rows have no ledger event, e.g. {', '.join(orphans[:5])}")
 
-        stale = []
-        for pmid, c in current_ch.items():
-            row = current.get((pmid, c["text_sha256"]))
-            if row is None:
-                stale.append(pmid)
-                continue
-            if rows_mod.records_digest_for(row) != c["records_digest"]:
-                stale.append(pmid)
+        stale = sorted(pmid for pmid, c in current_ch.items()
+                       if (row := current.get((pmid, c["text_sha256"]))) is None
+                       or rows_mod.records_digest_for(row) != c["records_digest"])
         if stale:
-            self.add("ERROR", "challenge-of-missing-records", "data/curated/challenges.jsonl",
+            self.add("ERROR", "challenge-of-missing-records", self.st.curated_dir / "challenges.jsonl",
                      f"{len(stale)} current challenges review records that no longer exist, "
-                     f"e.g. {', '.join(sorted(stale)[:5])}")
+                     f"e.g. {', '.join(stale[:5])}")
 
-        have = {pmid for pmid, _ in current}
-        bad_review = sorted({r["pmid"] for _, r in review if r["pmid"] not in have})
+    def snapshots(self, ext_rows: list[dict]) -> None:
+        """Snapshot directories, when this machine has them: manifests, texts, review queues."""
+        root = self.st.snapshot_root
+        dirs = sorted(d for d in root.iterdir() if d.is_dir()) if root.exists() else []
+        if not dirs:
+            self.add("INFO", "no-snapshots", root, "skipped: no snapshots on this machine")
+            return
+        have = {r["pmid"] for r in ext_rows if rows_mod.is_current_extraction(r, self.st.extract_model)}
+        review: list[dict] = []
+        for d in dirs:
+            if not (d / "manifest.json").exists():
+                self.add("ERROR", "no-manifest", d, "snapshot has no manifest.json")
+            else:
+                self.document(d / "manifest.json")
+            self.rows(d / "papers.jsonl")
+            review += self.rows(d / "review.jsonl")
+        bad_review = sorted({r["pmid"] for r in review if r["pmid"] not in have})
         if bad_review:
             self.add("ERROR", "review-of-missing-extraction", root,
                      f"{len(bad_review)} review-queue PMIDs have no current extraction, "
                      f"e.g. {', '.join(bad_review[:5])}")
+        names = {d.name for d in dirs}
+        textless = sorted({r["snapshot"] for r in ext_rows if r.get("snapshot") not in names})
+        if textless:
+            self.add("WARN", "extraction-without-text", root,
+                     f"extraction rows name snapshots not on this machine ({', '.join(textless[:5])}); "
+                     "`challenge` cannot read their text here")
 
     def responses(self) -> None:
         root = self.st.responses_dir

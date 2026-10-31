@@ -453,3 +453,7 @@ Two resume bugs surfaced while doing it. A paper whose text grew after it was ch
 ## Cache writes went unrecorded on three call sites (fixed 2026-10-31)
 
 Triage, figure and challenge rows kept `input`, `output` and `cache_read` and dropped `cache_write`, although all three send a cached system prompt; the spend total in `cmd_challenge` dropped it too, so `--budget-usd` stopped late. Extraction always recorded all four. The challenge cost reported above ($13.89) is therefore a slight underestimate: each call writes at most one short system prompt to the cache, so the error is bounded by that prompt's size at the cache-write rate, and it cannot be corrected after the fact because no raw responses were archived before today. All four counts are recorded from now on, through one `Reply.usage_row()`.
+
+## Extraction results tracked (2026-10-31)
+
+The 210 extraction rows moved from `data/raw/2026-10-31/extractions.jsonl` (untracked) to `data/curated/extractions.jsonl` (tracked), each gaining a `snapshot` field naming where its source text lives; the rows are otherwise byte-identical. This lets `publish` build from the repository alone, in CI. The rows carry short cited quotes and model output, never article text.

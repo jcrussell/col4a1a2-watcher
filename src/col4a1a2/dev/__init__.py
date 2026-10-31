@@ -5,7 +5,7 @@
 
 Separate from `col4a1a2` itself because these measure things rather than run
 the pipeline. Several spend money or hit the network, and the test suite never
-runs them; `export.build()` is offline and is the one thing a test imports.
+runs them; `schemas.build()` is offline and is the one thing a test imports.
 Verbs are imported only when invoked, so `--help` needs no API key and loads no
 SDK.
 """
@@ -15,7 +15,7 @@ from __future__ import annotations
 import importlib
 import sys
 
-VERBS = ("probe", "triage", "citations", "export", "fixtures")
+VERBS = ("probe", "triage", "citations", "schemas", "fixtures")
 
 
 def _summary(verb: str) -> str:

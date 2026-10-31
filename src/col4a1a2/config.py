@@ -121,6 +121,11 @@ class Settings:
         return self.curated_dir / "triage.jsonl"
 
     @property
+    def extractions(self) -> Path:
+        """Extraction results: tracked, so `publish` can build from the repo alone."""
+        return self.curated_dir / "extractions.jsonl"
+
+    @property
     def figure_cache(self) -> Path:
         return self.curated_dir / "figures.jsonl"
 

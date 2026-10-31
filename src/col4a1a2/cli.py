@@ -620,7 +620,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
     if a.limit:
         papers = papers[: a.limit]
     client = make_anthropic(st)
-    out_path = snap / "extractions.jsonl"
+    out_path = st.extractions
     # Resume on (prompt version, text hash), so a paper whose text has grown --
     # supplements or figure transcriptions appended -- is extracted again rather
     # than skipped.
@@ -672,7 +672,8 @@ def cmd_extract(a: argparse.Namespace) -> int:
         except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
             # One unusable paper must not abort the batch; record why and move on.
             log.warning("%s: %s", p.pmid, e)
-            jsonl.append(out_path, {"pmid": p.pmid, "pmcid": p.pmcid, "prompt_version": PROMPT_VERSION,
+            jsonl.append(out_path, {"pmid": p.pmid, "pmcid": p.pmcid, "snapshot": snap.name,
+                                    "prompt_version": PROMPT_VERSION,
                                     "requested_model": model, "effort": effort,
                                     "written_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                                     "text_sha256": text_hash, "error": type(e).__name__,
@@ -689,7 +690,8 @@ def cmd_extract(a: argparse.Namespace) -> int:
         rep = ground(res.extraction, texts[p.pmid], regions_by_pmid.get(p.pmid, []))
         reply = res.reply
         row = {
-            "pmid": p.pmid, "pmcid": p.pmcid, **reply.provenance(), "prompt_version": res.prompt_version,
+            "pmid": p.pmid, "pmcid": p.pmcid, **reply.provenance(), "snapshot": snap.name,
+            "prompt_version": res.prompt_version,
             "text_sha256": text_hash,
             "schema_version": res.schema_version, "stop_reason": reply.stop_reason,
             "usage": reply.usage_row(),
@@ -742,7 +744,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
     papers = {r["pmid"]: r for r in jsonl.read(snap / "papers.jsonl")}
-    rows = rows_mod.latest_extractions(snap / "extractions.jsonl", st.extract_model)
+    rows = rows_mod.latest_extractions(st.extractions, st.extract_model, snapshot=snap.name)
     rows = select_pmids(rows, a.pmid)
     # Every extracted paper, including those with no records: a zero-record
     # extraction is either an empty paper or a total miss, and only
@@ -833,7 +835,7 @@ def cmd_review(a: argparse.Namespace) -> int:
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
     papers = {r["pmid"]: r for r in jsonl.read(snap / "papers.jsonl")}
-    rows = rows_mod.latest_extractions(snap / "extractions.jsonl", st.extract_model)
+    rows = rows_mod.latest_extractions(st.extractions, st.extract_model, snapshot=snap.name)
 
     from col4a1a2.extract.challenge import record_key
     current = rows_mod.current_challenges(
@@ -941,7 +943,7 @@ def cmd_check(a: argparse.Namespace) -> int:
 
 def cmd_show(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
-    rows = rows_mod.latest_extractions(snap / "extractions.jsonl", a.settings.extract_model)
+    rows = rows_mod.latest_extractions(a.settings.extractions, a.settings.extract_model, snapshot=snap.name)
     rows = select_pmids(rows, a.pmid)
     for r in rows:
         ex = r["extraction"]

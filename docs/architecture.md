@@ -69,7 +69,7 @@ Rejected candidates are still recorded in the snapshot and the ledger, with the 
 | `discovery.py` | Time-sliced Europe PMC search. A closed date range against a fixed query is sealed and cached forever; the query string is hashed into the slice key, so editing it re-opens every slice. |
 | `config.py` | The one TOML file, resolved into a frozen `Settings` passed to every command. |
 | `patterns.py` | Classifier regexes: gene mentions, HGVS-like tokens, the clinical vocabulary of the keyword triage rule. |
-| `schemas.py`, `jsonl.py` | The row and document model for every file we write, found by filename, and the JSONL reader/writer that validates against it. `col4a1a2-dev export` writes these models to `schemas/` as JSON Schema. |
+| `schemas.py`, `jsonl.py` | The row and document model for every file we write, found by filename, and the JSONL reader/writer that validates against it. `col4a1a2-dev schemas` writes these models to `schemas/` as JSON Schema. |
 | `digest.py` | sha256 of bytes, text and canonical JSON, used by every resume and cache key. |
 | `ledger.py` | Append-only record of every candidate ever considered, folded on read. Resume reads the extraction events, never the fold. |
 | `check.py` | `col4a1a2 check`: parse and schema validity, duplicate rows, foreign keys, append-only logs and migration losses, and the links between tracked files and snapshots. Run by the pre-commit hook. |

@@ -25,7 +25,7 @@ def test_a_second_model_extracts_alongside_and_leaves_the_ledger_alone(tmp_path,
 
     assert cli.cmd_extract(cmd_args(st, snap, model="other-model")) == 0
     assert len(client.calls) == 2, "a second model must run, not skip"
-    rows = jsonl.read(snap / "extractions.jsonl")
+    rows = jsonl.read(st.extractions)
     assert [r["requested_model"] for r in rows] == [st.extract_model, "other-model"]
     events = [e for e in Ledger(st.curated_dir / "ledger.jsonl").rows if e.get("stage") == "extracted"]
     assert [e["requested_model"] for e in events] == [st.extract_model], \
@@ -38,8 +38,8 @@ def test_no_llm_cache_calls_again_and_the_new_row_is_current(tmp_path, monkeypat
     cli.cmd_extract(cmd_args(st, snap))
     cli.cmd_extract(cmd_args(st, snap, no_llm_cache=True))
     assert len(client.calls) == 2
-    rows = jsonl.read(snap / "extractions.jsonl")
-    current = latest_extractions(snap / "extractions.jsonl", st.extract_model)
+    rows = jsonl.read(st.extractions)
+    current = latest_extractions(st.extractions, st.extract_model)
     assert current[0]["written_at"] == max(r["written_at"] for r in rows)
     assert len(list(st.responses_dir.glob("*/*.response.json"))) == 2
 
@@ -49,7 +49,7 @@ def test_an_archived_answer_is_replayed_and_not_billed(tmp_path, monkeypatch, fa
     client = fake_anthropic(default_output=make_paper_extraction())
     st, snap = _setup(tmp_path, monkeypatch, client)
     cli.cmd_extract(cmd_args(st, snap))
-    (snap / "extractions.jsonl").unlink()
+    st.extractions.unlink()
     (st.curated_dir / "ledger.jsonl").unlink()
     capsys.readouterr()
     cli.cmd_extract(cmd_args(st, snap))

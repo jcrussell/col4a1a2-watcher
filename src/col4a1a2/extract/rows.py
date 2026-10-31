@@ -22,15 +22,15 @@ def is_current_extraction(row: dict, model: str) -> bool:
             and row.get("requested_model") == model)
 
 
-def latest_extractions(path: Path, model: str) -> list[dict]:
-    """One current row per PMID, the newest by `written_at`.
+def latest_extractions(path: Path, model: str, *, snapshot: str | None = None) -> list[dict]:
+    """One current row per PMID, the newest by `written_at`, optionally from one snapshot.
 
     A paper re-extracted after its text grew, or re-run with `--no-llm-cache`,
     has more than one row; readers want the newest current result.
     """
     by_pmid: dict[str, dict] = {}
     for r in sorted(jsonl.read(path), key=lambda r: r.get("written_at", "")):
-        if is_current_extraction(r, model):
+        if is_current_extraction(r, model) and (snapshot is None or r.get("snapshot") == snapshot):
             by_pmid[r["pmid"]] = r
     return list(by_pmid.values())
 

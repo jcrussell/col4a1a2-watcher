@@ -170,7 +170,9 @@ def make_snapshot(st, name: str = "s1", *, papers=(), extractions=(), manifest: 
     if manifest:
         schemas.write_document(snap / "manifest.json", {"fetched_at": "2026-10-31T00:00:00+00:00"})
     jsonl.write(snap / "papers.jsonl", list(papers))
-    jsonl.write(snap / "extractions.jsonl", list(extractions))
+    # Extraction results are tracked, beside the ledger; each names its snapshot.
+    if extractions:
+        jsonl.write(st.extractions, [{**r, "snapshot": name} for r in extractions])
     return snap
 
 
@@ -226,7 +228,7 @@ def make_extraction_row(pmid="1", variants=None, **over) -> dict:
 
     ex = make_paper_extraction(pmid, has_variant_level_data=True)
     row = {
-        "pmid": pmid, "pmcid": f"PMC{pmid}", **PROVENANCE, "prompt_version": PROMPT_VERSION,
+        "pmid": pmid, "pmcid": f"PMC{pmid}", **PROVENANCE, "snapshot": "s1", "prompt_version": PROMPT_VERSION,
         "text_sha256": "h", "schema_version": "1", "stop_reason": "end_turn",
         "usage": {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0},
         "grounding": {"total": 1, "grounded": 1, "ungrounded": [], "low_confidence": [],

@@ -109,7 +109,7 @@ def test_checks_are_quiet_on_the_real_corpus():
     future check that floods the review queue. If this fails, the new check
     needs its false-positive rate measured before it ships.
     """
-    snap = corpus_file("data/raw/2026-10-31/extractions.jsonl")
+    snap = corpus_file("data/curated/extractions.jsonl")
     rows = {}
     for r in jsonl.read(snap):
         if not r.get("error"):

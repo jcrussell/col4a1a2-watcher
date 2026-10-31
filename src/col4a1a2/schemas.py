@@ -307,6 +307,9 @@ class ExtractionRow(Row):
     requested_model: str
     effort: str | None = None
     written_at: str
+    # The snapshot whose papers.jsonl holds the text this row was extracted
+    # from; `challenge` reads it there, since the text itself is never tracked.
+    snapshot: str
     prompt_version: str
     # Without it a paper cannot be told apart from the same paper whose
     # supplements have since arrived.

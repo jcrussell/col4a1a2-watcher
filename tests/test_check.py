@@ -120,13 +120,13 @@ def test_a_migration_may_not_lose_a_triage_verdict(world):
 def test_an_index_entry_without_its_data_is_an_error(world):
     """The direction that matters: resume would skip a paper with no result."""
     st, repo, snap = world
-    (snap / "extractions.jsonl").unlink()
+    st.extractions.write_text("")
     assert "index-without-data" in _errors(st, repo, allow_rewrite=False)
 
 
 def test_data_without_its_index_is_only_a_warning(world):
     st, repo, snap = world
-    jsonl.append(snap / "extractions.jsonl", make_extraction_row("2", text_sha256="other"))
+    jsonl.append(st.extractions, make_extraction_row("2", text_sha256="other"))
     codes = _codes(st, repo, allow_rewrite=False)
     assert ("WARN", "data-without-index") in codes
     assert not {c for lvl, c in codes if lvl == "ERROR"}
@@ -134,9 +134,9 @@ def test_data_without_its_index_is_only_a_warning(world):
 
 def test_a_challenge_of_records_that_changed_is_an_error(world):
     st, repo, snap = world
-    row = jsonl.read(snap / "extractions.jsonl")[0]
+    row = jsonl.read(st.extractions)[0]
     row["extraction"]["variants"][0]["n_probands"] = 7
-    jsonl.write(snap / "extractions.jsonl", [row])
+    jsonl.write(st.extractions, [row])
     assert "challenge-of-missing-records" in _errors(st, repo, allow_rewrite=False)
 
 
