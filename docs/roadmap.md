@@ -18,13 +18,15 @@ In place:
 - Every raw Claude response archived; schema-validated files throughout; the ledger as denominator; `col4a1a2 check` in the pre-commit hook. Tests run offline.
 - The open-access corpus triaged, extracted and challenged; closed-access candidates triaged on title and abstract. Numbers in `docs/measurements.md`.
 
-Not yet: the human spot-check, HGVS normalisation, `build`, `report`, and any published table.
+- `publish`: confident evidence and the literature table as CSV, JSON Lines and a datapackage, plus a static site, built and deployed by CI from tracked files.
+
+Not yet: the human spot-check, HGVS normalisation, and `report`.
 
 ## Milestones
 
 **M1. End to end on one window.** Done, except the human spot-check that seeds the gold set in `data/curated/gold/`.
 
-**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: HGVS normalisation via VEP, `build`, and the first evidence tables; a gold set of thirty papers and measured precision and recall.
+**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: HGVS normalisation via VEP; a gold set of thirty papers and measured precision and recall.
 
 **M3. Watcher.** ClinVar diff, `report`, `watch` as a single scheduled command, snapshot freshness keys, idempotence tests. Runs monthly after the ClinVar release, with extraction through the Batches API at half price.
 

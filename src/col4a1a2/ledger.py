@@ -104,6 +104,23 @@ def fold_rows(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
+def paper_status(state: dict, *, extracted: bool = False) -> str:
+    """What became of a paper, as one word: the literature table's `status`.
+
+    `kept_not_read` and `kept_pending` together are the backlog the ledger
+    summary reports as `kept_not_extracted`: the first has no open full text
+    to read, the second has one and is waiting for `extract`.
+    """
+    triage = state.get("triage") or {}
+    if state.get("dropped_at"):
+        return f"dropped:{state['dropped_at']}"
+    if extracted or has_extraction(state):
+        return "extracted"
+    if triage.get("keep"):
+        return "kept_pending" if state.get("is_open_access") and state.get("has_pmcid") else "kept_not_read"
+    return "not_relevant" if triage else "not_triaged"
+
+
 def _merge_event(cur: dict, row: dict) -> None:
     """Fold one event into a paper's state: its fields overwrite, its stage only advances."""
     stage_old = cur.get("stage")
@@ -261,13 +278,11 @@ class Ledger:
             "kept_by_gate": sum(1 for r in state.values() if (r.get("triage") or {}).get("keep")),
             "with_records": sum(1 for r in state.values() if (r.get("n_variants") or 0) > 0),
             "needs_review": sum(1 for r in state.values() if r.get("needs_review")),
-            # The silent loss class: the gate wanted the paper, we hold its
-            # text, and no extraction exists. Reported so it cannot go unnoticed.
+            # The backlog: the gate wanted the paper and no extraction exists,
+            # whether or not an open full text does. Reported so it cannot go
+            # unnoticed.
             "kept_not_extracted": sum(
-                1 for r in state.values()
-                if (r.get("triage") or {}).get("keep") and not r.get("dropped_at")
-                and not has_extraction(r)
-            ),
+                1 for r in state.values() if paper_status(r) in ("kept_not_read", "kept_pending")),
             "wedged": sum(1 for r in state.values() if (r.get("attempts") or 0) >= 3),
         }
 

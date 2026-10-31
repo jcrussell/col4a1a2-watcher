@@ -1,0 +1,7 @@
+{
+  "additionalProperties": true,
+  "description": "The whole document datapackage.json. A Frictionless Data Package descriptor for a release.",
+  "properties": {},
+  "title": "DataPackage",
+  "type": "object"
+}

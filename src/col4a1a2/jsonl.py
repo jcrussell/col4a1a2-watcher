@@ -89,26 +89,34 @@ def read_tolerant(path: Path, *, what: str = "file") -> list[dict]:
     return loads_lines(path.read_text(encoding="utf-8"), tolerant=True, what=what, where=path)
 
 
-def write_tsv(path: Path, columns: list[str], rows: Iterable[dict]) -> None:
-    """A terminal export for a person reading a spreadsheet; nothing downstream parses it.
+def write_table(path: Path, columns: list[str], rows: Iterable[dict], *, delimiter: str = ",") -> None:
+    """A delimited export for spreadsheets and other tools; nothing here reads it back.
 
-    Cell whitespace, tabs and newlines included, is collapsed to single spaces,
-    so a free-text field can never split a row.
+    Cell whitespace, newlines included, is collapsed to single spaces and a
+    list becomes its items joined with " | ", so every row is one line. CSV
+    quotes as needed; TSV, which has no quoting, escapes instead.
     """
     import csv
+    import io
 
     def cell(v: Any) -> str:
+        if isinstance(v, list):
+            v = " | ".join(str(x) for x in v)
+        elif isinstance(v, bool):
+            v = "true" if v else "false"
         return " ".join(str("" if v is None else v).split())
 
-    with path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=columns, delimiter="\t", quoting=csv.QUOTE_NONE,
-                           escapechar="\\", extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow({c: cell(r.get(c)) for c in columns})
+    buf = io.StringIO()
+    quoting = dict(quoting=csv.QUOTE_NONE, escapechar="\\") if delimiter == "\t" else dict(quoting=csv.QUOTE_MINIMAL)
+    w = csv.DictWriter(buf, fieldnames=columns, delimiter=delimiter, extrasaction="ignore",
+                       lineterminator="\n", **quoting)
+    w.writeheader()
+    for r in rows:
+        w.writerow({c: cell(r.get(c)) for c in columns})
+    replace_atomically(path, buf.getvalue())
 
 
-def _replace_atomically(path: Path, data: str) -> None:
+def replace_atomically(path: Path, data: str) -> None:
     """Write `data` to a sibling temp file, fsync it, then rename over `path`.
 
     A crash leaves either the old file or the new one, never a truncated mix:
@@ -137,7 +145,7 @@ def write(path: Path, rows: Iterable[Any], *, validate: bool = True) -> int:
     if validate:
         for r in rows:
             _validate(path, r)
-    _replace_atomically(path, "".join(dumps(r) + "\n" for r in rows))
+    replace_atomically(path, "".join(dumps(r) + "\n" for r in rows))
     return len(rows)
 
 

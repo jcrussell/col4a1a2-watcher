@@ -4,7 +4,7 @@ A literature watcher for the collagen IV genes **COL4A1** and **COL4A2** (Gould 
 
 It finds papers, triages them on title and abstract, has Claude read each kept paper and extract per-variant carrier evidence into a structured record, verifies every quote against the source text, has a second call try to refute each record, and queues what needs a human. The goal is an open evidence table: nobody publishes an open, per-variant account of **published COL4A1/COL4A2 carriers**, with proband and family counts, de novo status, organ-system phenotypes and functional work, each fact tied to a PMID and a verbatim quote.
 
-**Status.** Fetch, triage, extraction, grounding, adversarial review and the review queue run over the whole open-access corpus. The evidence table, the monthly report and the human spot-check that would let us state an accuracy figure do not exist yet. See `docs/roadmap.md`.
+**Status.** Fetch, triage, extraction, grounding, adversarial review and the review queue run over the whole open-access corpus, and `publish` builds the evidence and literature tables and a static site from tracked files (CI deploys them). The monthly report and the human spot-check that would let us state an accuracy figure do not exist yet. See `docs/roadmap.md`.
 
 ## Setup
 
@@ -35,6 +35,9 @@ uv run col4a1a2 review --snapshot data/raw/2026-10-31 --tsv queue.tsv
 
 # Print records; summarise the denominator; check tracked data integrity
 uv run col4a1a2 show --snapshot data/raw/2026-10-31
+
+# Build the release (confident records) into _site/; CI does this on every push to main
+uv run col4a1a2 publish
 uv run col4a1a2 ledger
 uv run col4a1a2 check
 ```
@@ -63,7 +66,7 @@ uv run col4a1a2-dev --help     # probe, triage, citations, export, fixtures
 
 - Full texts and supplementary files come from Europe PMC and PubMed Central open-access articles, are stored locally only, and are never redistributed. Test fixtures are limited to CC BY articles and supplement files we generate ourselves, attributed in `tests/fixtures/README.md`.
 - Extracted records carry a PMID, a prepared citation and short verbatim quotes.
-- The evidence table will be released CC BY 4.0. Code is Apache-2.0.
+- The evidence and literature tables are released CC BY 4.0. Code is Apache-2.0.
 - Every non-Anthropic request goes through one rate-limited, cached, serial client (`src/col4a1a2/http.py`).
 
 **Research use only.** Records are machine-extracted and spot-checked at a stated rate. Nothing here is clinical advice.

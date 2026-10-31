@@ -855,19 +855,10 @@ def cmd_review(a: argparse.Namespace) -> int:
         g = r.get("grounding") or {}
         ch = challenges.get(pmid, {})
         verdicts = {v["record_key"]: v for v in (ch.get("challenge") or {}).get("verdicts", [])}
-        rep = ch.get("report") or {}
         for i, v in enumerate(r["extraction"].get("variants") or []):
             key = record_key(pmid, i, v)
-            reasons = []
-            if v["as_written"] in (g.get("figure_sourced") or []):
-                reasons.append("figure-sourced")
-            if v["confidence"] == "low":
-                reasons.append("low-confidence")
-            if any(u[0] == v["as_written"] for u in g.get("ungrounded") or []):
-                reasons.append("ungrounded-quote")
+            _verdict, reasons = rows_mod.record_review(key, v, g, ch or None)
             vd = verdicts.get(key, {})
-            if vd.get("verdict") == "disputed" and key in (rep.get("disputed") or []):
-                reasons.append("disputed")
             if not reasons:
                 continue
             out.append({
@@ -897,7 +888,7 @@ def cmd_review(a: argparse.Namespace) -> int:
     print(f"{len(out)} records across {len({r['pmid'] for r in out})} papers -> {path}")
     if a.tsv:
         # An export for a human to read in a spreadsheet, produced on request.
-        jsonl.write_tsv(Path(a.tsv), REVIEW_COLUMNS, out)
+        jsonl.write_table(Path(a.tsv), REVIEW_COLUMNS, out, delimiter="\t")
         print(f"  exported {a.tsv}")
     if missed:
         print(f"{len(missed)} grounded missed-variant reports across {len({p for p, _ in missed})} papers:")
@@ -928,12 +919,25 @@ def cmd_ledger(a: argparse.Namespace) -> int:
                 "is_open_access", "has_pmcid", "n_variants", "needs_review", "attempts",
                 "last_error", "first_pub_date", "journal", "title"]
         rows = sorted(ledger.fold().values(), key=lambda x: (x.get("stage") or "", x.get("identity")))
-        jsonl.write_tsv(Path(a.tsv), cols, ({**r, "title": str(r.get("title") or "")[:160]} for r in rows))
+        jsonl.write_table(Path(a.tsv), cols, delimiter="\t", rows=({**r, "title": str(r.get("title") or "")[:160]} for r in rows))
         print(f"  wrote {a.tsv}")
     return 0
 
 
 # ---------------------------------------------------------------- show
+
+def cmd_publish(a: argparse.Namespace) -> int:
+    """Build the release from tracked files: evidence and literature tables, datapackage, site."""
+    from col4a1a2 import publish
+
+    rel = publish.gather(a.settings, include_all=a.all)
+    out = Path(a.out) if a.out else REPO / "_site"
+    for path in publish.write(rel, out):
+        print(f"  wrote {path}")
+    print(f"{len(rel.evidence)} evidence rows ({'all' if rel.include_all else 'confident'} of "
+          f"{rel.n_extracted} extracted), {len(rel.literature)} papers considered, data as of {rel.version}")
+    return 0
+
 
 def cmd_check(a: argparse.Namespace) -> int:
     from col4a1a2 import check
@@ -990,9 +994,10 @@ def cmd_list(a: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------- main
 
-# Verbs that write to data/. They take `Settings.lock_file` so two runs never
-# interleave appends or race on a resume decision; read-only verbs skip it.
-WRITING_VERBS = frozenset({"fetch-papers", "extract", "challenge", "review"})
+# Verbs that write. They take `Settings.lock_file` so two runs never interleave
+# appends or race on a resume decision, and so `publish` never reads a log
+# another run is halfway through appending; read-only verbs skip it.
+WRITING_VERBS = frozenset({"fetch-papers", "extract", "challenge", "review", "publish"})
 
 
 class LockHeld(RuntimeError):
@@ -1106,6 +1111,13 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("ledger", parents=[common], help="summarise every candidate ever considered")
     g.add_argument("--tsv", help="also write the folded ledger to this TSV")
     g.set_defaults(func=cmd_ledger)
+
+    pb = sub.add_parser("publish", parents=[common],
+                        help="build the public tables and site from tracked files (what CI runs)")
+    pb.add_argument("--out", help="output directory (default _site/ in the repository)")
+    pb.add_argument("--all", action="store_true",
+                    help="release every current record, not only confident ones; for inspection, never CI")
+    pb.set_defaults(func=cmd_publish)
 
     k = sub.add_parser("check", parents=[common],
                        help="verify keys, foreign keys and append-only logs (run by the pre-commit hook)")

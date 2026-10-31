@@ -66,3 +66,56 @@ def challenge_for(extraction: dict, challenges: dict[tuple[str, str, str], dict]
     to the current ones whenever a paper is re-extracted.
     """
     return challenges.get((extraction["pmid"], extraction["text_sha256"], records_digest_for(extraction)))
+
+
+def reviewer_verdict(key: str, challenge: dict | None) -> str:
+    """What survived checking the reviewer's judgement of one record.
+
+    A dispute counts only if its refuting quote grounds in the text (the
+    report's `disputed`); one that does not is `dispute not grounded`. Upheld
+    and unverifiable need no grounding, so they come from the verdict itself,
+    exactly as `challenge.check` sorts them. A record the reviewer skipped is
+    `not reviewed`.
+    """
+    if not challenge:
+        return "not reviewed"
+    rep = challenge.get("report") or {}
+    if key in (rep.get("disputed") or []):
+        return "disputed"
+    if any(f[0] == key for f in rep.get("fabricated") or []):
+        return "dispute not grounded"
+    for v in (challenge.get("challenge") or {}).get("verdicts") or []:
+        if v.get("record_key") == key:
+            return "unverifiable" if v.get("verdict") == "unverifiable" else (
+                "upheld" if v.get("verdict") != "disputed" else "dispute not grounded")
+    return "not reviewed"
+
+
+def review_flags(variant: dict, grounding: dict, verdict: str, *, duplicate: bool = False) -> list[str]:
+    """Why a record needs a human, or nothing. The review queue and the release share this."""
+    flags = []
+    if variant["as_written"] in (grounding.get("figure_sourced") or []):
+        flags.append("figure-sourced")
+    if variant.get("confidence") == "low":
+        flags.append("low-confidence")
+    if any(u[0] == variant["as_written"] for u in grounding.get("ungrounded") or []):
+        flags.append("ungrounded-quote")
+    if verdict == "disputed":
+        flags.append("disputed")
+    # A record the reviewer says duplicates another in the same paper would
+    # count the same carriers twice.
+    if duplicate:
+        flags.append("duplicate")
+    return flags
+
+
+def record_review(key: str, variant: dict, grounding: dict, challenge: dict | None) -> tuple[str, list[str]]:
+    """A record's checked review verdict and its flags, as `review` and `publish` both see them."""
+    verdict = reviewer_verdict(key, challenge)
+    duplicate = key in (((challenge or {}).get("report") or {}).get("duplicates") or [])
+    return verdict, review_flags(variant, grounding, verdict, duplicate=duplicate)
+
+
+def is_confident(verdict: str, flags: list[str]) -> bool:
+    """Upheld by the checked review and nothing flags it: what `publish` releases by default."""
+    return verdict == "upheld" and not flags

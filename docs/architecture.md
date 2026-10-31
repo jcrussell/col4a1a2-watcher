@@ -1,6 +1,6 @@
 # Architecture
 
-Each stage writes to disk, so any stage can be re-run without repeating the one before it. `build` and `report` are planned and drawn dashed.
+Each stage writes to disk, so any stage can be re-run without repeating the one before it. `report` is planned and drawn dashed. Model output (extractions, challenges, triage, figure transcriptions) is tracked under `data/curated/`; snapshots, which hold article text, are not.
 
 ```mermaid
 flowchart LR
@@ -14,9 +14,10 @@ flowchart LR
   GATE{"triage gate<br/>Haiku, abstract only"}
   SNAP[("data/raw/&lt;date&gt;<br/>papers · full text · manifest")]
   EXTRACT["extract<br/>Opus, full text"]
-  RECS[("extractions.jsonl<br/>+ grounding report")]
-  BUILD["build (planned)<br/>offline"]
-  TABLES[("carriers tables (planned)<br/>TSV + datapackage")]
+  RECS[("data/curated<br/>extractions · challenges · ledger")]
+  CHALLENGE["challenge<br/>adversarial review"]
+  PUBLISH["publish<br/>CI, tracked files only"]
+  SITE[("evidence + literature<br/>CSV · JSONL · datapackage · site")]
   REPORT["report (planned)<br/>offline"]
 
   EPMC --> FETCH
@@ -25,7 +26,10 @@ flowchart LR
   FETCH --> GATE
   GATE -- keep --> SNAP
   GATE -- skip --> SNAP
-  SNAP --> EXTRACT --> RECS -.-> BUILD -.-> TABLES -.-> REPORT
+  SNAP --> EXTRACT --> RECS
+  SNAP --> CHALLENGE --> RECS
+  RECS --> PUBLISH --> SITE
+  RECS -.-> REPORT
 ```
 
 Rejected candidates are still recorded in the snapshot and the ledger, with the reason, so a triage change can be evaluated against them later. Only kept papers have their full text downloaded.
@@ -34,15 +38,15 @@ Rejected candidates are still recorded in the snapshot and the ledger, with the 
 
 **`fetch-papers`** searches Europe PMC (in date slices, recorded in `discovery.jsonl`) and PubTator 3 for a date window, takes the union of PMIDs, triages the candidates, and downloads open-access full text only for the ones that survive. For those it also fetches the article's file bundle, parses any supplementary tables, and transcribes figures where the text looks to be missing its variants. It writes `papers.jsonl`, the raw JATS XML and bundle members per paper, and a `manifest.json` recording the queries, window, counts, request totals, rate-limiter sleep and what the supplement and figure stages cost.
 
-**`extract`** sends each kept paper to Claude and stores one structured record per paper in `extractions.jsonl`, together with the served and requested model, effort, prompt version, schema version, token usage and a quote-grounding report. Papers already extracted at the current prompt version, requested model and text hash are skipped, so the command is safe to re-run; `--budget-usd` caps one run's spend.
+**`extract`** sends each kept paper to Claude and stores one structured record per paper in the tracked `data/curated/extractions.jsonl`, naming the snapshot that holds its text, together with the served and requested model, effort, prompt version, schema version, token usage and a quote-grounding report. Papers already extracted at the current prompt version, requested model and text hash are skipped, so the command is safe to re-run; `--budget-usd` caps one run's spend.
 
-**`build`** (planned) joins extractions to citation metadata and produces the published tables. It must be offline and deterministic from a single snapshot.
+**`publish`** builds the release from tracked files alone, so CI can run it from a checkout: an `evidence` table (one row per paper × variant) and a `literature` table (every paper considered and its status), each as CSV and JSON Lines, a Frictionless `datapackage.json` generated from the row models, and a self-contained `index.html`. By default it releases only confident records: upheld by the checked review, every quote grounded, nothing flagging them for a person. `--all` releases everything with status columns, for inspection; CI never passes it. The same commit always builds the same bytes. `.github/workflows/publish.yml` runs the tests, `check` and `publish`, and deploys to GitHub Pages.
 
 **`report`** (planned) diffs two snapshots into a monthly Markdown and HTML summary.
 
 **`challenge`** asks a second model call to refute each extracted record, and verifies the reviewer's own output before storing it: a disputed verdict must cite a sentence that grounds against the paper text, or it is recorded as fabricated rather than believed.
 
-`review` writes the human spot-check queue to `review.jsonl` in the snapshot from both review signals (grounding and challenge), with an optional TSV export. `list`, `show` and `ledger` are read-only views; `ledger` reports the denominator. `check` validates every tracked file and is run by `.githooks/pre-commit`.
+`review` writes the human spot-check queue to `review.jsonl` in the snapshot from both review signals (grounding and challenge), with an optional TSV export; its flags are the same `extract.rows.review_flags` that `publish` uses to decide what is confident. `list`, `show` and `ledger` are read-only views; `ledger` reports the denominator. `check` validates every tracked file and is run by `.githooks/pre-commit`.
 
 ## Modules
 
@@ -80,13 +84,13 @@ Bootstrap and monthly refresh run the same code; only the date window differs.
 
 | Path | Tracked | Contents |
 |---|---|---|
-| `data/raw/<date>/` | no | Snapshot: paper metadata, full texts, extractions, manifest. Full texts are never redistributed. |
+| `data/raw/<date>/` | no | Snapshot: paper metadata, full texts, manifest, review queue. Full texts are never redistributed. |
 | `data/responses/<YYYY-MM>/` | no | Every raw Claude response, thinking included, one JSON document per call, archived before parsing. Paid for, so outside `data/cache/` and never evicted; untracked because thinking can paraphrase article text. |
 | `data/cache/http.sqlite` | no | Response cache, so a repeated fetch makes no network requests. |
 | `data/cache/bundles/<pmcid>/` | no | Supplementary files and figure images, shared across snapshots. The endpoint they come from fails or stalls for most requests, so a successful download is reused by every later run rather than re-attempted. |
-| `data/curated/` | yes | `labels.json` (hand-assigned triage labels), `gold/` (human spot-check results), and the append-only logs `triage.jsonl`, `figures.jsonl`, `challenges.jsonl`, `discovery.jsonl` and `ledger.jsonl`. The logs use a union merge driver and are folded by `written_at`, so line order never changes the result. |
+| `data/curated/` | yes | `labels.json` (hand-assigned triage labels), `gold/` (human spot-check results), and the append-only logs `extractions.jsonl`, `triage.jsonl`, `figures.jsonl`, `challenges.jsonl`, `discovery.jsonl` and `ledger.jsonl`. The logs use a union merge driver and are folded by `written_at`, so line order never changes the result. |
 | `schemas/` | yes | JSON Schema for every artefact, exported from `schemas.py` and checked against it by the tests. |
-| `data/built/<date>/` | no | Generated tables (planned). |
+| `_site/` | no | The release `publish` builds; CI builds its own and deploys it. |
 | `reports/<date>/` | yes | Published Markdown reports (planned). |
 
-Snapshots are dated directories and are never edited in place. A rebuild from an old snapshot must produce the same bytes.
+Snapshots are dated directories and are never edited in place.

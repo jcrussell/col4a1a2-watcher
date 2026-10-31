@@ -462,6 +462,79 @@ class ApiResponse(Row):
     response: Loose
 
 
+class EvidenceRow(Row):
+    """One published record: a variant reported in carriers in one paper."""
+
+    record_key: str = Field(description="Stable key: PMID, position in the paper's records, and a short content hash")
+    pmid: str = Field(description="PubMed ID of the paper the record comes from")
+    pmcid: str = Field(description="PubMed Central ID of the full text that was read")
+    doi: str = Field(description="DOI of the paper, if known")
+    citation: str = Field(description="Short citation: first author, journal, year, PMID, DOI")
+    year: str = Field(description="Year of first publication")
+    gene: str = Field(description="COL4A1 or COL4A2")
+    as_written: str = Field(description="The variant exactly as the paper writes it")
+    hgvs_c: str = Field(description="Coding-DNA HGVS if the paper gives it or it is unambiguous; empty if not")
+    hgvs_p: str = Field(description="Protein HGVS if the paper gives it; empty if not")
+    transcript_if_stated: str = Field(description="Reference transcript the paper names; empty if none")
+    variant_type: str = Field(description="missense_glycine, missense_other, splice, nonsense, frameshift, "
+                                          "inframe_indel, intronic, utr, deletion_cnv or other")
+    n_probands: int = Field(description="Unrelated index cases carrying the variant in this paper (one per family)")
+    n_families: int = Field(description="Kindreds with the variant in this paper; 0 when carriers came from screening "
+                                        "a cohort and no family was studied")
+    n_total_carriers: int | None = Field(description="All reported carriers including relatives; empty if not stated")
+    n_tested: int = Field(description="Everyone the study screened or sequenced; 0 means not stated")
+    inh_de_novo_confirmed: int = Field(description="Probands whose variant is de novo with both parents tested")
+    inh_de_novo_assumed: int = Field(description="Probands called de novo without parental testing described")
+    inh_inherited: int = Field(description="Probands who inherited the variant from a parent")
+    inh_unknown: int = Field(description="Probands whose inheritance is not reported")
+    phenotype_systems: str = Field(description="Organ systems affected in at least one carrier, comma-separated: "
+                                               "cerebrovascular, small_vessel, renal_hanac, ocular, muscle, other")
+    phenotype_details: str = Field(description="The phenotype as reported, including age at onset if stated")
+    functional_evidence: str = Field(description="One-sentence summary of functional work on the variant in this "
+                                                 "paper; machine-written, not a quote")
+    reported_classification: str = Field(description="The authors' own classification, verbatim; empty if none")
+    same_family_as_prior_report: bool = Field(description="The paper says this family or proband was reported "
+                                                          "before; counts may overlap with that paper")
+    prior_report_reason: str = Field(description="Why the record is marked as a prior report")
+    confidence: str = Field(description="high, medium or low, as assigned at extraction")
+    evidence_quotes: list[str] = Field(description="Verbatim sentences from the paper supporting the record; "
+                                                   "joined with ' | ' in the CSV")
+    quotes_grounded: bool = Field(description="Every quote was found verbatim in the paper's text")
+    figure_sourced: bool = Field(description="The record rests on a machine transcription of a figure")
+    reviewer_verdict: str = Field(description="Outcome of the adversarial review, checked against the text: upheld, "
+                                              "disputed, unverifiable, dispute not grounded, or not reviewed")
+    reviewer_problem: str = Field(description="The reviewer's stated problem, if it disputed the record")
+    review_flags: str = Field(description="Why the record is queued for a person, comma-separated; empty if not")
+    extracted_by: str = Field(description="The model that extracted the record")
+    prompt_version: str = Field(description="Version of the extraction prompt")
+    extracted_at: str = Field(description="When the record was extracted (UTC)")
+
+
+class LiteratureRow(Row):
+    """One paper considered by the watcher, and what became of it."""
+
+    pmid: str = Field(description="PubMed ID; empty for a candidate identified another way")
+    identity: str = Field(description="Stable identity: the PMID, else the DOI, else a title hash")
+    doi: str = Field(description="DOI, if known")
+    title: str = Field(description="Title as indexed")
+    journal: str = Field(description="Journal")
+    first_pub_date: str = Field(description="Date of first publication")
+    citation: str = Field(description="Short citation")
+    open_access: bool | None = Field(description="Open access as recorded at discovery (see status for whether a "
+                                                 "full text was available to read)")
+    found_by: str = Field(description="How the paper was found: europepmc, pubtator, or both")
+    gate_kept: bool | None = Field(description="The triage gate judged the paper worth reading; empty if not triaged")
+    gate_reason: str = Field(description="The gate's one-line reason, machine-written")
+    status: str = Field(description="extracted; kept_not_read (the gate kept it and no open full text exists to "
+                                    "read); kept_pending (kept, open full text held, extraction pending); "
+                                    "not_relevant; not_triaged; or dropped:<reason>")
+    n_records: int = Field(description="Evidence rows from this paper in this release")
+
+
+class DataPackage(Loose):
+    """A Frictionless Data Package descriptor for a release."""
+
+
 # Files named `<digest>.<stamp>.response.json`, one per call, matched by suffix.
 RESPONSE_SUFFIX = ".response.json"
 
@@ -485,6 +558,9 @@ MODELS: dict[str, type[BaseModel]] = {
     "extractions.jsonl": ExtractionRow,
     "review.jsonl": ReviewRow,
     "manifest.json": ManifestRow,
+    "evidence.jsonl": EvidenceRow,
+    "literature.jsonl": LiteratureRow,
+    "datapackage.json": DataPackage,
     "labels.json": TriageLabels,
 }
 
@@ -515,7 +591,7 @@ def write_document(path, obj) -> None:
     import json
     from pathlib import Path
 
-    from col4a1a2.jsonl import _replace_atomically
+    from col4a1a2.jsonl import replace_atomically
 
     validate(path, obj)
-    _replace_atomically(Path(path), json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
+    replace_atomically(Path(path), json.dumps(obj, indent=2, ensure_ascii=False) + "\n")

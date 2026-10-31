@@ -9,10 +9,20 @@
     "model": "ChallengeRow",
     "schema": "schemas/challenges.schema.json"
   },
+  "datapackage.json": {
+    "format": "json",
+    "model": "DataPackage",
+    "schema": "schemas/datapackage.schema.json"
+  },
   "discovery.jsonl": {
     "format": "jsonl",
     "model": "DiscoveryRow",
     "schema": "schemas/discovery.schema.json"
+  },
+  "evidence.jsonl": {
+    "format": "jsonl",
+    "model": "EvidenceRow",
+    "schema": "schemas/evidence.schema.json"
   },
   "extractions.jsonl": {
     "format": "jsonl",
@@ -33,6 +43,11 @@
     "format": "jsonl",
     "model": "LedgerEvent",
     "schema": "schemas/ledger.schema.json"
+  },
+  "literature.jsonl": {
+    "format": "jsonl",
+    "model": "LiteratureRow",
+    "schema": "schemas/literature.schema.json"
   },
   "manifest.json": {
     "format": "json",

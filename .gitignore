@@ -25,6 +25,7 @@ data/.lock
 
 # Derived outputs.
 data/built/
+_site/
 reports/*/html/
 
 # Reference papers, and planning scratch that became AGENTS.md and docs/.

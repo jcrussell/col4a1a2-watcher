@@ -1,0 +1,236 @@
+{
+  "additionalProperties": false,
+  "description": "One row of evidence.jsonl. One published record: a variant reported in carriers in one paper.",
+  "properties": {
+    "as_written": {
+      "description": "The variant exactly as the paper writes it",
+      "title": "As Written",
+      "type": "string"
+    },
+    "citation": {
+      "description": "Short citation: first author, journal, year, PMID, DOI",
+      "title": "Citation",
+      "type": "string"
+    },
+    "confidence": {
+      "description": "high, medium or low, as assigned at extraction",
+      "title": "Confidence",
+      "type": "string"
+    },
+    "doi": {
+      "description": "DOI of the paper, if known",
+      "title": "Doi",
+      "type": "string"
+    },
+    "evidence_quotes": {
+      "description": "Verbatim sentences from the paper supporting the record; joined with ' | ' in the CSV",
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Quotes",
+      "type": "array"
+    },
+    "extracted_at": {
+      "description": "When the record was extracted (UTC)",
+      "title": "Extracted At",
+      "type": "string"
+    },
+    "extracted_by": {
+      "description": "The model that extracted the record",
+      "title": "Extracted By",
+      "type": "string"
+    },
+    "figure_sourced": {
+      "description": "The record rests on a machine transcription of a figure",
+      "title": "Figure Sourced",
+      "type": "boolean"
+    },
+    "functional_evidence": {
+      "description": "One-sentence summary of functional work on the variant in this paper; machine-written, not a quote",
+      "title": "Functional Evidence",
+      "type": "string"
+    },
+    "gene": {
+      "description": "COL4A1 or COL4A2",
+      "title": "Gene",
+      "type": "string"
+    },
+    "hgvs_c": {
+      "description": "Coding-DNA HGVS if the paper gives it or it is unambiguous; empty if not",
+      "title": "Hgvs C",
+      "type": "string"
+    },
+    "hgvs_p": {
+      "description": "Protein HGVS if the paper gives it; empty if not",
+      "title": "Hgvs P",
+      "type": "string"
+    },
+    "inh_de_novo_assumed": {
+      "description": "Probands called de novo without parental testing described",
+      "title": "Inh De Novo Assumed",
+      "type": "integer"
+    },
+    "inh_de_novo_confirmed": {
+      "description": "Probands whose variant is de novo with both parents tested",
+      "title": "Inh De Novo Confirmed",
+      "type": "integer"
+    },
+    "inh_inherited": {
+      "description": "Probands who inherited the variant from a parent",
+      "title": "Inh Inherited",
+      "type": "integer"
+    },
+    "inh_unknown": {
+      "description": "Probands whose inheritance is not reported",
+      "title": "Inh Unknown",
+      "type": "integer"
+    },
+    "n_families": {
+      "description": "Kindreds with the variant in this paper; 0 when carriers came from screening a cohort and no family was studied",
+      "title": "N Families",
+      "type": "integer"
+    },
+    "n_probands": {
+      "description": "Unrelated index cases carrying the variant in this paper (one per family)",
+      "title": "N Probands",
+      "type": "integer"
+    },
+    "n_tested": {
+      "description": "Everyone the study screened or sequenced; 0 means not stated",
+      "title": "N Tested",
+      "type": "integer"
+    },
+    "n_total_carriers": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "All reported carriers including relatives; empty if not stated",
+      "title": "N Total Carriers"
+    },
+    "phenotype_details": {
+      "description": "The phenotype as reported, including age at onset if stated",
+      "title": "Phenotype Details",
+      "type": "string"
+    },
+    "phenotype_systems": {
+      "description": "Organ systems affected in at least one carrier, comma-separated: cerebrovascular, small_vessel, renal_hanac, ocular, muscle, other",
+      "title": "Phenotype Systems",
+      "type": "string"
+    },
+    "pmcid": {
+      "description": "PubMed Central ID of the full text that was read",
+      "title": "Pmcid",
+      "type": "string"
+    },
+    "pmid": {
+      "description": "PubMed ID of the paper the record comes from",
+      "title": "Pmid",
+      "type": "string"
+    },
+    "prior_report_reason": {
+      "description": "Why the record is marked as a prior report",
+      "title": "Prior Report Reason",
+      "type": "string"
+    },
+    "prompt_version": {
+      "description": "Version of the extraction prompt",
+      "title": "Prompt Version",
+      "type": "string"
+    },
+    "quotes_grounded": {
+      "description": "Every quote was found verbatim in the paper's text",
+      "title": "Quotes Grounded",
+      "type": "boolean"
+    },
+    "record_key": {
+      "description": "Stable key: PMID, position in the paper's records, and a short content hash",
+      "title": "Record Key",
+      "type": "string"
+    },
+    "reported_classification": {
+      "description": "The authors' own classification, verbatim; empty if none",
+      "title": "Reported Classification",
+      "type": "string"
+    },
+    "review_flags": {
+      "description": "Why the record is queued for a person, comma-separated; empty if not",
+      "title": "Review Flags",
+      "type": "string"
+    },
+    "reviewer_problem": {
+      "description": "The reviewer's stated problem, if it disputed the record",
+      "title": "Reviewer Problem",
+      "type": "string"
+    },
+    "reviewer_verdict": {
+      "description": "Outcome of the adversarial review, checked against the text: upheld, disputed, unverifiable, dispute not grounded, or not reviewed",
+      "title": "Reviewer Verdict",
+      "type": "string"
+    },
+    "same_family_as_prior_report": {
+      "description": "The paper says this family or proband was reported before; counts may overlap with that paper",
+      "title": "Same Family As Prior Report",
+      "type": "boolean"
+    },
+    "transcript_if_stated": {
+      "description": "Reference transcript the paper names; empty if none",
+      "title": "Transcript If Stated",
+      "type": "string"
+    },
+    "variant_type": {
+      "description": "missense_glycine, missense_other, splice, nonsense, frameshift, inframe_indel, intronic, utr, deletion_cnv or other",
+      "title": "Variant Type",
+      "type": "string"
+    },
+    "year": {
+      "description": "Year of first publication",
+      "title": "Year",
+      "type": "string"
+    }
+  },
+  "required": [
+    "record_key",
+    "pmid",
+    "pmcid",
+    "doi",
+    "citation",
+    "year",
+    "gene",
+    "as_written",
+    "hgvs_c",
+    "hgvs_p",
+    "transcript_if_stated",
+    "variant_type",
+    "n_probands",
+    "n_families",
+    "n_total_carriers",
+    "n_tested",
+    "inh_de_novo_confirmed",
+    "inh_de_novo_assumed",
+    "inh_inherited",
+    "inh_unknown",
+    "phenotype_systems",
+    "phenotype_details",
+    "functional_evidence",
+    "reported_classification",
+    "same_family_as_prior_report",
+    "prior_report_reason",
+    "confidence",
+    "evidence_quotes",
+    "quotes_grounded",
+    "figure_sourced",
+    "reviewer_verdict",
+    "reviewer_problem",
+    "review_flags",
+    "extracted_by",
+    "prompt_version",
+    "extracted_at"
+  ],
+  "title": "EvidenceRow",
+  "type": "object"
+}

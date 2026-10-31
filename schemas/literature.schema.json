@@ -1,0 +1,102 @@
+{
+  "additionalProperties": false,
+  "description": "One row of literature.jsonl. One paper considered by the watcher, and what became of it.",
+  "properties": {
+    "citation": {
+      "description": "Short citation",
+      "title": "Citation",
+      "type": "string"
+    },
+    "doi": {
+      "description": "DOI, if known",
+      "title": "Doi",
+      "type": "string"
+    },
+    "first_pub_date": {
+      "description": "Date of first publication",
+      "title": "First Pub Date",
+      "type": "string"
+    },
+    "found_by": {
+      "description": "How the paper was found: europepmc, pubtator, or both",
+      "title": "Found By",
+      "type": "string"
+    },
+    "gate_kept": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The triage gate judged the paper worth reading; empty if not triaged",
+      "title": "Gate Kept"
+    },
+    "gate_reason": {
+      "description": "The gate's one-line reason, machine-written",
+      "title": "Gate Reason",
+      "type": "string"
+    },
+    "identity": {
+      "description": "Stable identity: the PMID, else the DOI, else a title hash",
+      "title": "Identity",
+      "type": "string"
+    },
+    "journal": {
+      "description": "Journal",
+      "title": "Journal",
+      "type": "string"
+    },
+    "n_records": {
+      "description": "Evidence rows from this paper in this release",
+      "title": "N Records",
+      "type": "integer"
+    },
+    "open_access": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Open access as recorded at discovery (see status for whether a full text was available to read)",
+      "title": "Open Access"
+    },
+    "pmid": {
+      "description": "PubMed ID; empty for a candidate identified another way",
+      "title": "Pmid",
+      "type": "string"
+    },
+    "status": {
+      "description": "extracted; kept_not_read (the gate kept it and no open full text exists to read); kept_pending (kept, open full text held, extraction pending); not_relevant; not_triaged; or dropped:<reason>",
+      "title": "Status",
+      "type": "string"
+    },
+    "title": {
+      "description": "Title as indexed",
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pmid",
+    "identity",
+    "doi",
+    "title",
+    "journal",
+    "first_pub_date",
+    "citation",
+    "open_access",
+    "found_by",
+    "gate_kept",
+    "gate_reason",
+    "status",
+    "n_records"
+  ],
+  "title": "LiteratureRow",
+  "type": "object"
+}
