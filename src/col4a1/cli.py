@@ -340,7 +340,11 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         kept_oa = [m for m in metas if m.is_open_access and m.pmcid]
         # Write point 2. The filter runs before the triage loop, so a paper cut
         # here never gets a decision row and used to leave no trace at all.
-        dropped = [m for m in metas if m not in kept_oa]
+        # Partitioned by object identity: `m not in kept_oa` compares dataclass
+        # fields down a list, which is quadratic and the candidate pool is now
+        # thousands of papers.
+        keep_ids = {id(m) for m in kept_oa}
+        dropped = [m for m in metas if id(m) not in keep_ids]
         for m in dropped:
             ledger.record_candidate(
                 pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,

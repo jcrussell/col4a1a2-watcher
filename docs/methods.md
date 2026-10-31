@@ -8,6 +8,17 @@ Two searches run for each window and the union of PMIDs is taken.
 
 The Europe PMC query requires the gene to be named in the **title or abstract**. An unrestricted full-text match returns roughly ten times as many papers, mostly cancer, fibrosis and omics work that lists the gene in passing. PubTator 3 contributes papers where it tagged both the gene and a variant mention, which catches clinical papers that name the gene only in the body.
 
+PubTator returns PMIDs with no open-access status and no PMCID, so each
+PubTator-only PMID is looked up in Europe PMC before the open-access filter can
+judge it. **That lookup decides the size of the corpus**, and for ten commits it
+was asking for a field Europe PMC does not index, resolving 2% of its input and
+leaving roughly 1,850 open-access papers recorded as closed. It now queries
+`EXT_ID`, drops the PMC-keyed duplicates that `EXT_ID` also matches, and reports
+resolved against requested so the next such break is a number rather than a
+quietly smaller corpus. A PMID that still does not resolve is marked
+`metadata_source="pubtator_only"` and recorded as `no_metadata`, never as
+closed access.
+
 The query is deliberately broad, and we do not tighten it. Whatever a query excludes, we never see, so recall lost at search time is permanently unmeasurable. Filtering happens later, where the decision is recorded and auditable.
 
 ## Triage

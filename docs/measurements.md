@@ -114,6 +114,11 @@ The Europe PMC bundle endpoint is the bottleneck, not the parsing or the vision.
 
 ## Corpus size, corrected (2026-10-30)
 
+> **Superseded in part.** Every open-access count below is a floor, not a
+> measurement: the PubTator metadata lookup was resolving 2% of what it asked
+> for, so most of the union pool was never checked for open-access status at
+> all. See *The lookup that hid three quarters of the corpus* below.
+
 Planning documents carried a "2,200-paper bootstrap" for months. That came from
 the rev-5 full-text query, which was replaced by the title-or-abstract query
 long before the batch ran. Measured against the live query:
@@ -146,6 +151,10 @@ What was invisible before it existed, now recorded per candidate:
 | Cut by `--limit` | 642, of which **24 were papers the gate wanted** |
 | Dropped by the open-access filter | 2,108 |
 | Europe PMC hits carrying no PMID | 141 |
+
+Two of those four rows were later found to be wrong, in opposite directions:
+`--limit` is no longer a disposition at all, and most of the open-access row was
+never looked up. Both are measured below.
 
 3,396 identities over 3,396 events, 2.4 MB tracked, after two fixes: a run no
 longer re-appends a row whose state is unchanged, and `rank`/`limit_at` were
@@ -211,3 +220,57 @@ variant designation in the text. A relevance filter is required before this can
 be called recall.
 
 Cost per paper came out at $0.07, against $0.11 estimated.
+
+## The lookup that hid three quarters of the corpus (2026-10-31)
+
+Europe PMC does not index a `PMID` field. `cli.py` had been looking up
+PubTator-discovered PMIDs with `query=PMID:x OR PMID:y` since the first commit.
+
+| | |
+|---|---|
+| Unique PMIDs sent through the old query | 2,075 |
+| Resolved | **41** (2.0%) |
+| `PMID:11985779` → `hitCount` | **0** |
+| `EXT_ID:11985779` → `hitCount` | **1**, PMC102755, open access |
+| Random 100 of the 2,034 unresolved, re-queried with `EXT_ID` | **97 resolved** |
+| Of those 100: carrying a PMCID | 92 |
+| Of those 100: flagged open access | 91 |
+| Two 50-PMID chunks, resolved against requested | 47/50 and 50/50 |
+
+The code beneath the lookup then built a `PaperMeta` by hand for every miss,
+with `is_open_access=False` and `pmcid=None`, `--oa-only` dropped those, and the
+ledger recorded them as `oa_filter` -- not open access, a claim nothing had
+checked. So roughly **1,850 open-access papers with full text in PMC** sat in
+the ledger labelled closed, and they are the PubTator pool: gene *and* variant
+tagged, the highest-prior set in the project and the one least examined.
+
+**Why it was silent for ten commits.** The fallback's job is to invent metadata,
+and it cannot tell "absent from Europe PMC" from "asked wrong". Nothing compared
+requested against resolved. That comparison, per chunk and in the manifest
+(`pmid_lookup_requested`, `pmid_lookup_resolved`), is the durable fix; `EXT_ID`
+is the one-line part.
+
+`EXT_ID` also matches PMC-sourced records, one of which came back
+`source=PMC, pmid=null`, so records without a PMID are dropped rather than keyed
+wrongly.
+
+## Run-scoped facts stored as paper state (2026-10-31)
+
+`dropped_at="limit"` was a disposition. The `2026-10-30-idem` run -- a
+`--limit 100` idempotence check that started at 19:01, two minutes after the
+real sweep finished -- stamped it onto 739 papers that had already been triaged,
+fetched, and in 36 cases extracted and challenged.
+
+| Ledger reported | Actually |
+|---|---|
+| `limit` = 652 | 8 |
+| `in_play` = 159 | ~803 |
+| -- | 644 rows reading `stage=fetched, dropped_at=limit`, which cannot happen |
+
+`rank` and `limit_at` had already been removed from the ledger for being
+run-scoped; this was the last of the class. `--limit` now records no
+disposition, the per-run count goes in the manifest as
+`candidates_cut_by_limit`, and the backlog is derived instead:
+`col4a1 ledger` reports `kept_not_extracted`, which found PMID 36360323 --
+triage-kept, 63,613 characters of full text fetched, sitting in a snapshot that
+was never extracted. One paper of 133, known to the ledger, read by nothing.

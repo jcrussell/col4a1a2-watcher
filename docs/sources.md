@@ -1,13 +1,13 @@
 # Data sources, rates and licences
 
-Every host below is reached through `src/col4a1/http.py`. Rates are configured in `config/queries.yaml`; anything not listed defaults to one request per second.
+Every host below is reached through `src/col4a1/http.py`. Rates are configured in `config/col4a1.toml`; anything not listed defaults to one request per second.
 
 ## In use
 
 | Source | What we take | Rate | Terms |
 |---|---|---|---|
-| Europe PMC REST | Search results, abstracts, author lists and affiliations, open-access full text as JATS XML, reference lists | 2/s | Metadata is open. Article licences vary per paper and are stated in the XML. |
-| Europe PMC `supplementaryFiles` | One ZIP per paper holding supplementary files and figure image renditions | 0.1/s | Same article licences. The ZIP is built per request, so it gets its own much slower bucket; at 2/s it returns errors. Members stay in the untracked snapshot and are never redistributed. |
+| Europe PMC REST | Search results, abstracts, author lists and affiliations, open-access full text as JATS XML, reference lists, metadata by PMID (`EXT_ID`, never `PMID` -- there is no such field) | 2/s | Metadata is open. Article licences vary per paper and are stated in the XML. |
+| Europe PMC `supplementaryFiles` | One ZIP per paper holding supplementary files and figure image renditions | 0.25/s | Same article licences. The ZIP is built per request, so it gets its own much slower bucket; at 2/s it returns errors. Members stay in the untracked snapshot and are never redistributed. |
 | PubTator 3 (NCBI) | Entity-aware search, BioC annotations, variant mentions linked to a gene | 2/s | Public NCBI resource. |
 | NCBI E-utilities | Full-text fallback, ClinVar record counts | 2/s | Public. Requests carry a contact address, as NCBI asks. |
 | Anthropic API | Triage on title and abstract, extraction on full text | n/a | Outputs belong to the account holder. |
