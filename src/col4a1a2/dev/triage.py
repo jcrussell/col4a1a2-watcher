@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Score triage rules against hand-labelled papers.
 
-    uv run python tools/triage.py --snapshot data/raw/2026-10-29
+    uv run col4a1a2-dev triage --snapshot data/raw/2026-10-29
 
 Needs a fetched snapshot and `data/curated/labels.json`. Keyword rules
 are scored offline from the snapshot. Pass --llm to also score the live Haiku
@@ -19,8 +19,7 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
+from col4a1a2.config import REPO
 
 PERSON = re.compile(
     r"\b(proband|probands|patient|patients|family|families|kindred|pedigree|"
@@ -111,13 +110,14 @@ def score(name: str, keep_fn, sig: dict, truth: dict) -> None:
     print(f"{name:<48} keep={tp + fp:>3}  TP={tp} FP={fp} FN={fn}  prec={prec:.2f} rec={rec:.2f}{tail}")
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    ap = argparse.ArgumentParser(prog="col4a1a2-dev triage")
     ap.add_argument("--snapshot", default="data/raw/2026-10-29")
     ap.add_argument("--borderline-is-yes", action="store_true",
                     help="count the 'borderline' label as a true positive")
     ap.add_argument("--llm", action="store_true", help="also call Haiku live (costs money)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     snapshot = Path(a.snapshot)
     if not snapshot.is_absolute():

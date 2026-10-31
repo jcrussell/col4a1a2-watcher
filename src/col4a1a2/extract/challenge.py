@@ -62,7 +62,7 @@ from col4a1a2.extract.verify import find_quote, normalise
 
 log = logging.getLogger("col4a1a2")
 
-CHALLENGE_PROMPT_VERSION = "c1"
+CHALLENGE_PROMPT_VERSION = "c2"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_CHALLENGE_TOKENS = 32000
 
@@ -117,7 +117,7 @@ For each record, return exactly one verdict, copying its record_key exactly:
 Do not dispute a record because you would have phrased it differently, because a field is empty where the paper is silent, or because you would have chosen a different variant_type. Dispute it when the text says something incompatible with it.
 
 Pay particular attention to:
-- Proband and family counts. A cohort of N individuals is not N families. Counts drawn from a figure or a supplementary table are the likeliest to be wrong.
+- Proband and family counts, judged by THIS database's definitions, not your own: n_probands counts unrelated index cases, so affected relatives in one family count ONCE, however many of them were enrolled or examined -- two affected sisters are one proband in one family. n_families is 0 when carriers were found by screening a cohort and no family was studied. n_tested is the denominator, 0 if not stated. A cohort of N individuals is not N families. Counts drawn from a figure or a supplementary table are the likeliest to be wrong.
 - Whether each evidence quote actually supports the claim attached to it, rather than merely mentioning the variant.
 - Whether a gene assignment is printed in the text or was inferred. Records whose details came from a transcribed figure are flagged in the input as such; a figure that does not label its panels cannot establish which gene a variant belongs to.
 - The same family appearing as more than one record.

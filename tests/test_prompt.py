@@ -20,7 +20,7 @@ def test_schema_stays_within_structured_output_budget():
     import json
     from col4a1a2.extract.schema import json_schema
     s = json.dumps(json_schema())
-    # Measured with tools/probe.py: 45 properties accepted, 48 rejected, and
+    # Measured with col4a1a2-dev probe: 45 properties accepted, 48 rejected, and
     # cutting 1,300 bytes of description from the 48-property version did not
     # help -- the ceiling is structural. The goal-scoped schema is 30
     # properties, 1 anyOf and 2 objects, accepted in 72s. These bounds leave

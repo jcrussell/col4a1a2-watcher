@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Measure how often papers reporting the same variant cite each other.
 
-    uv run python tools/citations.py "p.Gly773Arg" "G773R"
+    uv run col4a1a2-dev citations "p.Gly773Arg" "G773R"
 
 Each argument is an alternative spelling of one variant. The script finds every
 paper whose full text mentions any of them, orders them by publication date, and
@@ -18,16 +18,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
+from col4a1a2.config import REPO
 
-from col4a1a2.cli import make_client  # noqa: E402
-from col4a1a2.config import load_settings  # noqa: E402
-from col4a1a2.sources import europepmc  # noqa: E402
+from col4a1a2.cli import make_client
+from col4a1a2.config import load_settings
+from col4a1a2.sources import europepmc
 
 
-def main() -> int:
-    spellings = sys.argv[1:]
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    spellings = argv
     if not spellings:
         print(__doc__)
         return 2

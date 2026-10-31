@@ -19,7 +19,7 @@ so this keeps which systems were affected and loses the ability to record that
 an examination was done and normal. That loss is real and intentional.
 
 **The structured-output grammar has a hard ceiling, and it is structural.**
-Measured with `tools/probe.py`: 45 properties accepted, 48 rejected, and
+Measured with `col4a1a2-dev probe`: 45 properties accepted, 48 rejected, and
 cutting 1,300 bytes of description from the 48-property version did not help.
 Only removing properties does. This shape is about 30 properties with two
 objects and one nullable union, which leaves room for the next field instead of

@@ -602,6 +602,15 @@ def cmd_extract(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, st)
     _paper_inputs.include_all = a.all
     papers = _paper_inputs(snap)
+    if a.pmid:
+        # Named papers only, for piloting a prompt or schema change against
+        # papers whose previous answers and challenge verdicts are known.
+        wanted = set(a.pmid)
+        papers = [p for p in papers if p.pmid in wanted]
+        missing = wanted - {p.pmid for p in papers}
+        if missing:
+            print(f"not in this snapshot or not kept by the gate: {', '.join(sorted(missing))}",
+                  file=sys.stderr)
     if a.limit:
         papers = papers[: a.limit]
     client = make_anthropic(st)
@@ -1041,6 +1050,8 @@ def main(argv: list[str] | None = None) -> int:
 
     e = sub.add_parser("extract", parents=[common], help="run Claude extraction over a snapshot's papers (synchronous)")
     e.add_argument("--snapshot")
+    e.add_argument("--pmid", action="append",
+                   help="extract only this paper; repeat for several")
     e.add_argument("--limit", type=int)
     e.add_argument("--model", default=None, help="default from config")
     e.add_argument("--effort", default=None,

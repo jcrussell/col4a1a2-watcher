@@ -1,6 +1,6 @@
 # Codebook: per-paper variant evidence extraction
 
-This defines every field Claude fills in `PaperExtraction` (see `src/col4a1a2/extract/schema.py`) and how a human spot-checker should judge it. The system prompt (`src/col4a1a2/extract/prompts/v3.md`) is the operational version of these rules; keep the two in sync and bump `PROMPT_VERSION` when either changes.
+This defines every field Claude fills in `PaperExtraction` (see `src/col4a1a2/extract/schema.py`) and how a human spot-checker should judge it. The system prompt (`src/col4a1a2/extract/prompts/v4.md`) is the operational version of these rules; keep the two in sync and bump `PROMPT_VERSION` when either changes.
 
 ## What the schema is for
 
@@ -14,14 +14,14 @@ Fields that served interpretation rather than these three were cut in v3, after 
 
 ## Unit of extraction
 
-One record per paper. Inside it, one `VariantEvidence` per distinct COL4A1/COL4A2 variant reported in specific individuals **in this paper**. Variants cited from earlier publications without new individuals are not records.
+One record per paper. Inside it, one `VariantEvidence` per distinct COL4A1/COL4A2 variant reported in specific individuals **in this paper**. Variants cited from earlier publications without new individuals are not records. Nor are **common polymorphisms studied for association** -- an rsID reported with allele frequencies, odds ratios or p-values across a cohort. The pilot found v3 extracting them more eagerly than v2 (one association paper went from 2 records to 5); they are not disease variants, and their carrier counts are not probands.
 
 ## Counting
 
 | Field | Rule |
 |---|---|
 | `n_probands` | Unrelated index cases with this variant in this paper. One per family. If probands and relatives are not distinguished, count families and say so in `notes`. |
-| `n_families` | Kindreds with this variant in this paper. |
+| `n_families` | Kindreds with this variant in this paper. **0 when carriers were found by screening a cohort and no family was studied** -- `n_probands` then carries the count. A roll-up must not sum families across such records. |
 | `n_total_carriers` | All reported carriers including relatives; `null` if not stated. |
 | `n_tested` | **The denominator**: everyone the study screened or sequenced -- cohort, biobank or panel size. `0` means not stated, never "nobody tested". A variant in 174 of half a million biobank participants and in 174 clinic patients are different facts, and this field is the only thing that tells them apart. |
 | `same_family_as_prior_report` | `true` when the paper says the family or proband was reported before, with the reasoning in `prior_report_reason`. This is the main double-counting risk when rolling up across papers. |
@@ -30,7 +30,7 @@ One record per paper. Inside it, one `VariantEvidence` per distinct COL4A1/COL4A
 
 | Field | Rule |
 |---|---|
-| `inh_de_novo_confirmed` | Both parents tested negative; parentage not disputed. |
+| `inh_de_novo_confirmed` | Both parents tested negative; parentage not disputed. If the paper says parentage was not confirmed, or says only "possibly" de novo, it is `assumed`. |
 | `inh_de_novo_assumed` | Called de novo without parental testing described. |
 | `inh_inherited` | A parent carries the variant. |
 | `inh_unknown` | Anything else. |
@@ -75,4 +75,4 @@ Two to five verbatim sentences or table rows per variant. `verify.py` string-mat
 
 ## Spot-check protocol (human)
 
-For each queued record, open the paper and check, in order: (1) every variant in the paper has a record and no record is invented; (2) `n_probands`, `n_families` and `n_tested`; (3) inheritance; (4) `phenotype_systems`; (5) quotes are real. Record agree/disagree per item as JSONL in `data/curated/gold/`. Precision and recall are computed from those files, and until they exist no output may state either.
+For each queued record, open the paper and check, in order: (1) every variant in the paper has a record and no record is invented; (2) `n_probands`, `n_families` and `n_tested` -- remembering that affected relatives in one family are **one** proband, however many were enrolled; (3) inheritance; (4) `phenotype_systems`; (5) quotes are real. Record agree/disagree per item as JSONL in `data/curated/gold/`. Precision and recall are computed from those files, and until they exist no output may state either.

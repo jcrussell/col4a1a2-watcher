@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Check that a Pydantic schema is accepted by the structured-outputs grammar.
 
-    uv run python tools/probe.py col4a1a2.extract.schema:PaperExtraction
+    uv run col4a1a2-dev probe col4a1a2.extract.schema:PaperExtraction
 
 Structured outputs compile the schema into a grammar with a size budget, and
 exceeding it fails the whole request with `400 Schema is too complex` rather
@@ -15,30 +15,37 @@ import importlib
 import json
 import sys
 import time
-from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
+from col4a1a2.config import REPO
 
-import anthropic  # noqa: E402
+import anthropic
 
 PROBE = "PMID 1. Title: test paper. Abstract: no variants are reported."
 
 
-def main() -> int:
-    if len(sys.argv) != 2 or ":" not in sys.argv[1]:
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 1 or ":" not in argv[0]:
         print(__doc__)
         return 2
-    module, name = sys.argv[1].rsplit(":", 1)
+    module, name = argv[0].rsplit(":", 1)
     model_cls = getattr(importlib.import_module(module), name)
 
-    schema = json.dumps(model_cls.model_json_schema())
-    print(f"{name}: {len(schema)} bytes, {schema.count('anyOf')} anyOf, "
+    js = model_cls.model_json_schema()
+    schema = json.dumps(js)
+    props = len(js.get("properties", {})) + sum(
+        len(d.get("properties", {})) for d in js.get("$defs", {}).values())
+    # Property count is what binds: measured 2026-10-31, 45 accepted and 48
+    # rejected, while cutting 1,300 bytes of descriptions changed nothing.
+    print(f"{name}: {props} properties, {len(schema)} bytes, {schema.count('anyOf')} anyOf, "
           f"{schema.count(chr(34) + 'object' + chr(34))} objects, "
           f"{schema.count(chr(34) + 'enum' + chr(34))} enums, "
           f"{schema.count(chr(34) + 'array' + chr(34))} arrays")
 
-    client = anthropic.Anthropic()
+    from col4a1a2.cli import make_anthropic
+    from col4a1a2.config import load_settings
+
+    client = make_anthropic(load_settings())
     t0 = time.time()
     try:
         resp = client.beta.messages.parse(

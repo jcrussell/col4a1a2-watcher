@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Backfill ledger extraction outcomes from snapshots that predate the ledger.
 
-    uv run python tools/backfill.py data/raw/2026-10-30-batch100 [...]
+    uv run col4a1a2-dev backfill data/raw/2026-10-30-batch100 [...]
 
 The ledger was added after 100 papers had already been extracted, and `extract`
 correctly skips work it has already done, so those outcomes would never appear.
@@ -14,15 +14,15 @@ import json
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
+from col4a1a2.config import REPO
 
-from col4a1a2.config import load_settings  # noqa: E402
-from col4a1a2.ledger import Ledger  # noqa: E402
+from col4a1a2.config import load_settings
+from col4a1a2.ledger import Ledger
 
 
-def main() -> int:
-    snaps = [Path(s) for s in sys.argv[1:]]
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    snaps = [Path(s) for s in argv]
     if not snaps:
         print(__doc__)
         return 2

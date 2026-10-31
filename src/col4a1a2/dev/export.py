@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Export JSON Schema for every artefact this project writes.
 
-    uv run python tools/export.py
+    uv run col4a1a2-dev export
 
 `schemas/` is documentation for anyone consuming the published data without
 this codebase: one file per artefact plus an index naming the format. The
@@ -16,10 +16,9 @@ import json
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
+from col4a1a2.config import REPO
 
-from col4a1a2 import schemas  # noqa: E402
+from col4a1a2 import schemas
 
 OUT = REPO / "schemas"
 
@@ -46,7 +45,7 @@ def build() -> dict[str, dict]:
     return files
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     OUT.mkdir(exist_ok=True)
     files = build()
     for rel, doc in files.items():

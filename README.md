@@ -36,7 +36,7 @@ Add `--no-llm-triage` to fetch without an API key, using the keyword fallback.
 
 ```bash
 uv run pytest                                              # offline, no key needed
-uv run python tools/triage.py --snapshot data/raw/2026-10-29
+uv run col4a1a2-dev triage --snapshot data/raw/2026-10-29
 ```
 
 ## Documentation

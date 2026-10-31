@@ -21,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 col4a1a2 = "col4a1a2.cli:main"
+col4a1a2-dev = "col4a1a2.dev:main"
 
 [tool.uv.build-backend]
 # The distribution is col4a1a2-watcher but the module is col4a1a2: without this

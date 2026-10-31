@@ -108,15 +108,12 @@ def test_the_committed_schemas_match_the_models():
     """`schemas/` is documentation someone outside this repo will rely on, so a
     model change without re-exporting is a failure, not stale documentation.
 
-        uv run python tools/export.py
+        uv run col4a1a2-dev export
     """
-    import sys
-
-    sys.path.insert(0, str(REPO / "tools"))
-    from export import build
+    from col4a1a2.dev.export import build
 
     for rel, doc in build().items():
         path = REPO / "schemas" / rel
-        assert path.is_file(), f"{rel} missing; run tools/export.py"
+        assert path.is_file(), f"{rel} missing; run `col4a1a2-dev export`"
         on_disk = json.loads(path.read_text(encoding="utf-8"))
-        assert on_disk == doc, f"{rel} is stale; run tools/export.py"
+        assert on_disk == doc, f"{rel} is stale; run `col4a1a2-dev export`"

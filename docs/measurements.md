@@ -1,6 +1,6 @@
 # Measurements
 
-Numbers behind the design choices, each with the date it was taken. Re-measure before quoting any of these as current. Scripts that produce them are in `tools/`.
+Numbers behind the design choices, each with the date it was taken. Re-measure before quoting any of these as current. The tools that produce them are verbs of `uv run col4a1a2-dev`.
 
 ## Corpus size (2026-10-29, Europe PMC and NCBI)
 
@@ -20,7 +20,7 @@ So the bootstrap corpus is roughly two thousand papers and the monthly increment
 Five of the twenty genuinely report COL4A1/COL4A2 variants in named individuals. Labels are in `data/curated/labels.json`. Reproduce with:
 
 ```
-uv run python tools/triage.py --snapshot data/raw/2026-10-29
+uv run col4a1a2-dev triage --snapshot data/raw/2026-10-29
 ```
 
 | Gate | Kept | Recall | Precision |
@@ -61,7 +61,7 @@ A character-count estimate made before measuring put the mean at 10.7k tokens, a
 
 ## Structured-output schema limit (2026-10-29)
 
-The first extraction schema was rejected with `400 Schema is too complex`. It carried twelve nullable unions and two more levels of nested object. Flattening optional strings to the empty string, collapsing an inheritance list into a fixed four-count object, and inlining a nested prior-report object brought it inside the budget, accepted in four seconds. `tools/probe.py` checks a candidate against the live API; `tests/test_prompt.py` guards the shape offline.
+The first extraction schema was rejected with `400 Schema is too complex`. It carried twelve nullable unions and two more levels of nested object. Flattening optional strings to the empty string, collapsing an inheritance list into a fixed four-count object, and inlining a nested prior-report object brought it inside the budget, accepted in four seconds. `col4a1a2-dev probe` checks a candidate against the live API; `tests/test_prompt.py` guards the shape offline.
 
 ## Citation density between papers reporting the same variant (2026-10-30)
 
@@ -310,7 +310,7 @@ of PubTator PMIDs mattered so much.
 ## The structured-output grammar ceiling is structural (2026-10-31)
 
 Adding five fields to the v2 extraction schema was rejected. Three probes with
-`tools/probe.py`, each taking two to three minutes because the server compiles
+`col4a1a2-dev probe`, each taking two to three minutes because the server compiles
 the grammar before it refuses:
 
 | Shape | Properties | anyOf | Bytes | Result |
