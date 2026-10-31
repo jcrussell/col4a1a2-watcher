@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from col4a1a2.sources.fulltext import TextRegion
 from pathlib import Path
 
-PROMPT_VERSION = "v4"
+PROMPT_VERSION = "v1"
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 
 

@@ -292,22 +292,18 @@ class ExtractionRow(Row):
     pmcid: str | None = None
     model: str | None = None
     prompt_version: str
-    # Optional only for history: the 20 rows in the 2026-10-29 snapshot were
-    # written before resume keyed on the text hash. Every row written since
-    # carries it, and without it a paper cannot be told apart from the same
-    # paper whose supplements have since arrived.
+    # Every row written carries it: without it a paper cannot be told apart
+    # from the same paper whose supplements have since arrived.
     text_sha256: str | None = None
     schema_version: str | None = None
     stop_reason: str | None = None
     usage: Usage | None = None
     grounding: Grounding | None = None
-    # Permissive by type, strict by validator. Records written by an earlier
-    # prompt version have an earlier shape -- v2 nested inheritance,
-    # segregation and phenotypes as objects and carried functional_assays as a
-    # list -- and they are kept as the historical record rather than rewritten.
-    # Validating them against today's model would either fail or force the
-    # model to describe three shapes at once. So the current version is checked
-    # against `PaperExtraction` and older ones are accepted as they stand.
+    # Permissive by type, strict by validator. A prompt bump that reshapes the
+    # schema leaves older rows in an older shape until they are re-extracted,
+    # and validating those against today's model would fail. So the current
+    # prompt version is checked against `PaperExtraction` and older ones are
+    # accepted as they stand.
     extraction: dict | None = None
     error: str | None = None
     detail: str | None = None

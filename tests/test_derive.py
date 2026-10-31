@@ -101,41 +101,22 @@ def test_families_equal_probands_fires_only_at_scale():
 
 
 def test_checks_are_quiet_on_the_real_corpus():
-    """Measured: exactly two findings over 177 records, and both are real.
+    """Measured: four findings over 233 records in 209 papers.
 
-    Guards against a future check that floods the review queue. If this fails,
-    the new check needs its false-positive rate measured before it ships.
+    Two are the CNV gain typed as a deletion, which is real. Guards against a
+    future check that floods the review queue. If this fails, the new check
+    needs its false-positive rate measured before it ships.
     """
-    snap = Path(__file__).resolve().parents[1] / "data/raw/2026-10-30-batch100/extractions.jsonl"
+    snap = Path(__file__).resolve().parents[1] / "data/raw/2026-10-31/extractions.jsonl"
     if not snap.exists():
-        pytest.skip("batch snapshot not present")
+        pytest.skip("corpus snapshot not present")
     rows = {}
     for line in snap.read_text(encoding="utf-8").splitlines():
         r = json.loads(line)
         if not r.get("error"):
             rows[r["pmid"]] = r
-    # The snapshot was written by prompt v2, which nested inheritance,
-    # segregation and phenotypes. The checks read the v3 flat fields, so the
-    # rows are adapted here rather than teaching production code two shapes.
-    # The point of the test survives: the checks must stay quiet on 177 real
-    # records, and the one real error must still fire.
-    def to_v3(v: dict) -> dict:
-        inh = v.get("inheritance") or {}
-        ph = v.get("phenotypes") or {}
-        present = [k for k, val in ph.items() if val == "present" and k != "details"]
-        return {**v,
-                "inh_de_novo_confirmed": inh.get("de_novo_confirmed", 0),
-                "inh_de_novo_assumed": inh.get("de_novo_assumed", 0),
-                "inh_inherited": inh.get("inherited", 0),
-                "inh_unknown": inh.get("unknown", 0),
-                "phenotype_systems": ",".join(present),
-                "phenotype_details": ph.get("details", ""),
-                "n_tested": v.get("n_tested", 0)}
-
-    for r in rows.values():
-        r["extraction"]["variants"] = [to_v3(v) for v in r["extraction"]["variants"]]
     findings = [f for r in rows.values() for f in check_extraction(r["extraction"])]
     n_records = sum(len(r["extraction"]["variants"]) for r in rows.values())
-    assert n_records == 177
-    assert len(findings) <= 5, f"{len(findings)} findings over {n_records} records: {findings}"
-    assert any(f.check == "families_equal_probands_at_scale" for f in findings)
+    assert n_records == 233
+    assert len(findings) <= 8, f"{len(findings)} findings over {n_records} records: {findings}"
+    assert any(f.check == "cnv_gain_typed_as_deletion" and f.pmid == "33375380" for f in findings)

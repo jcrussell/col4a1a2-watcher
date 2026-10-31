@@ -309,17 +309,17 @@ of PubTator PMIDs mattered so much.
 
 ## The structured-output grammar ceiling is structural (2026-10-31)
 
-Adding five fields to the v2 extraction schema was rejected. Three probes with
+Adding five fields to the draft-v2 extraction schema was rejected. Three probes with
 `col4a1a2-dev probe`, each taking two to three minutes because the server compiles
 the grammar before it refuses:
 
 | Shape | Properties | anyOf | Bytes | Result |
 |---|---|---|---|---|
-| v2, as used for the first 206 records | 45 | 4 | ~7,900 | accepted |
-| v2 + 5 fields | 50 | 5 | 9,069 | **rejected** |
-| v2 + 5 fields, nullable replaced by a sentinel | 50 | 4 | 9,032 | **rejected** |
+| draft v2, as used for the first 206 records | 45 | 4 | ~7,900 | accepted |
+| draft v2 + 5 fields | 50 | 5 | 9,069 | **rejected** |
+| draft v2 + 5 fields, nullable replaced by a sentinel | 50 | 4 | 9,032 | **rejected** |
 | as above, minus two dead fields, descriptions cut by 1,300 bytes | 48 | 4 | 7,733 | **rejected** |
-| v3, scoped to the project's three questions | **30** | 1 | 5,190 | **accepted in 72s** |
+| draft v3, scoped to the project's three questions | **30** | 1 | 5,190 | **accepted in 72s** |
 
 So the ceiling is between 45 and 48 properties for this nesting, union count is
 not the binding constraint, and prose descriptions barely matter. Only removing
@@ -376,14 +376,14 @@ the ~300 projected from the old rate.
 
 LOVD was evaluated and rejected; see `AGENTS.md`. No LOVD data is stored.
 
-## First full run on prompt v4 (2026-10-31)
+## First full run on prompt v1, then numbered draft v4 (2026-10-31)
 
-All 209 open-access papers the gate kept, extracted on v4 and challenged on c2.
+All 209 open-access papers the gate kept, extracted on draft v4 and challenged on draft c2 -- released as v1 and c1, see below.
 
 | | |
 |---|---|
 | Extraction | 209 papers, 0 failures, **$17.58** ($0.084/paper; the pilot's $0.153 over-sampled big papers) |
-| Challenge (c2) | 209 papers, 0 failures, **$13.89** |
+| Challenge (c1, then c2) | 209 papers, 0 failures, **$13.89** |
 | Papers with records | 101; 17 reviews, 13 functional and 10 "other" correctly yield none |
 | Records | 233 |
 | Distinct variants (crude key, before VEP) | **219** -- COL4A1 157, COL4A2 62 |
@@ -416,3 +416,17 @@ clinical journals -- Neurology, Stroke, Annals of Neurology -- are where case
 reports are published, so the open-access corpus is less than half of what
 the watcher should be aware of. These 265 are in the ledger as triaged and
 kept, so the denominator is honest; none has been extracted.
+
+## Prompt versions squashed to v1 (2026-10-31)
+
+Nothing had been published and every in-scope paper had been extracted on the latest draft, so the drafts were retired and their numbering reset: extraction prompt draft v4 became **v1**, challenge prompt draft c2 became **c1**. Draft numbers elsewhere in this file refer to the retired drafts, which survive in git history.
+
+| | before | after |
+|---|---|---|
+| Extraction rows in `data/raw/*/extractions.jsonl` | 395 across v1-v4 | 212, all v1 |
+| Challenge rows in `data/curated/challenges.jsonl` | 361 (149 c1/v2, 212 c2/v4) | 212, all c1/v1 |
+| Ledger events | 11,356 | 11,356 |
+
+The older rows could not simply be relabelled: 20 rows were already called `v1`, and resume matches on the version string, so leaving them would have made pre-gate extractions count as current. They were removed, and the 16 papers that had only an older extraction -- all with zero records, all off-topic, none in current discovery -- now read `fetched`.
+
+Ledger events were kept, not deleted. A first attempt dropped them, and that erased 4 papers from the denominator and the gate decision on 127 more, because for those papers a backfilled challenge event was the only place the metadata and triage verdict were written down. Each retired extraction or challenge event instead lost the fields that described the retired run (`prompt_version`, record counts, grounding counts, `challenge`) and kept the rest, with its stage set to `fetched`, which remains true. After the rewrite the folded ledger matches the old one except for those 16 papers moving from extracted or challenged back to fetched.

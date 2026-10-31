@@ -141,7 +141,7 @@ def check_record(pmid: str, v: dict) -> list[Finding]:
         add("prior_report_without_reason", "flagged as a prior report with no reason given")
 
     # The vocabulary has deletion_cnv and nothing for a copy-number gain, so a
-    # duplication or partial trisomy has nowhere to go but there. The c2
+    # duplication or partial trisomy has nowhere to go but there. The c1
     # reviewer disputed three records for exactly this, across two papers.
     # Free to check here; fixing the vocabulary waits for the next prompt
     # revision, since any prompt bump re-extracts every paper.

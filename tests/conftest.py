@@ -147,7 +147,7 @@ def make_paper_row(pmid="1", **over) -> dict:
 
 def make_challenge_row(pmid="1", **over) -> dict:
     row = {"pmid": pmid, "text_sha256": "h", "records_digest": "d",
-           "challenge_prompt_version": "c1", "extract_prompt_version": "v2",
+           "challenge_prompt_version": "c1", "extract_prompt_version": "v1",
            "model": "test",
            "usage": {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0,
                      "effort": "medium"},

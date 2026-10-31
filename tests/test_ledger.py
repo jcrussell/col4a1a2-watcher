@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from col4a1a2.ledger import DROPPED_AT, Ledger, identify
+from col4a1a2.ledger import DROPPED_AT, Ledger, has_extraction, identify
 
 
 def test_identity_falls_back_through_pmid_doi_title():
@@ -214,3 +214,14 @@ def test_run_scoped_fields_are_not_ledger_state(tmp_path):
 
     sig = inspect.signature(Ledger.record_candidate)
     assert "rank" not in sig.parameters and "limit_at" not in sig.parameters
+
+
+def test_a_challenged_paper_is_not_re_extracted(tmp_path):
+    """The fold keeps the furthest stage, so after a challenge the paper reads
+    `challenged`. Resume keyed on `stage == "extracted"` missed every one of
+    them and would have re-extracted the whole corpus next month."""
+    led = Ledger(tmp_path / "l.jsonl")
+    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v1", attempts=0)
+    led.record(identity="1", stage="challenged")
+    assert Ledger(tmp_path / "l.jsonl").needs_extraction("1", "aaa", "v1") is False
+    assert has_extraction(Ledger(tmp_path / "l.jsonl").fold()["1"])

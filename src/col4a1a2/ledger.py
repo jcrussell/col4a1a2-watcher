@@ -76,6 +76,16 @@ STAGES = ("candidate", "triaged", "fetched", "extracted", "challenged")
 _STAGE_RANK = {s: i for i, s in enumerate(STAGES)}
 
 
+def has_extraction(state: dict) -> bool:
+    """Reached extraction, whether or not a challenge has since run.
+
+    Testing `stage == "extracted"` instead would read every challenged paper
+    as never extracted, because the fold keeps the furthest stage, and a
+    later snapshot would re-extract all of them at full price.
+    """
+    return _STAGE_RANK.get(state.get("stage") or "", -1) >= _STAGE_RANK["extracted"]
+
+
 def identify(pmid: str | None, doi: str | None, title: str | None) -> tuple[str, str]:
     """A stable key for a candidate, and which kind of key it is."""
     if pmid:
@@ -259,7 +269,7 @@ class Ledger:
         # The stage matters as well as the hash: a row recording only that the
         # paper was *fetched* at this text hash is not an extraction, and
         # treating it as one would skip the paper forever.
-        return not (r.get("stage") == "extracted"
+        return not (has_extraction(r)
                     and r.get("text_sha256") == text_sha256
                     and r.get("prompt_version") == prompt_version
                     and not r.get("last_error"))

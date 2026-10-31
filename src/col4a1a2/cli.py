@@ -21,7 +21,7 @@ from col4a1a2.extract.prompt import PaperInput
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
 from col4a1a2 import jsonl, schemas
 from col4a1a2.http import PoliteClient
-from col4a1a2.ledger import Ledger
+from col4a1a2.ledger import Ledger, has_extraction
 from col4a1a2.sources import europepmc, ncbi, pubtator
 from col4a1a2.sources.europepmc import citation
 from col4a1a2.sources.fulltext import TextRegion, jats_inventory, jats_to_text
@@ -631,7 +631,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
     # affordable pieces. The ledger is the cross-snapshot index.
     for ident, pr in prior.items():
         if (pr.get("prompt_version") == PROMPT_VERSION
-                and pr.get("stage") == "extracted"
+                and has_extraction(pr)
                 and not pr.get("last_error")
                 and pr.get("text_sha256")):
             done.add((ident, pr["text_sha256"]))

@@ -32,11 +32,10 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-# Deliberately not bumped for the v2 -> v3 reshaping. `PROMPT_VERSION` already
-# discriminates the two shapes exactly -- v2 rows nest inheritance,
-# segregation and phenotypes, v3 rows are flat -- and it is the key that gates
-# re-extraction, so a second version alongside it would be decoration. Bump
-# this only if something ever stores it and depends on it.
+# Not bumped when the shape changes. `PROMPT_VERSION` is the key that gates
+# re-extraction and already moves whenever the shape does, so a second version
+# alongside it would be decoration. Bump this only if something ever stores it
+# and depends on it.
 SCHEMA_VERSION = "1"
 
 

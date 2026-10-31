@@ -62,7 +62,7 @@ from col4a1a2.extract.verify import find_quote, normalise
 
 log = logging.getLogger("col4a1a2")
 
-CHALLENGE_PROMPT_VERSION = "c2"
+CHALLENGE_PROMPT_VERSION = "c1"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_CHALLENGE_TOKENS = 32000
 
