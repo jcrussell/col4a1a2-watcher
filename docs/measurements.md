@@ -430,3 +430,22 @@ Nothing had been published and every in-scope paper had been extracted on the la
 The older rows could not simply be relabelled: 20 rows were already called `v1`, and resume matches on the version string, so leaving them would have made pre-gate extractions count as current. They were removed, and the 16 papers that had only an older extraction -- all with zero records, all off-topic, none in current discovery -- now read `fetched`.
 
 Ledger events were kept, not deleted. A first attempt dropped them, and that erased 4 papers from the denominator and the gate decision on 127 more, because for those papers a backfilled challenge event was the only place the metadata and triage verdict were written down. Each retired extraction or challenge event instead lost the fields that described the retired run (`prompt_version`, record counts, grounding counts, `challenge`) and kept the rest, with its stage set to `fetched`, which remains true. After the rewrite the folded ledger matches the old one except for those 16 papers moving from extracted or challenged back to fetched.
+
+## Provenance backfilled, responses archived from here on (2026-10-31)
+
+Every model-derived row now records the model that served it, the model requested, the effort and when it was written, and caches key on the requested model. Before this, triage and figure rows recorded a module constant rather than the model called: the config's `triage_model`, `triage_effort`, `figure_model` and `figure_effort` were never read. No row named the wrong model, because the constants matched the config, but changing the config would have made every new row misreport.
+
+The existing rows were backfilled once, under `COL4A1A2_ALLOW_REWRITE`, from the best evidence available:
+
+| Table | Rows | `written_at` from | Matched |
+|---|---|---|---|
+| `triage.jsonl` | 3,276 | the earliest ledger event carrying the same verdict reason | 3,276 exactly |
+| `figures.jsonl` | 92 | the fetch time of the earliest snapshot that used the image | 92 |
+| `challenges.jsonl` | 212 | the paper's challenged ledger events, in order | 212 |
+| `extractions.jsonl` (2026-10-31) | 210 | the extracted ledger event at the same text hash | 210 |
+
+These timestamps are when the ledger recorded the result, within seconds of the call, not the call itself. `requested_model` is the recorded model in every case; `effort` is the config value each ran under (extraction high, triage low, figures low) or, for challenges, the effort they already recorded.
+
+Raw API responses were not kept before this date. The archive under `data/responses/` starts with the next paid call.
+
+Two resume bugs surfaced while doing it. A paper whose text grew after it was challenged (a supplement arriving) read as already extracted at the new hash, because resume consulted the merged ledger fold, where a later `fetched` event overwrites the hash but not the stage. And `extract --model X` would have skipped every paper, because no key named a model. Both are fixed and tested.

@@ -26,8 +26,10 @@ def build() -> dict[str, dict]:
     plain data, so the test can compare without writing anything."""
     files: dict[str, dict] = {}
     index: dict[str, dict] = {}
-    for name, model in sorted(schemas.MODELS.items()):
-        stem = name.rsplit(".", 1)[0]
+    # The response archive is one file per call, matched by suffix rather than name.
+    named = sorted(schemas.MODELS.items()) + [(f"*{schemas.RESPONSE_SUFFIX}", schemas.ApiResponse)]
+    for name, model in named:
+        stem = "response" if name.startswith("*") else name.rsplit(".", 1)[0]
         is_rows = name.endswith(".jsonl")
         doc = model.model_json_schema(by_alias=True)
         doc["title"] = model.__name__

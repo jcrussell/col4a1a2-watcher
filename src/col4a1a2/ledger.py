@@ -98,6 +98,29 @@ def identify(pmid: str | None, doi: str | None, title: str | None) -> tuple[str,
     return "", "unknown"
 
 
+def fold_rows(rows: list[dict]) -> dict[str, dict]:
+    """Current state per identity: merge events in `written_at` order.
+
+    Order-independent by construction, so a union merge in git cannot change
+    the result. Later events overwrite the fields they carry and leave the
+    rest, and `stage` only ever advances.
+    """
+    out: dict[str, dict] = {}
+    for row in sorted(rows, key=lambda r: (r.get("written_at", ""), r.get("identity", ""))):
+        ident = row.get("identity")
+        if not ident:
+            continue
+        cur = out.setdefault(ident, {})
+        stage_new, stage_old = row.get("stage"), cur.get("stage")
+        cur.update({k: v for k, v in row.items() if k not in ("stage", "written_at")})
+        cur["written_at"] = row.get("written_at")
+        if stage_new and _STAGE_RANK.get(stage_new, -1) >= _STAGE_RANK.get(stage_old or "", -1):
+            cur["stage"] = stage_new
+        elif stage_old:
+            cur["stage"] = stage_old
+    return out
+
+
 @dataclass
 class Ledger:
     path: Path
@@ -235,26 +258,7 @@ class Ledger:
     # ---------------------------------------------------------------- reading
 
     def fold(self) -> dict[str, dict]:
-        """Current state per identity: merge events in `written_at` order.
-
-        Order-independent by construction, so a union merge in git cannot change
-        the result. Later events overwrite the fields they carry and leave the
-        rest, and `stage` only ever advances.
-        """
-        out: dict[str, dict] = {}
-        for row in sorted(self.rows, key=lambda r: (r.get("written_at", ""), r.get("identity", ""))):
-            ident = row.get("identity")
-            if not ident:
-                continue
-            cur = out.setdefault(ident, {})
-            stage_new, stage_old = row.get("stage"), cur.get("stage")
-            cur.update({k: v for k, v in row.items() if k not in ("stage", "written_at")})
-            cur["written_at"] = row.get("written_at")
-            if stage_new and _STAGE_RANK.get(stage_new, -1) >= _STAGE_RANK.get(stage_old or "", -1):
-                cur["stage"] = stage_new
-            elif stage_old:
-                cur["stage"] = stage_old
-        return out
+        return fold_rows(self.rows)
 
     def summary(self) -> dict:
         state = self.fold()

@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "Loose": {
+      "additionalProperties": true,
+      "description": "Shapes owned by an upstream API or a parsed document.",
+      "properties": {},
+      "title": "Loose",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The whole document *.response.json. One archived Claude response, written by `extract/llm.py` before parsing.",
+  "properties": {
+    "betas": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Betas",
+      "type": "array"
+    },
+    "digest": {
+      "title": "Digest",
+      "type": "string"
+    },
+    "effort": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Effort"
+    },
+    "max_tokens": {
+      "title": "Max Tokens",
+      "type": "integer"
+    },
+    "request": {
+      "$ref": "#/$defs/Loose"
+    },
+    "requested_model": {
+      "title": "Requested Model",
+      "type": "string"
+    },
+    "response": {
+      "$ref": "#/$defs/Loose"
+    },
+    "site": {
+      "enum": [
+        "extract",
+        "triage",
+        "figure",
+        "challenge"
+      ],
+      "title": "Site",
+      "type": "string"
+    },
+    "written_at": {
+      "title": "Written At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "digest",
+    "written_at",
+    "site",
+    "requested_model",
+    "effort",
+    "max_tokens",
+    "betas",
+    "request",
+    "response"
+  ],
+  "title": "ApiResponse",
+  "type": "object"
+}

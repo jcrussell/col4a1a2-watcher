@@ -151,3 +151,16 @@ def test_every_appender_validates(tmp_path):
         log.record(query="q", sl=Slice(date_from="2020-01-01", date_to="2021-01-01"),
                    hits_available=None, hits_fetched="many", complete=True)
     assert not any(tmp_path.iterdir()), "nothing invalid may reach disk"
+
+
+def test_a_second_writer_is_refused_and_told_who_holds_the_lock(tmp_path):
+    import os
+
+    from col4a1a2.cli import LockHeld, hold_lock
+
+    lock = tmp_path / "data" / ".lock"
+    first = hold_lock(lock)
+    with pytest.raises(LockHeld, match=f"pid {os.getpid()}"):
+        hold_lock(lock)
+    first.close()
+    hold_lock(lock).close()  # released when the holder goes away

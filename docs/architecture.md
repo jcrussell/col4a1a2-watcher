@@ -56,15 +56,17 @@ Rejected candidates are still recorded in the snapshot, with the reason, so a tr
 | `sources/supplements.py` | The article's file bundle: one streamed, size- and deadline-bounded request, ZIP member safety checks, and classification into figure renditions versus supplements. |
 | `sources/tabular.py` | Supplement bytes to rows. Spreadsheets, Word, delimited files and PDFs, plus the row filtering that keeps the input affordable. Pure: no network, no JATS, no model. |
 | `extract/figures.py` | Reading variant labels out of figure images, as a structured transcription, cached by image content. |
-| `extract/triage.py` | The cheap gate: does this abstract justify reading the paper? Haiku, cached by prompt version. |
+| `extract/triage.py` | The cheap gate: does this abstract justify reading the paper? Haiku, cached by prompt version and requested model. |
 | `extract/schema.py` | The Pydantic record. Deliberately flat; see the note in `AGENTS.md`. |
 | `extract/prompt.py`, `extract/prompts/` | Versioned system prompt and the per-paper user message. |
-| `extract/client.py` | The Opus call: structured output, prompt caching, refusal fallbacks, usage accounting. |
+| `extract/client.py` | The Opus extraction call: streaming, prompt caching, usage accounting. |
+| `extract/llm.py` | The one path every Claude call takes: sends the structured-output schema, archives the raw response before validating it, replays an identical request from the archive, and stamps provenance (served and requested model, effort, time). |
 | `extract/verify.py` | String-matches every quote against the source and decides whether a record needs human review. |
 | `extract/derive.py` | Deterministic consistency checks and the `variant_type` cross-check. No model, no network. |
 | `extract/challenge.py` | Adversarial review of records, and the verification of the reviewer's own claims. |
 | `config.py` | The one TOML file, resolved into a frozen `Settings` passed to every command. |
-| `ledger.py` | Append-only record of every candidate ever considered, folded on read. |
+| `ledger.py` | Append-only record of every candidate ever considered, folded on read. Resume reads the extraction events, never the fold. |
+| `check.py` | `col4a1a2 check`: parse and schema validity, duplicate rows, foreign keys, append-only logs and migration losses, and the links between tracked files and snapshots. Run by the pre-commit hook. |
 
 ## Data lifecycle
 
@@ -73,6 +75,7 @@ Bootstrap and monthly refresh run the same code; only the date window differs.
 | Path | Tracked | Contents |
 |---|---|---|
 | `data/raw/<date>/` | no | Snapshot: paper metadata, full texts, extractions, manifest. Full texts are never redistributed. |
+| `data/responses/<YYYY-MM>/` | no | Every raw Claude response, thinking included, one JSON document per call, archived before parsing. Paid for, so outside `data/cache/` and never evicted; untracked because thinking can paraphrase article text. |
 | `data/cache/http.sqlite` | no | Response cache, so a repeated fetch makes no network requests. |
 | `data/cache/bundles/<pmcid>/` | no | Supplementary files and figure images, shared across snapshots. The endpoint they come from fails or stalls for most requests, so a successful download is reused by every later run rather than re-attempted. |
 | `data/curated/` | yes | Hand-labelled artefacts, the triage decision log, figure transcriptions, challenge verdicts, and `ledger.jsonl`. Append-only with a union merge driver, folded by `written_at`, so line order never changes the result. |

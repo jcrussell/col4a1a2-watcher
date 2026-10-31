@@ -1,4 +1,9 @@
 {
+  "*.response.json": {
+    "format": "json",
+    "model": "ApiResponse",
+    "schema": "schemas/response.schema.json"
+  },
   "challenges.jsonl": {
     "format": "jsonl",
     "model": "ChallengeRow",

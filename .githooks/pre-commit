@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Integrity gate: keys, foreign keys, append-only logs, then the offline tests.
+# Enable once per clone:   git config core.hooksPath .githooks
+# A deliberate rewrite of a tracked log (a migration) needs
+#   COL4A1A2_ALLOW_REWRITE=1 git commit ...
+# and a note in docs/measurements.md saying what changed and why.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+export PATH="$HOME/.local/bin:$PATH"
+
+# `check` reads the working tree, so the working tree must be what is committed.
+if ! git diff --quiet -- data/curated schemas; then
+    echo "pre-commit: data/curated/ or schemas/ has unstaged changes; stage or stash them" >&2
+    echo "            so the check sees exactly what is being committed." >&2
+    exit 1
+fi
+
+uv run --quiet col4a1a2 check
+uv run --quiet pytest -q

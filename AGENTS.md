@@ -33,6 +33,18 @@ Instructions for anyone, human or agent, working in this repository.
 - **Figures are transcribed before extraction, never passed as images to it.** An image has no string for grounding to match, so a fact read straight from one could never be verified. `extract/figures.py` turns a figure into text first, clearly labelled as machine-generated.
 - **Claude's own spend is explicit.** Triage uses Haiku on title and abstract only; extraction uses Opus on full text. Decisions and extractions are both cached so that re-running costs nothing. Before adding a model call to a loop, work out what it costs over the full corpus and say so.
 
+## Integrity
+
+The files are a small database, so they get the few guarantees a database would give. Enable the hook once per clone: `git config core.hooksPath .githooks`.
+
+- **`uv run col4a1a2 check` is the first thing to run after any hand edit, merge or migration.** It validates every row, finds torn lines, duplicate rows and dangling PMIDs, confirms each challenge still matches the records it reviewed, and confirms every extraction the ledger records exists in a snapshot. The pre-commit hook runs it and the tests.
+- **Tracked logs are append-only.** `ledger`, `triage`, `figures`, `challenges` and `discovery` must extend their `HEAD` version byte for byte. A deliberate rewrite is a migration: commit it with `COL4A1A2_ALLOW_REWRITE=1` and say in `docs/measurements.md` what changed and why. Even then `check` refuses a ledger rewrite that loses a paper or a triage verdict, which is what the first attempt at squashing the prompt versions did to 4 papers and 127 verdicts.
+- **Data before index.** Write the result row, then the ledger event. A crash between them leaves a result the ledger does not know about (a warning) rather than a ledger entry pointing at nothing, which would make resume skip a paper that has no result.
+- **One writer at a time.** Writing verbs hold `data/.lock`; a second run exits naming the PID that holds it.
+- **Writes are atomic or single-line.** `jsonl.write` and `schemas.write_document` write a temp file and rename it; `jsonl.append` writes one line and refuses to append after a torn one. Never open a data file for writing yourself.
+- **Every Claude call goes through `extract/llm.py`.** It archives the raw response under `data/responses/` before validating it, so a response that fails to parse can still be read, and an identical request is answered from disk for free. Responses from before 2026-10-31 were never kept; the archive starts there.
+- **Model-derived rows carry provenance** (`model` as served, `requested_model`, `effort`, `written_at`), and caches and resume key on `requested_model`. "Current" means this prompt version and the configured model; rows from `extract --model X` sit alongside without entering the table, and only the configured model writes extraction events to the ledger. `--no-llm-cache` calls again and appends; the newest row for a key wins.
+
 ## Decisions already made, with reasons
 
 Do not re-propose these without new evidence.

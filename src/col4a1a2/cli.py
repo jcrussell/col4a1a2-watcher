@@ -1006,6 +1006,12 @@ def latest_extractions(path: Path, st: Settings) -> list[dict]:
     return list(by_pmid.values())
 
 
+def cmd_check(a: argparse.Namespace) -> int:
+    from col4a1a2 import check
+
+    return check.run(a.settings, repo=REPO, as_json=a.json)
+
+
 def cmd_show(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
     rows = latest_extractions(snap / "extractions.jsonl", a.settings)
@@ -1055,6 +1061,41 @@ def cmd_list(a: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------- main
+
+# Verbs that write to data/. They take `Settings.lock_file` so two runs never
+# interleave appends or race on a resume decision; read-only verbs skip it.
+WRITING_VERBS = frozenset({"fetch-papers", "extract", "challenge", "review"})
+
+
+class LockHeld(RuntimeError):
+    pass
+
+
+def hold_lock(path: Path):
+    """Take an exclusive, non-blocking lock and write our PID into the file.
+
+    The OS drops the lock when the process dies, however it dies, so there is
+    no stale-lock cleanup. Returns the open file, which must stay referenced
+    for as long as the lock is needed.
+    """
+    import fcntl
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        f.seek(0)
+        holder = f.read().strip() or "unknown"
+        f.close()
+        raise LockHeld(f"another col4a1a2 run (pid {holder}) is writing to {path.parent}; "
+                       "wait for it to finish") from None
+    f.seek(0)
+    f.truncate()
+    f.write(str(os.getpid()))
+    f.flush()
+    return f
+
 
 # Named for the LLM so nobody reads it as "ignore the HTTP cache": that would
 # re-download every article, which `http.py` exists to prevent.
@@ -1139,6 +1180,11 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--tsv", help="also write the folded ledger to this TSV")
     g.set_defaults(func=cmd_ledger)
 
+    k = sub.add_parser("check", parents=[common],
+                       help="verify keys, foreign keys and append-only logs (run by the pre-commit hook)")
+    k.add_argument("--json", action="store_true", help="one finding per line as JSON")
+    k.set_defaults(func=cmd_check)
+
     s = sub.add_parser("show", parents=[common], help="print extractions in a snapshot")
     s.add_argument("--snapshot")
     s.add_argument("--pmid")
@@ -1150,6 +1196,12 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
+    if a.cmd in WRITING_VERBS:
+        try:
+            lock = hold_lock(a.settings.lock_file)  # noqa: F841  (held until return)
+        except LockHeld as e:
+            print(str(e), file=sys.stderr)
+            return 3
     return a.func(a)
 
 
