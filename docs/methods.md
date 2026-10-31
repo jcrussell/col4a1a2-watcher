@@ -6,7 +6,9 @@ How a paper becomes rows in the evidence table. Field-level rules are in `docs/c
 
 Two searches run for each window and the union of PMIDs is taken.
 
-The Europe PMC query requires the gene to be named in the **title or abstract**. An unrestricted full-text match returns roughly ten times as many papers, mostly cancer, fibrosis and omics work that lists the gene in passing. PubTator 3 contributes papers where it tagged both the gene and a variant mention, which catches clinical papers that name the gene only in the body.
+The Europe PMC query requires COL4A1, COL4A2 or one of the three disease names to appear in the **title or abstract**. An unrestricted full-text match returns roughly ten times as many papers, mostly cancer, fibrosis and omics work that lists the gene in passing.
+
+The disease names are there because the gene symbols alone have a measured blind spot: 16 papers say "Gould syndrome", PADMAL or "HANAC syndrome" and never name the gene, including a 2026 anaesthetic case report on a child with Gould syndrome, a 2026 retinal imaging series in HANAC, a 2015 HANAC case and the 2009 PADMAL MRI series. The acronyms are matched as phrases: a bare HANAC also matches plant NAC transcription-factor papers and a 1950 laboratory method. Protein-name clauses were measured and rejected -- "collagen type IV alpha 1" and its variants add 63 papers for one relevant hit already in the corpus. PubTator 3 contributes papers where it tagged both the gene and a variant mention, which catches clinical papers that name the gene only in the body.
 
 PubTator returns PMIDs with no open-access status and no PMCID, so each
 PubTator-only PMID is looked up in Europe PMC before the open-access filter can

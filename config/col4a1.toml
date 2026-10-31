@@ -13,10 +13,33 @@ contact_email = "joncrussell@gmail.com"
 user_agent = "col4a1-watcher/0.1 (https://github.com/joncrussell/col4a1; joncrussell@gmail.com)"
 
 [europepmc]
-# Precision first: the gene must be named in the title or abstract. A full-text
-# match on COL4A1 pulls in cancer and fibrosis papers that list the gene in
-# passing. Measured 2026-10-30: 1,468 papers, 645 of them open access.
-query = "(TITLE:COL4A1 OR TITLE:COL4A2 OR ABSTRACT:COL4A1 OR ABSTRACT:COL4A2)"
+# Title or abstract, never full text: a full-text match on COL4A1 pulls in ten
+# times as many papers, mostly cancer, fibrosis and omics work that lists the
+# gene in passing.
+#
+# Beyond the two gene symbols this matches the three disease names, because the
+# symbol query has a measured blind spot: 16 papers say "Gould syndrome",
+# PADMAL or "HANAC syndrome" and never name the gene, and among them are a 2026
+# anaesthetic case report on a child with Gould syndrome, retinal imaging in
+# HANAC, and the 2009 PADMAL MRI series -- exactly the paper type this project
+# exists for.
+#
+# The acronyms must stay phrases. A bare HANAC matches plant NAC
+# transcription-factor papers and a 1950 laboratory method; "HANAC syndrome"
+# matches neither.
+#
+# Protein-name clauses ("collagen type IV alpha 1" and the rest) were measured
+# and rejected: they add 63 papers for one relevant hit we already hold, nearly
+# all of it collagen-IV cell biology.
+#
+# Measured 2026-10-31: symbols alone 1,469 papers; with the disease names
+# 1,485, so +16, of which 3 are open access. The earlier "645 open access"
+# figure in this file was an artefact of the broken PMID lookup (see
+# docs/measurements.md) and is not comparable.
+#
+# Editing this string changes `query_hash` and so re-opens every discovery
+# slice, by design: stale coverage must not be left behind silently.
+query = '(TITLE:COL4A1 OR TITLE:COL4A2 OR ABSTRACT:COL4A1 OR ABSTRACT:COL4A2 OR TITLE:"Gould syndrome" OR ABSTRACT:"Gould syndrome" OR TITLE:PADMAL OR ABSTRACT:PADMAL OR TITLE:"HANAC syndrome" OR ABSTRACT:"HANAC syndrome")'
 page_size = 100
 
 [pubtator]

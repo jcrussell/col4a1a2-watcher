@@ -274,3 +274,35 @@ disposition, the per-run count goes in the manifest as
 `col4a1 ledger` reports `kept_not_extracted`, which found PMID 36360323 --
 triage-kept, 63,613 characters of full text fetched, sitting in a snapshot that
 was never extracted. One paper of 133, known to the ledger, read by nothing.
+
+## What the query can and cannot see (2026-10-31)
+
+Both genes are covered at every stage -- Europe PMC query, both PubTator
+queries, NCBI gene IDs 1282 and 1284, the triage prompt, and the extraction
+schema's two-member `Gene` enum -- and COL4A2 is a third of the output, not a
+token presence: **65 of 206 records**, against 141 for COL4A1. Of 802 snapshot
+papers, 85 name COL4A1 in the title, 33 name COL4A2 and 13 name both.
+
+The symbol query's blind spot, measured against the live index:
+
+| Query | Hits | Beyond the symbols | Open access |
+|---|---|---|---|
+| Gene symbols only | 1,469 | -- | -- |
+| Disease names as phrases | 63 | **16** (15 new to us) | 3 |
+| Protein names ("collagen type IV alpha 1", …) | 159 | 63 (1 new and relevant) | 12 |
+| Adopted: symbols + disease names | 1,485 | 16 | 3 |
+
+The disease-name clause earns its place on content, not count: those 16 include
+a 2026 anaesthetic case report on a child with Gould syndrome, 2026 retinal
+imaging in HANAC, a 2015 HANAC case, the 2019 HANAC series and the 2009 PADMAL
+MRI series. The protein-name clause does not: 63 papers for one relevant hit
+already held, the rest collagen-IV cell biology.
+
+The acronyms must be phrases. A bare `HANAC` matches plant NAC
+transcription-factor papers and a 1950 method for determining cell counts.
+
+What still cannot be reached this way is a paper that names neither the symbol
+nor a disease name in its title or abstract and mentions the gene only in the
+body. PubTator is the mitigation, since it tags gene concepts by synonym across
+the full text -- which is also why the enrichment lookup silently dropping 98%
+of PubTator PMIDs mattered so much.
