@@ -31,6 +31,17 @@
   "additionalProperties": false,
   "description": "One row of triage.jsonl.",
   "properties": {
+    "effort": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Effort"
+    },
     "model": {
       "title": "Model",
       "type": "string"
@@ -47,18 +58,29 @@
       "title": "Reason",
       "type": "string"
     },
+    "requested_model": {
+      "title": "Requested Model",
+      "type": "string"
+    },
     "triage_prompt_version": {
       "title": "Triage Prompt Version",
       "type": "string"
     },
     "usage": {
       "$ref": "#/$defs/Usage"
+    },
+    "written_at": {
+      "title": "Written At",
+      "type": "string"
     }
   },
   "required": [
+    "model",
+    "requested_model",
+    "effort",
+    "written_at",
     "pmid",
     "triage_prompt_version",
-    "model",
     "read_full_text",
     "reason",
     "usage"

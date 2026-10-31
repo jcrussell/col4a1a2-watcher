@@ -19,12 +19,13 @@ rather than by signal. Recall is what matters here, so we prefer the model.
 Cost: $0.000103 per paper measured over 742 decisions, so about 8 cents for
 the whole gate. (This said $0.0012 for some weeks by applying Haiku 4.5 prices
 to a Haiku 5.5 model.)
-Decisions are cached by (pmid, prompt version) so refetching is free.
+Decisions are cached by (pmid, prompt version, requested model) so refetching
+is free and a second model's verdicts sit alongside instead of hiding behind
+the first's.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -33,6 +34,8 @@ from pydantic import BaseModel, Field
 
 TRIAGE_PROMPT_VERSION = "t1"
 TRIAGE_MODEL = "claude-haiku-5-5"
+TRIAGE_EFFORT = "low"
+MAX_TRIAGE_TOKENS = 2000
 
 log = logging.getLogger("col4a1a2")
 
@@ -53,60 +56,62 @@ class TriageDecision(BaseModel):
 
 
 class TriageCache:
-    """Append-only JSONL cache of decisions, keyed by (pmid, prompt version)."""
+    """Append-only JSONL cache of decisions, keyed by (pmid, prompt version, requested model).
+
+    A later row with the same key wins, which is what a `--no-llm-cache` re-run
+    relies on.
+    """
 
     def __init__(self, path: Path):
         self.path = path
-        self.entries: dict[tuple[str, str], dict] = {}
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").split("\n"):
-                if not line.strip():
-                    continue
-                try:
-                    r = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                self.entries[(r["pmid"], r.get("triage_prompt_version", ""))] = r
+        self.entries: dict[tuple[str, str, str], dict] = {}
+        for r in jsonl.read_tolerant(path, what="triage cache"):
+            self.entries[(r["pmid"], r.get("triage_prompt_version", ""), r.get("requested_model", ""))] = r
         self.hits = 0
         self.misses = 0
 
-    def get(self, pmid: str) -> dict | None:
-        r = self.entries.get((pmid, TRIAGE_PROMPT_VERSION))
+    def get(self, pmid: str, requested_model: str) -> dict | None:
+        r = self.entries.get((pmid, TRIAGE_PROMPT_VERSION, requested_model))
         if r is not None:
             self.hits += 1
         return r
 
-    def put(self, pmid: str, decision: TriageDecision, usage: dict) -> dict:
+    def put(self, pmid: str, decision: TriageDecision, usage: dict, provenance: dict) -> dict:
         r = {
             "pmid": pmid,
             "triage_prompt_version": TRIAGE_PROMPT_VERSION,
-            "model": TRIAGE_MODEL,
+            **provenance,
             "read_full_text": decision.read_full_text,
             "reason": decision.reason,
             "usage": usage,
         }
-        self.entries[(pmid, TRIAGE_PROMPT_VERSION)] = r
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(jsonl.dumps(r) + "\n")
+        jsonl.append(self.path, r)
+        self.entries[(pmid, TRIAGE_PROMPT_VERSION, provenance["requested_model"])] = r
         self.misses += 1
         return r
 
 
-def triage_paper(client, title: str, abstract: str | None, *, model: str = TRIAGE_MODEL) -> tuple[TriageDecision, dict]:
-    """One Haiku call on title + abstract. Raises on API failure; caller decides."""
+def triage_paper(client, title: str, abstract: str | None, *, model: str = TRIAGE_MODEL,
+                 effort: str = TRIAGE_EFFORT, archive=None,
+                 refresh: bool = False) -> tuple[TriageDecision, dict, dict]:
+    """One Haiku call on title + abstract. Raises on API failure; caller decides.
+
+    Returns the decision, its usage, and the provenance every cached row carries.
+    """
+    import hashlib
+
+    from col4a1a2.extract.llm import call
+
     user = f"TITLE: {title or ''}\n\nABSTRACT: {abstract or '(no abstract available)'}"
-    resp = client.beta.messages.parse(
-        model=model,
-        max_tokens=2000,
-        output_config={"effort": "low"},
+    reply = call(
+        client, site="triage", model=model, effort=effort, max_tokens=MAX_TRIAGE_TOKENS,
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user}],
-        output_format=TriageDecision,
+        output_format=TriageDecision, fallbacks=False, archive=archive, refresh=refresh,
+        request={"prompt_version": TRIAGE_PROMPT_VERSION,
+                 "input_sha256": hashlib.sha256(user.encode("utf-8")).hexdigest()},
     )
-    usage = {
-        "input": resp.usage.input_tokens,
-        "output": resp.usage.output_tokens,
-        "cache_read": getattr(resp.usage, "cache_read_input_tokens", 0) or 0,
-    }
-    return resp.parsed_output, usage
+    if reply.parsed is None:
+        raise RuntimeError(f"no triage decision (stop_reason={reply.stop_reason})")
+    usage = {k: reply.usage[k] for k in ("input", "output", "cache_read")}
+    return reply.parsed, usage, reply.provenance()

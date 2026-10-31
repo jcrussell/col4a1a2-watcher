@@ -78,6 +78,17 @@
       "default": null,
       "title": "Detail"
     },
+    "effort": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Effort"
+    },
     "error": {
       "anyOf": [
         {
@@ -117,21 +128,32 @@
       ],
       "default": null
     },
+    "requested_model": {
+      "title": "Requested Model",
+      "type": "string"
+    },
     "text_sha256": {
       "title": "Text Sha256",
       "type": "string"
     },
     "usage": {
       "$ref": "#/$defs/ChallengeUsage"
+    },
+    "written_at": {
+      "title": "Written At",
+      "type": "string"
     }
   },
   "required": [
+    "model",
+    "requested_model",
+    "effort",
+    "written_at",
     "pmid",
     "text_sha256",
     "records_digest",
     "challenge_prompt_version",
     "extract_prompt_version",
-    "model",
     "usage"
   ],
   "title": "ChallengeRow",

@@ -71,6 +71,9 @@ class Settings:
     cache_dir: Path
     snapshot_root: Path
     curated_dir: Path
+    # Raw API responses we paid for. Outside cache_dir on purpose: eviction
+    # must never delete one.
+    responses_dir: Path
 
     anthropic_max_retries: int
     anthropic_timeout_s: float
@@ -103,6 +106,11 @@ class Settings:
     @property
     def bundle_store(self) -> Path:
         return self.cache_dir / "bundles"
+
+    @property
+    def lock_file(self) -> Path:
+        """Held by any command that writes, so two runs never interleave."""
+        return self.curated_dir.parent / ".lock"
 
     @property
     def triage_cache(self) -> Path:
@@ -189,6 +197,7 @@ def load_settings(
         cache_dir=_resolve(root, str(cache_dir)) if cache_dir else _resolve(root, paths.get("cache_dir", "data/cache")),
         snapshot_root=_resolve(root, paths.get("snapshot_root", "data/raw")),
         curated_dir=_resolve(root, paths.get("curated_dir", "data/curated")),
+        responses_dir=_resolve(root, paths.get("responses_dir", "data/responses")),
         anthropic_max_retries=int(ant.get("max_retries", 8)),
         anthropic_timeout_s=float(ant.get("timeout_s", 120.0)),
         extract_model=models.get("extract_model", "claude-opus-5-5"),

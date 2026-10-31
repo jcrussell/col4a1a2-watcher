@@ -125,28 +125,31 @@ def test_cache_keys_on_both_text_and_records(tmp_path):
     rep = check(ch, recs, TEXT)
     c = ChallengeCache(tmp_path / "c.jsonl")
     d = records_digest(recs)
-    assert c.get("textA", d) is None
-    c.put(pmid="1", text_sha256="textA", records_digest=d, model="m",
-          challenge=ch, report=rep, usage={"input": 1, "output": 2, "cache_read": 0})
+    assert c.get("textA", d, "m") is None
+    c.put(pmid="1", text_sha256="textA", records_digest=d,
+          challenge=ch, report=rep, usage={"input": 1, "output": 2, "cache_read": 0, "effort": "low"},
+          provenance={"model": "m", "requested_model": "m", "effort": "low", "written_at": "2026-10-31T00:00:00+00:00"})
 
     again = ChallengeCache(tmp_path / "c.jsonl")
-    assert again.get("textA", d) is not None
-    assert again.get("textB", d) is None, "different text must miss"
-    assert again.get("textA", "otherdigest") is None, "different records must miss"
+    assert again.get("textA", d, "m") is not None
+    assert again.get("textB", d, "m") is None, "different text must miss"
+    assert again.get("textA", "otherdigest", "m") is None, "different records must miss"
+    assert again.get("textA", d, "other-model") is None, "a second model must not see the first's verdict"
 
 
 def test_cache_misses_on_a_bumped_challenge_version(tmp_path):
     path = tmp_path / "c.jsonl"
     path.write_text(json.dumps({
         "pmid": "1", "text_sha256": "t", "records_digest": "d",
-        "challenge_prompt_version": "c0", "report": {}, "challenge": {},
+        "challenge_prompt_version": "c0", "requested_model": "m", "report": {}, "challenge": {},
     }) + "\n")
-    assert ChallengeCache(path).get("t", "d") is None
+    assert ChallengeCache(path).get("t", "d", "m") is None
     path.write_text(json.dumps({
         "pmid": "1", "text_sha256": "t", "records_digest": "d",
-        "challenge_prompt_version": CHALLENGE_PROMPT_VERSION, "report": {}, "challenge": {},
+        "challenge_prompt_version": CHALLENGE_PROMPT_VERSION, "requested_model": "m",
+        "report": {}, "challenge": {},
     }) + "\n")
-    assert ChallengeCache(path).get("t", "d") is not None
+    assert ChallengeCache(path).get("t", "d", "m") is not None
 
 
 def test_malformed_cache_line_is_skipped(tmp_path):
@@ -173,8 +176,9 @@ def test_challenge_sends_the_records_and_the_fallback_beta(fake_anthropic):
     recs = slim_records("1", [_variant()], [])
     ch = _ch(verdicts=[RecordVerdict(record_key=recs[0]["record_key"], verdict=Verdict.upheld)])
     client = fake_anthropic(default_output=ch)
-    out, usage = challenge_paper(client, pmid="1", source_text=TEXT, records=recs, model="m")
-    assert out is ch
+    out, usage, prov = challenge_paper(client, pmid="1", source_text=TEXT, records=recs, model="m")
+    assert out == ch
+    assert prov["requested_model"] == "m" and prov["effort"] == "medium"
     sent = client.calls[0]
     assert sent["betas"] and sent["fallbacks"] == "default"
     assert sent["output_config"]["effort"] == "medium"
@@ -183,13 +187,14 @@ def test_challenge_sends_the_records_and_the_fallback_beta(fake_anthropic):
     assert usage["effort"] == "medium"
 
 
-def test_the_fake_client_exercises_the_beta_branch_of_extract_paper(fake_anthropic):
-    """extract/client.py inspects stream()'s signature for `betas` and
-    `fallbacks`. A fake declared `def stream(self, **kw)` would silently
-    exercise only the stable branch forever."""
-    from col4a1a2.extract.client import _beta_parse_supports_fallbacks
+def test_the_fake_client_exercises_the_beta_branch(fake_anthropic):
+    """llm.py inspects create() and stream() for `betas` and `fallbacks`. A
+    fake declared `def create(self, **kw)` would silently exercise only the
+    stable branch forever."""
+    from col4a1a2.extract.llm import _supports_fallbacks
 
-    assert _beta_parse_supports_fallbacks(fake_anthropic()) is True
+    assert _supports_fallbacks(fake_anthropic(), stream=True) is True
+    assert _supports_fallbacks(fake_anthropic(), stream=False) is True
 
 
 def test_extract_paper_is_now_covered_at_all(fake_anthropic, fake_response):
@@ -201,7 +206,8 @@ def test_extract_paper_is_now_covered_at_all(fake_anthropic, fake_response):
     ex = PaperExtraction(pmid="1", paper_type=PaperType.case_report,
                          input_was_abstract_only=False, has_variant_level_data=False)
     res = extract_paper(fake_anthropic(default_output=ex), p, model="m")
-    assert res.extraction is ex and res.stop_reason == "end_turn"
+    assert res.extraction == ex and res.stop_reason == "end_turn"
+    assert res.requested_model == "m" and res.written_at
 
     client = fake_anthropic(fake_response(parsed_output=None, stop_reason="refusal"))
     with pytest.raises(ExtractionRefused):

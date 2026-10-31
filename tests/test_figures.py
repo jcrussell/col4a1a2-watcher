@@ -94,13 +94,14 @@ def test_cache_keys_on_image_content_and_prompt_version(tmp_path):
     t = FigureTranscription(figure_label="Figure 4", items=["c.1A>T"], legible=True,
                             contains_variant_labels=True)
     digest = c.digest(b"imagebytes")
-    assert c.get(digest) is None
+    assert c.get(digest, "m") is None
     c.put(pmcid="PMC1", fig=_fig("F4", "Figure 4"), image_sha256=digest, transcription=t,
-          usage={"input": 300, "output": 100})
+          usage={"input": 300, "output": 100}, provenance={"model": "m", "requested_model": "m", "effort": "low", "written_at": "2026-10-31T00:00:00+00:00"})
 
     reread = FigureCache(tmp_path / "ft.jsonl")
-    got = reread.get(digest)
+    assert reread.get(digest, "other-model") is None, "a second model must not see the first's reading"
+    got = reread.get(digest, "m")
     assert got is not None and got["figure_prompt_version"] == FIGURE_PROMPT_VERSION
     assert FigureTranscription.model_validate(got["transcription"]).items == ["c.1A>T"]
     # Different image bytes must miss, so a replaced figure is re-read.
-    assert reread.get(c.digest(b"otherbytes")) is None
+    assert reread.get(c.digest(b"otherbytes"), "m") is None

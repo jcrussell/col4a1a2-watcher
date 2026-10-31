@@ -4,10 +4,14 @@
 is what has kept `triage_paper`, `transcribe_figure`, `extract_paper` and
 `challenge_paper` untested until now.
 
-One non-obvious requirement: `extract/client.py` decides which endpoint to use
-by inspecting `client.beta.messages.stream`'s signature for `betas` and
-`fallbacks`. A fake declared `def stream(self, **kw)` would silently exercise
-only the stable branch forever, so the signature is declared explicitly.
+One non-obvious requirement: `extract/llm.py` decides which endpoint to use
+by inspecting `client.beta.messages.create` and `.stream` for `betas` and
+`fallbacks`. A fake declared `def create(self, **kw)` would silently exercise
+only the stable branch forever, so the signatures are declared explicitly.
+
+Responses are dumped the way the SDK's are (`model_dump`), with the canned
+output as the JSON text block, because `llm.call` archives and then parses
+that text rather than trusting a pre-parsed object.
 """
 
 from __future__ import annotations
@@ -42,6 +46,20 @@ class FakeResponse:
     def get_final_message(self):
         return self
 
+    def model_dump(self, **_kw) -> dict:
+        out = self.parsed_output
+        if out is None:
+            content = []
+        else:
+            text = out if isinstance(out, str) else out.model_dump_json()
+            content = [{"type": "text", "text": text}]
+        return {"content": content, "stop_reason": self.stop_reason,
+                "stop_details": self.stop_details, "model": self.model,
+                "usage": {"input_tokens": self.usage.input_tokens,
+                          "output_tokens": self.usage.output_tokens,
+                          "cache_read_input_tokens": self.usage.cache_read_input_tokens,
+                          "cache_creation_input_tokens": self.usage.cache_creation_input_tokens}}
+
 
 class _Messages:
     def __init__(self, owner: "FakeAnthropic"):
@@ -55,9 +73,12 @@ class _Messages:
             return self._owner.responses.pop(0)
         return FakeResponse(parsed_output=self._owner.default_output)
 
-    # Signature declared so `_beta_parse_supports_fallbacks` sees both names
-    # and the beta branch is actually exercised.
+    # Signatures declared so `llm._supports_fallbacks` sees both names and the
+    # beta branch is actually exercised.
     def stream(self, *, betas=None, fallbacks=None, **kw):
+        return self._next({**kw, "betas": betas, "fallbacks": fallbacks})
+
+    def create(self, *, betas=None, fallbacks=None, **kw):
         return self._next({**kw, "betas": betas, "fallbacks": fallbacks})
 
     def parse(self, *, betas=None, fallbacks=None, **kw):
@@ -97,6 +118,20 @@ def fake_response():
 
 
 # ---------------------------------------------------------------- row fixtures
+
+def _configured_extract_model() -> str:
+    from pathlib import Path
+
+    from col4a1a2.config import load_settings
+
+    return load_settings(Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml").extract_model
+
+
+# What every model-derived row carries. The requested model is the configured
+# one, so rows built here count as current for commands run on that config.
+EXTRACT_MODEL = _configured_extract_model()
+PROVENANCE = {"model": EXTRACT_MODEL, "requested_model": EXTRACT_MODEL, "effort": "high",
+              "written_at": "2026-10-31T00:00:00+00:00"}
 #
 # Built through the real Pydantic models rather than written out by hand, so a
 # fixture cannot drift from the schema it is meant to represent. Hand-written
@@ -123,7 +158,7 @@ def make_extraction_row(pmid="1", variants=None, **over) -> dict:
     ex = PaperExtraction(pmid=pmid, paper_type=PaperType.case_report,
                          input_was_abstract_only=False, has_variant_level_data=True)
     row = {
-        "pmid": pmid, "pmcid": f"PMC{pmid}", "model": "test", "prompt_version": PROMPT_VERSION,
+        "pmid": pmid, "pmcid": f"PMC{pmid}", **PROVENANCE, "prompt_version": PROMPT_VERSION,
         "text_sha256": "h", "schema_version": "1", "stop_reason": "end_turn",
         "usage": {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0},
         "grounding": {"total": 1, "grounded": 1, "ungrounded": [], "low_confidence": [],
@@ -146,9 +181,11 @@ def make_paper_row(pmid="1", **over) -> dict:
 
 
 def make_challenge_row(pmid="1", **over) -> dict:
+    from col4a1a2.extract.challenge import CHALLENGE_PROMPT_VERSION
+
     row = {"pmid": pmid, "text_sha256": "h", "records_digest": "d",
-           "challenge_prompt_version": "c1", "extract_prompt_version": "v1",
-           "model": "test",
+           "challenge_prompt_version": CHALLENGE_PROMPT_VERSION, "extract_prompt_version": "v1",
+           **PROVENANCE,
            "usage": {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0,
                      "effort": "medium"},
            "challenge": {"pmid": pmid, "duplicate_record_keys": [], "missed_variants": [],

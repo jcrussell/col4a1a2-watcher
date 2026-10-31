@@ -133,11 +133,11 @@ def test_needs_extraction_keys_on_freshness_not_stage(tmp_path):
     This is the resume bug already fixed once inside cmd_extract, one layer up.
     """
     led = Ledger(tmp_path / "l.jsonl")
-    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v2", attempts=0)
-    assert led.needs_extraction("1", "aaa", "v2") is False
-    assert led.needs_extraction("1", "bbb", "v2") is True, "grown text must be re-extracted"
-    assert led.needs_extraction("1", "aaa", "v3") is True, "a new prompt version re-extracts"
-    assert led.needs_extraction("unseen", "aaa", "v2") is True
+    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v2", requested_model="m", attempts=0)
+    assert led.needs_extraction("1", "aaa", "v2", "m") is False
+    assert led.needs_extraction("1", "bbb", "v2", "m") is True, "grown text must be re-extracted"
+    assert led.needs_extraction("1", "aaa", "v3", "m") is True, "a new prompt version re-extracts"
+    assert led.needs_extraction("unseen", "aaa", "v2", "m") is True
 
 
 def test_a_deterministically_failing_paper_stops_being_selected(tmp_path):
@@ -146,8 +146,8 @@ def test_a_deterministically_failing_paper_stops_being_selected(tmp_path):
     led = Ledger(tmp_path / "l.jsonl")
     for n in (1, 2, 3):
         led.record(identity="1", stage="fetched", text_sha256="aaa",
-                   prompt_version="v2", attempts=n, last_error="ExtractionTruncated")
-    assert led.needs_extraction("1", "aaa", "v2", max_attempts=3) is False
+                   prompt_version="v2", requested_model="m", attempts=n, last_error="ExtractionTruncated")
+    assert led.needs_extraction("1", "aaa", "v2", "m", max_attempts=3) is False
     assert led.summary()["wedged"] == 1
 
 
@@ -186,10 +186,10 @@ def test_an_unchanged_candidate_is_not_re_appended(tmp_path):
 
 def test_in_memory_state_tracks_appends_within_one_run(tmp_path):
     led = Ledger(tmp_path / "l.jsonl")
-    led.record(identity="1", stage="fetched", text_sha256="aaa", prompt_version="v2")
-    assert led.needs_extraction("1", "aaa", "v2") is True, "fetched is not extracted"
-    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v2", attempts=0)
-    assert led.needs_extraction("1", "aaa", "v2") is False
+    led.record(identity="1", stage="fetched", text_sha256="aaa", prompt_version="v2", requested_model="m")
+    assert led.needs_extraction("1", "aaa", "v2", "m") is True, "fetched is not extracted"
+    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v2", requested_model="m", attempts=0)
+    assert led.needs_extraction("1", "aaa", "v2", "m") is False
 
 
 def test_a_repeated_triage_verdict_is_not_re_appended(tmp_path):
@@ -222,9 +222,9 @@ def test_a_challenged_paper_is_not_re_extracted(tmp_path):
     `challenged`. Resume keyed on `stage == "extracted"` missed every one of
     them and would have re-extracted the whole corpus next month."""
     led = Ledger(tmp_path / "l.jsonl")
-    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v1", attempts=0)
+    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v1", requested_model="m", attempts=0)
     led.record(identity="1", stage="challenged")
-    assert Ledger(tmp_path / "l.jsonl").needs_extraction("1", "aaa", "v1") is False
+    assert Ledger(tmp_path / "l.jsonl").needs_extraction("1", "aaa", "v1", "m") is False
     assert has_extraction(Ledger(tmp_path / "l.jsonl").fold()["1"])
 
 
@@ -237,3 +237,26 @@ def test_a_retired_disposition_is_rejected_on_write(tmp_path):
     with pytest.raises(ValidationError):
         led.record(identity="1", stage="queued")
     assert not (tmp_path / "l.jsonl").exists()
+
+
+def test_grown_text_is_re_extracted_even_after_a_challenge(tmp_path):
+    """The fold merges every event, so a later `fetched` event at a new hash
+    overwrote `text_sha256` while stage and prompt version stayed from the old
+    extraction: a paper whose supplements had arrived read as extracted at the
+    new hash and was skipped. Resume now reads the extraction events."""
+    led = Ledger(tmp_path / "l.jsonl")
+    led.record(identity="1", stage="extracted", text_sha256="old", prompt_version="v1",
+               requested_model="m", attempts=0)
+    led.record(identity="1", stage="challenged")
+    led.record(identity="1", stage="fetched", text_sha256="grown")
+    again = Ledger(tmp_path / "l.jsonl")
+    assert again.fold()["1"]["text_sha256"] == "grown" and again.fold()["1"]["stage"] == "challenged"
+    assert again.needs_extraction("1", "grown", "v1", "m") is True
+    assert again.needs_extraction("1", "old", "v1", "m") is False
+
+
+def test_another_model_does_not_count_as_extracted(tmp_path):
+    led = Ledger(tmp_path / "l.jsonl")
+    led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v1",
+               requested_model="m", attempts=0)
+    assert led.needs_extraction("1", "aaa", "v1", "other") is True

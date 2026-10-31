@@ -18,10 +18,11 @@ import anthropic
 from col4a1a2.config import ConfigError, Settings, load_settings
 from col4a1a2.discovery import DiscoveryLog, plan as plan_slices
 from col4a1a2.extract.prompt import PaperInput
+from col4a1a2.extract.llm import Policy, ResponseArchive
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
 from col4a1a2 import jsonl, schemas
 from col4a1a2.http import PoliteClient
-from col4a1a2.ledger import Ledger, has_extraction
+from col4a1a2.ledger import Ledger
 from col4a1a2.sources import europepmc, ncbi, pubtator
 from col4a1a2.sources.europepmc import citation
 from col4a1a2.sources.fulltext import TextRegion, jats_inventory, jats_to_text
@@ -106,6 +107,7 @@ def _enrich(
     force_figures: bool,
     acl=None,
     fig_cache=None,
+    fig_llm=None,
 ) -> _Enrichment:
     """Fetch the article's file bundle, parse its tables, and transcribe figures.
 
@@ -200,12 +202,13 @@ def _enrich(
                 continue
             digest = fig_cache.digest(member.data)
             meta["image_sha256"] = digest
-            cached = fig_cache.get(digest)
+            cached = None if fig_llm.refresh else fig_cache.get(digest, fig_llm.model)
             if cached is None:
                 try:
-                    tr, usage = figmod.transcribe_figure(acl, member.data, mt, fig)
+                    tr, usage, prov = figmod.transcribe_figure(acl, member.data, mt, fig,
+                                                               **fig_llm.kwargs())
                     cached = fig_cache.put(pmcid=pmcid, fig=fig, image_sha256=digest,
-                                           transcription=tr, usage=usage)
+                                           transcription=tr, usage=usage, provenance=prov)
                 except Exception as exc:
                     # A figure is optional enrichment. Letting one bad image abort
                     # the fetch would discard every paper gathered so far, along
@@ -373,6 +376,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         log.warning("ANTHROPIC_API_KEY not set; falling back to keyword triage")
     tcache = TriageCache(st.triage_cache)
     acl = make_anthropic(st) if use_llm else None
+    archive = ResponseArchive(st.responses_dir)
+    triage_llm = Policy(st.triage_model, st.triage_effort, archive, refresh=a.no_llm_cache)
+    fig_llm = Policy(st.figure_model, st.figure_effort, archive, refresh=a.no_llm_cache)
 
     triaged: list[tuple[europepmc.PaperMeta, list[dict], dict]] = []
     for m in metas:
@@ -393,11 +399,13 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                         or (tr["title_abstract_mention"] and tr["clinical_keyword"]))
         tr["keyword_keep"] = keyword_keep
         if use_llm:
-            cached = tcache.get(m.pmid)
+            cached = None if triage_llm.refresh else tcache.get(m.pmid, triage_llm.model)
             if cached is None:
                 try:
-                    decision, usage = triage_paper(acl, m.title, m.abstract)
-                    cached = tcache.put(m.pmid, decision, usage)
+                    decision, usage, prov = triage_paper(acl, m.title, m.abstract,
+                                                         **triage_llm.kwargs())
+                    # Data before index: the verdict is cached before the ledger records it.
+                    cached = tcache.put(m.pmid, decision, usage, prov)
                 except Exception as e:  # never let triage abort a fetch
                     log.warning("triage failed for %s (%s); keeping paper", m.pmid, type(e).__name__)
                     cached = {"read_full_text": True, "reason": f"triage error: {type(e).__name__}",
@@ -477,6 +485,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                         client, pt, xml, m.pmcid, st.bundle_store / m.pmcid,
                         want_supplements=want_supplements, want_figures=want_figures,
                         force_figures=a.figures, acl=acl, fig_cache=fig_cache,
+                        fig_llm=fig_llm,
                     )
                 except Exception as exc:
                     # Enrichment is optional. Letting it raise would discard every
@@ -593,10 +602,14 @@ def cmd_extract(a: argparse.Namespace) -> int:
         return 2
     st: Settings = a.settings
     ledger = Ledger(st.curated_dir / "ledger.jsonl")
-    prior = ledger.fold()
     # argparse defaults are None so config can win; the CLI flag still beats it.
     model = a.model or st.extract_model
     effort = a.effort or st.extract_effort
+    # The ledger holds one extraction state per paper, so only the configured
+    # model writes to it. A comparison run with `--model X` writes its rows to
+    # the snapshot beside the current ones and leaves the ledger alone.
+    is_current = model == st.extract_model
+    archive = ResponseArchive(st.responses_dir)
     snap = snapshot_dir(a.snapshot, st)
     _paper_inputs.include_all = a.all
     papers = _paper_inputs(snap)
@@ -618,21 +631,22 @@ def cmd_extract(a: argparse.Namespace) -> int:
     # figure transcriptions were appended — making those additions a no-op.
     # Rows recording a failure are a log, not a result: including them would mark
     # a transiently refused paper done forever.
+    # The requested model is part of the key, so `--model X` extracts alongside
+    # the configured model's rows instead of finding them and skipping.
     done = {
         (r["pmid"], r.get("text_sha256"))
         for r in read_jsonl(out_path)
         if r.get("prompt_version") == PROMPT_VERSION and not r.get("error")
+        and r.get("requested_model") == model
     }
     # Resume across snapshots, not just within one. Without this a paper
     # extracted in last month's snapshot is re-extracted in this month's at full
     # price, which is the whole reason the bootstrap could not be split into
-    # affordable pieces. The ledger is the cross-snapshot index.
-    for ident, pr in prior.items():
-        if (pr.get("prompt_version") == PROMPT_VERSION
-                and has_extraction(pr)
-                and not pr.get("last_error")
-                and pr.get("text_sha256")):
-            done.add((ident, pr["text_sha256"]))
+    # affordable pieces. The ledger is the cross-snapshot index, and it tracks
+    # the configured model only (see `is_current` above); `needs_extraction`
+    # is the single statement of the rule.
+    if a.no_llm_cache:
+        done = set()
     texts = {p.pmid: p.text for p in papers}
     regions_by_pmid = {p.pmid: p.regions for p in papers}
 
@@ -650,67 +664,79 @@ def cmd_extract(a: argparse.Namespace) -> int:
     n_skipped = 0
     spent = 0.0
     price = st.price_for(model)
-    with out_path.open("a", encoding="utf-8") as f:
-        for p in papers:
-            text_hash = hashlib.sha256(p.text.encode("utf-8")).hexdigest()
-            if (p.pmid, text_hash) in done:
-                log.info("skip %s (already extracted at %s on identical text)", p.pmid, PROMPT_VERSION)
-                n_skipped += 1
+    for p in papers:
+        text_hash = hashlib.sha256(p.text.encode("utf-8")).hexdigest()
+        if (p.pmid, text_hash) in done or (
+                is_current and not a.no_llm_cache
+                and not ledger.needs_extraction(p.pmid, text_hash, PROMPT_VERSION, model)):
+            log.info("skip %s (already extracted at %s on identical text)", p.pmid, PROMPT_VERSION)
+            n_skipped += 1
+            continue
+        if a.budget_usd and spent >= a.budget_usd:
+            log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_ok)
+            break
+        log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
+        hits_before = archive.hits
+        try:
+            res = extract_paper(client, p, model=model, effort=effort,
+                                archive=archive, refresh=a.no_llm_cache)
+        except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
+            # One unusable paper must not abort the batch; record why and move on.
+            log.warning("%s: %s", p.pmid, e)
+            jsonl.append(out_path, {"pmid": p.pmid, "pmcid": p.pmcid, "prompt_version": PROMPT_VERSION,
+                                    "requested_model": model, "effort": effort,
+                                    "written_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                                    "text_sha256": text_hash, "error": type(e).__name__,
+                                    "detail": str(e)})
+            n_failed += 1
+            if not is_current:
                 continue
-            if a.budget_usd and spent >= a.budget_usd:
-                log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_ok)
-                break
-            log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
-            try:
-                res = extract_paper(client, p, model=model, effort=effort)
-            except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
-                # One unusable paper must not abort the batch; record why and move on.
-                log.warning("%s: %s", p.pmid, e)
-                f.write(jsonl.dumps({"pmid": p.pmid, "pmcid": p.pmcid, "prompt_version": PROMPT_VERSION,
-                                     "text_sha256": text_hash, "error": type(e).__name__,
-                                     "detail": str(e)}) + "\n")
-                f.flush()
-                n_failed += 1
-                ledger.record(identity=p.pmid, stage="fetched", snapshot=snap.name,
-                              text_sha256=text_hash, prompt_version=PROMPT_VERSION,
-                              last_error=type(e).__name__,
-                              attempts=(prior.get(p.pmid, {}).get("attempts") or 0) + 1)
-                continue
-            rep = ground(res.extraction, texts[p.pmid], regions_by_pmid.get(p.pmid, []))
-            row = {
-                "pmid": p.pmid, "pmcid": p.pmcid, "model": res.model, "prompt_version": res.prompt_version,
-                "text_sha256": text_hash,
-                "schema_version": res.schema_version, "stop_reason": res.stop_reason,
-                "usage": {"input": res.input_tokens, "output": res.output_tokens,
-                          "cache_read": res.cache_read_tokens, "cache_write": res.cache_write_tokens},
-                "grounding": {"total": rep.total_quotes, "grounded": rep.grounded_quotes,
-                              "ungrounded": rep.ungrounded, "low_confidence": rep.low_confidence_variants,
-                              "region_counts": rep.region_counts,
-                              "quote_regions": rep.quote_regions,
-                              "figure_sourced": rep.figure_sourced,
-                              "model_transcribed_only": rep.model_transcribed_only,
-                              "overconfident_transcribed": rep.overconfident_transcribed,
-                              "needs_review": rep.needs_review},
-                "extraction": json.loads(res.raw_json),
-            }
-            f.write(jsonl.dumps(row) + "\n")
-            f.flush()
-            ex = res.extraction
-            n_ok += 1
-            if price:
-                spent += price.cost(input=res.input_tokens, output=res.output_tokens,
-                                    cache_read=res.cache_read_tokens,
-                                    cache_write=res.cache_write_tokens)
+            ledger.record(identity=p.pmid, stage="fetched", snapshot=snap.name,
+                          text_sha256=text_hash, prompt_version=PROMPT_VERSION,
+                          last_error=type(e).__name__,
+                          requested_model=model,
+                          attempts=ledger.failures(p.pmid, text_hash, PROMPT_VERSION, model) + 1)
+            continue
+        rep = ground(res.extraction, texts[p.pmid], regions_by_pmid.get(p.pmid, []))
+        row = {
+            "pmid": p.pmid, "pmcid": p.pmcid, **res.provenance(), "prompt_version": res.prompt_version,
+            "text_sha256": text_hash,
+            "schema_version": res.schema_version, "stop_reason": res.stop_reason,
+            "usage": {"input": res.input_tokens, "output": res.output_tokens,
+                      "cache_read": res.cache_read_tokens, "cache_write": res.cache_write_tokens},
+            "grounding": {"total": rep.total_quotes, "grounded": rep.grounded_quotes,
+                          "ungrounded": rep.ungrounded, "low_confidence": rep.low_confidence_variants,
+                          "region_counts": rep.region_counts,
+                          "quote_regions": rep.quote_regions,
+                          "figure_sourced": rep.figure_sourced,
+                          "model_transcribed_only": rep.model_transcribed_only,
+                          "overconfident_transcribed": rep.overconfident_transcribed,
+                          "needs_review": rep.needs_review},
+            "extraction": json.loads(res.raw_json),
+        }
+        # Data before index: the result row lands before the ledger event, so
+        # a crash between them leaves an unindexed result (harmless, reported
+        # by `check`) and never an index entry pointing at nothing.
+        jsonl.append(out_path, row)
+        ex = res.extraction
+        n_ok += 1
+        # An answer replayed from the response archive cost nothing this run.
+        if price and archive.hits == hits_before:
+            spent += price.cost(input=res.input_tokens, output=res.output_tokens,
+                                cache_read=res.cache_read_tokens,
+                                cache_write=res.cache_write_tokens)
+        if is_current:
             ledger.record(identity=p.pmid, stage="extracted", snapshot=snap.name,
                           text_sha256=text_hash, prompt_version=res.prompt_version,
+                          requested_model=res.requested_model,
                           n_variants=len(ex.variants), n_grounded=rep.grounded_quotes,
                           n_ungrounded=len(rep.ungrounded), needs_review=rep.needs_review,
                           n_figure_sourced=len(rep.figure_sourced),
                           last_error=None, attempts=0)
-            print(f"{p.pmid}: {ex.paper_type.value}, variants={len(ex.variants)}, "
-                  f"quotes grounded {rep.grounded_quotes}/{rep.total_quotes}, "
-                  f"tokens in={res.input_tokens} out={res.output_tokens} cache_read={res.cache_read_tokens}"
-                  + ("  [REVIEW]" if rep.needs_review else ""))
+        print(f"{p.pmid}: {ex.paper_type.value}, variants={len(ex.variants)}, "
+              f"quotes grounded {rep.grounded_quotes}/{rep.total_quotes}, "
+              f"tokens in={res.input_tokens} out={res.output_tokens} cache_read={res.cache_read_tokens}"
+              + ("  [REVIEW]" if rep.needs_review else ""))
     print(f"\n{n_ok} extracted, {n_skipped} already done, {n_failed} failed, ${spent:.2f} spent")
     if ledger.appended:
         log.info("ledger: %d events appended", ledger.appended)
@@ -738,7 +764,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
     papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
-    rows = latest_extractions(snap / "extractions.jsonl")
+    rows = latest_extractions(snap / "extractions.jsonl", st)
     if a.pmid:
         rows = [r for r in rows if r["pmid"] == a.pmid]
     # Every extracted paper, including those with no records: a zero-record
@@ -751,8 +777,11 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     cache = ChallengeCache(st.curated_dir / "challenges.jsonl")
     client = make_anthropic(st)
     ledger = Ledger(st.curated_dir / "ledger.jsonl")
+    archive = ResponseArchive(st.responses_dir)
+    # The reviewer runs on the extraction model, and reviews only current rows.
+    model = st.extract_model
     spent = 0.0
-    price = st.price_for(st.extract_model)
+    price = st.price_for(model)
     n_done = n_failed = 0
 
     for r in rows:
@@ -762,7 +791,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
         recs = slim_records(pmid, r["extraction"].get("variants") or [],
                             (r.get("grounding") or {}).get("figure_sourced") or [])
         digest = records_digest(recs)
-        cached = cache.get(paper.get("text_sha256", ""), digest)
+        cached = None if a.no_llm_cache else cache.get(paper.get("text_sha256", ""), digest, model)
         if cached is not None:
             log.info("skip %s (challenged at %s on identical text and records)", pmid,
                      cached.get("challenge_prompt_version"))
@@ -771,9 +800,11 @@ def cmd_challenge(a: argparse.Namespace) -> int:
             log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_done)
             break
         log.info("challenging %s (%d records)", pmid, len(recs))
+        hits_before = archive.hits
         try:
-            ch, usage = challenge_paper(client, pmid=pmid, source_text=text, records=recs,
-                                        model=st.extract_model, effort=a.effort)
+            ch, usage, prov = challenge_paper(client, pmid=pmid, source_text=text, records=recs,
+                                              model=model, effort=a.effort,
+                                              archive=archive, refresh=a.no_llm_cache)
         except (ChallengeFailed, Exception) as e:  # fails closed: never "nothing to refute"
             if isinstance(e, KeyboardInterrupt):
                 raise
@@ -781,9 +812,10 @@ def cmd_challenge(a: argparse.Namespace) -> int:
             n_failed += 1
             continue
         rep = check(ch, recs, text)
+        # Data before index, as in `cmd_extract`.
         cache.put(pmid=pmid, text_sha256=paper.get("text_sha256", ""), records_digest=digest,
-                  model=st.extract_model, challenge=ch, report=rep, usage=usage)
-        if price:
+                  challenge=ch, report=rep, usage=usage, provenance=prov)
+        if price and archive.hits == hits_before:
             spent += price.cost(input=usage["input"], output=usage["output"],
                                 cache_read=usage["cache_read"])
         ledger.record(identity=pmid, stage="challenged", snapshot=snap.name,
@@ -824,13 +856,17 @@ def cmd_review(a: argparse.Namespace) -> int:
     st: Settings = a.settings
     snap = snapshot_dir(a.snapshot, st)
     papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
-    rows = latest_extractions(snap / "extractions.jsonl")
+    rows = latest_extractions(snap / "extractions.jsonl", st)
 
     from col4a1a2.extract.challenge import record_key
     challenges: dict[str, dict] = {}
     cpath = st.curated_dir / "challenges.jsonl"
-    for c in jsonl.read_tolerant(cpath, what="challenges"):
-        challenges[c["pmid"]] = c
+    from col4a1a2.extract.challenge import CHALLENGE_PROMPT_VERSION
+
+    for c in sorted(jsonl.read_tolerant(cpath, what="challenges"), key=lambda c: c.get("written_at", "")):
+        if (c.get("challenge_prompt_version") == CHALLENGE_PROMPT_VERSION
+                and c.get("requested_model") == st.extract_model):
+            challenges[c["pmid"]] = c
 
     def clean(v) -> str:
         # The measurement that justified TSV covered extraction fields only;
@@ -942,25 +978,37 @@ def cmd_ledger(a: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------- show
 
-def latest_extractions(path: Path) -> list[dict]:
-    """One row per PMID, keeping the newest.
+def is_current_extraction(row: dict, st: Settings) -> bool:
+    """The one definition of "current": this prompt, the configured model, not a failure.
+
+    Rows from a comparison model (`extract --model X`) or a retired prompt sit in
+    the same file and must never leak into the table, the review queue or the
+    challenge.
+    """
+    from col4a1a2.extract.prompt import PROMPT_VERSION
+
+    return (not row.get("error") and row.get("prompt_version") == PROMPT_VERSION
+            and row.get("requested_model") == st.extract_model)
+
+
+def latest_extractions(path: Path, st: Settings) -> list[dict]:
+    """One current row per PMID, keeping the newest.
 
     `extractions.jsonl` is append-only, so a paper re-extracted after its text
-    grew (a supplement or figure transcription arriving) has more than one row.
-    Readers want the current result, not the superseded one. Error rows are
-    dropped: they are a log of why a paper was skipped, not a result.
+    grew (a supplement or figure transcription arriving), or re-run with
+    `--no-llm-cache`, has more than one row. Readers want the newest current
+    result, not a superseded one.
     """
     by_pmid: dict[str, dict] = {}
-    for r in read_jsonl(path):
-        if r.get("error"):
-            continue
-        by_pmid[r["pmid"]] = r
+    for r in sorted(read_jsonl(path), key=lambda r: r.get("written_at", "")):
+        if is_current_extraction(r, st):
+            by_pmid[r["pmid"]] = r
     return list(by_pmid.values())
 
 
 def cmd_show(a: argparse.Namespace) -> int:
     snap = snapshot_dir(a.snapshot, a.settings)
-    rows = latest_extractions(snap / "extractions.jsonl")
+    rows = latest_extractions(snap / "extractions.jsonl", a.settings)
     if a.pmid:
         rows = [r for r in rows if r["pmid"] == a.pmid]
     for r in rows:
@@ -1008,6 +1056,12 @@ def cmd_list(a: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------- main
 
+# Named for the LLM so nobody reads it as "ignore the HTTP cache": that would
+# re-download every article, which `http.py` exists to prevent.
+NO_LLM_CACHE_HELP = ("call Claude even when an answer is cached or archived; the new answer "
+                     "is appended and becomes the current row (costs money)")
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     for name in ("httpx", "httpx2", "anthropic"):
@@ -1041,6 +1095,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="re-query every slice, including sealed ones")
     f.add_argument("--no-llm-triage", action="store_true",
                    help="use the keyword triage rule instead of the Haiku gate (offline / no API key)")
+    f.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
     f.set_defaults(func=cmd_fetch_papers)
 
     e = sub.add_parser("extract", parents=[common], help="run Claude extraction over a snapshot's papers (synchronous)")
@@ -1052,6 +1107,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--effort", default=None,
                    help="low|medium|high|xhigh|max (default from config)")
     e.add_argument("--count-only", action="store_true", help="only count input tokens per paper")
+    e.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
     e.add_argument("--all", action="store_true", help="include papers the triage step rejected")
     e.add_argument("--budget-usd", type=float,
                    help="stop once this much has been spent (may overshoot by one paper, "
@@ -1069,6 +1125,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--limit", type=int)
     c.add_argument("--effort", default=None, help="override the record-count-scaled effort")
     c.add_argument("--budget-usd", type=float, help="stop once this much has been spent")
+    c.add_argument("--no-llm-cache", action="store_true", help=NO_LLM_CACHE_HELP)
     c.set_defaults(func=cmd_challenge)
 
     r = sub.add_parser("review", parents=[common], help="emit the human spot-check queue as TSV")

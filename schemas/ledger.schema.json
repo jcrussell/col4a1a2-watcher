@@ -535,6 +535,18 @@
       "default": null,
       "title": "Prompt Version"
     },
+    "requested_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Requested Model"
+    },
     "snapshot": {
       "anyOf": [
         {

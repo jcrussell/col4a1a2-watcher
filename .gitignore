@@ -15,6 +15,14 @@ __pycache__/
 data/raw/
 data/cache/
 
+# Raw Claude responses. Paid for, so never evicted, but not tracked: thinking
+# can paraphrase article text at length, which puts it on the data/raw/ side of
+# the licence line.
+data/responses/
+
+# Held by any command that writes, so two runs never interleave.
+data/.lock
+
 # Derived outputs.
 data/built/
 reports/*/html/

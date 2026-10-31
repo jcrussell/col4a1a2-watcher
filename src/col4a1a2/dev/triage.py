@@ -150,13 +150,16 @@ def main(argv: list[str] | None = None) -> int:
         print("\n(no recorded Haiku decisions; run fetch-papers with a key, or pass --llm)")
 
     if a.llm:
-        import anthropic
+        from col4a1a2.config import load_settings
+        from col4a1a2.cli import make_anthropic
         from col4a1a2.extract.triage import triage_paper
         print("\nlive Haiku calls:")
-        client = anthropic.Anthropic()
+        st = load_settings()
+        client = make_anthropic(st)
         live, tin, tout = {}, 0, 0
         for p in known:
-            d, u = triage_paper(client, papers[p].get("title") or "", papers[p].get("abstract"))
+            d, u, _prov = triage_paper(client, papers[p].get("title") or "", papers[p].get("abstract"),
+                                       model=st.triage_model, effort=st.triage_effort)
             live[p] = d.read_full_text
             tin += u["input"]
             tout += u["output"]

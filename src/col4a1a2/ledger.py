@@ -121,6 +121,34 @@ class Ledger:
         # tracked file grows by about 3,400 rows a run; it reached 11 MB over a
         # handful of runs before this existed.
         self._state = self.fold()
+        # Resume is answered from the extraction events themselves, never from
+        # the fold. The fold merges every event into one row per paper, so a
+        # later `fetched` event at a new text hash overwrote `text_sha256` while
+        # the stage and prompt version stayed from the old extraction, and a
+        # paper whose text had grown read as already extracted at the new hash.
+        self._extracted: set[tuple] = set()
+        self._failures: dict[tuple, int] = {}
+        for r in sorted(self.rows, key=lambda r: r.get("written_at", "")):
+            self._index_extraction(r)
+
+    @staticmethod
+    def _extraction_key(r: dict) -> tuple | None:
+        if not (r.get("text_sha256") and r.get("prompt_version")):
+            return None
+        return (r["identity"], r["text_sha256"], r["prompt_version"], r.get("requested_model") or "")
+
+    def _index_extraction(self, r: dict) -> None:
+        key = self._extraction_key(r)
+        if key is None:
+            return
+        if r.get("stage") == "extracted" and not r.get("last_error"):
+            self._extracted.add(key)
+        elif r.get("last_error"):
+            self._failures[key] = self._failures.get(key, 0) + 1
+
+    def failures(self, identity: str, text_sha256: str, prompt_version: str,
+                 requested_model: str) -> int:
+        return self._failures.get((identity, text_sha256, prompt_version, requested_model), 0)
 
     # ---------------------------------------------------------------- writing
 
@@ -140,10 +168,9 @@ class Ledger:
         from col4a1a2.schemas import LedgerEvent
 
         LedgerEvent.model_validate(row)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(jsonl.dumps(row) + "\n")
+        jsonl.append(self.path, row, validate=False)
         self.rows.append(row)
+        self._index_extraction(row)
         cur = self._state.setdefault(row["identity"], {})
         stage_old = cur.get("stage")
         cur.update({k: v for k, v in row.items() if k != "stage"})
@@ -257,24 +284,17 @@ class Ledger:
         }
 
     def needs_extraction(self, identity: str, text_sha256: str, prompt_version: str,
-                         *, max_attempts: int = 3) -> bool:
+                         requested_model: str, *, max_attempts: int = 3) -> bool:
         """Freshness, not stage.
 
-        A paper extracted last month whose bundle arrives this month has grown
-        new text and needs re-extracting, yet its stage is already `extracted` --
-        the same bug already fixed once inside `cmd_extract`, one layer up. And a
-        paper that fails deterministically must stop being first in the queue
-        forever, so attempts are counted.
+        True unless this exact text has been extracted under this prompt for
+        this model. A paper extracted last month whose bundle arrives this
+        month has grown new text and needs re-extracting, whatever its stage
+        says. A paper that fails deterministically must stop being first in
+        the queue forever, so failures at the same key are counted and give up
+        at `max_attempts`.
         """
-        r = self._state.get(identity)
-        if r is None:
-            return True
-        if (r.get("attempts") or 0) >= max_attempts:
+        key = (identity, text_sha256, prompt_version, requested_model)
+        if key in self._extracted:
             return False
-        # The stage matters as well as the hash: a row recording only that the
-        # paper was *fetched* at this text hash is not an extraction, and
-        # treating it as one would skip the paper forever.
-        return not (has_extraction(r)
-                    and r.get("text_sha256") == text_sha256
-                    and r.get("prompt_version") == prompt_version
-                    and not r.get("last_error"))
+        return self._failures.get(key, 0) < max_attempts

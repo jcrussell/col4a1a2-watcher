@@ -74,6 +74,10 @@ page_size = 100
 cache_dir = "data/cache"
 snapshot_root = "data/raw"
 curated_dir = "data/curated"
+# Every raw Claude response, archived before parsing (thinking included).
+# Gitignored for the same licence reason as data/raw/, and kept outside
+# cache_dir so eviction never deletes a response we paid for.
+responses_dir = "data/responses"
 
 [anthropic]
 # The SDK default is max_retries = 2 with 0.5s initial and 8s maximum backoff,

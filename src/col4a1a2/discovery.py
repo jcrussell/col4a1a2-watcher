@@ -158,9 +158,7 @@ class DiscoveryLog:
             "complete": complete,
             "completed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(jsonl.dumps(row) + "\n")
+        jsonl.append(self.path, row)
         self.rows.append(row)
         self.appended += 1
         return row

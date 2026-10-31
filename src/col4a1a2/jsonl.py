@@ -91,28 +91,61 @@ def read_tolerant(path: Path, *, what: str = "file") -> list[dict]:
     return out
 
 
-def write(path: Path, rows: Iterable[Any], *, validate: bool = True) -> int:
-    """Write every row, validating each against the file's schema first.
+def _replace_atomically(path: Path, data: str) -> None:
+    """Write `data` to a sibling temp file, fsync it, then rename over `path`.
 
-    Validation happens before the file is opened, so a bad row cannot truncate
-    a good file: `open("w")` truncates on open, and raising halfway through
-    would leave a partial file where a whole one was.
+    A crash leaves either the old file or the new one, never a truncated mix:
+    `open("w")` truncates on open, so writing in place would lose the old
+    contents the moment it started.
     """
+    import os
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def write(path: Path, rows: Iterable[Any], *, validate: bool = True) -> int:
+    """Replace the file with `rows`, validating every row before touching disk."""
     rows = list(rows)
     if validate:
         for r in rows:
             _validate(path, r)
-    n = 0
-    with path.open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(dumps(r) + "\n")
-            n += 1
-    return n
+    _replace_atomically(path, "".join(dumps(r) + "\n" for r in rows))
+    return len(rows)
+
+
+class TornTail(RuntimeError):
+    """The file's last line has no newline: an earlier writer died mid-line."""
+
+
+def has_torn_tail(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    with path.open("rb") as f:
+        f.seek(-1, 2)
+        return f.read(1) != b"\n"
 
 
 def append(path: Path, row: Any, *, validate: bool = True) -> None:
+    """Append one validated row as a single write.
+
+    Refuses to append after a torn last line: the new row would be glued onto
+    the fragment and both would be lost to every reader.
+    """
     if validate:
         _validate(path, row)
+    if has_torn_tail(path):
+        raise TornTail(f"{path} ends mid-line; run `col4a1a2 check` and repair it before writing")
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(dumps(row) + "\n")

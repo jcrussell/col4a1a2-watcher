@@ -110,6 +110,18 @@
       "default": null,
       "title": "Detail"
     },
+    "effort": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Effort"
+    },
     "error": {
       "anyOf": [
         {
@@ -178,6 +190,10 @@
       "title": "Prompt Version",
       "type": "string"
     },
+    "requested_model": {
+      "title": "Requested Model",
+      "type": "string"
+    },
     "schema_version": {
       "anyOf": [
         {
@@ -216,10 +232,16 @@
         }
       ],
       "default": null
+    },
+    "written_at": {
+      "title": "Written At",
+      "type": "string"
     }
   },
   "required": [
     "pmid",
+    "requested_model",
+    "written_at",
     "prompt_version",
     "text_sha256"
   ],

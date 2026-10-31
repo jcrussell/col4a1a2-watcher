@@ -206,6 +206,7 @@ class LedgerEvent(Row):
     n_supplements: int | None = None
     n_figures: int | None = None
     prompt_version: str | None = None
+    requested_model: str | None = None
     n_variants: int | None = None
     n_grounded: int | None = None
     n_ungrounded: int | None = None
@@ -226,22 +227,35 @@ class DiscoveryRow(Row):
     completed_at: str
 
 
-class TriageDecisionRow(Row):
+class Provenance(Row):
+    """Who answered, what we asked for, how hard, and when.
+
+    `model` is what the API reports served the request, which can differ from
+    `requested_model` under server-side fallbacks. Caches and resume key on
+    `requested_model`, so a fallback-served answer still counts as done for the
+    run that asked for it, and a second model's rows sit alongside the first's.
+    """
+
+    model: str
+    requested_model: str
+    effort: str | None
+    written_at: str
+
+
+class TriageDecisionRow(Provenance):
     pmid: str
     triage_prompt_version: str
-    model: str
     read_full_text: bool
     reason: str
     usage: Usage
 
 
-class FigureTranscriptRow(Row):
+class FigureTranscriptRow(Provenance):
     pmcid: str
     fig_id: str
     label: str
     image_sha256: str
     figure_prompt_version: str
-    model: str
     transcription: Loose
     usage: Usage
 
@@ -292,7 +306,11 @@ class ExtractionRow(Row):
 
     pmid: str
     pmcid: str | None = None
+    # A failure row may have no served model: the call never returned.
     model: str | None = None
+    requested_model: str
+    effort: str | None = None
+    written_at: str
     prompt_version: str
     # Without it a paper cannot be told apart from the same paper whose
     # supplements have since arrived.
@@ -319,13 +337,12 @@ class ExtractionRow(Row):
         return self
 
 
-class ChallengeRow(Row):
+class ChallengeRow(Provenance):
     pmid: str
     text_sha256: str
     records_digest: str
     challenge_prompt_version: str
     extract_prompt_version: str
-    model: str
     usage: ChallengeUsage
     challenge: Loose | None = None
     report: Loose | None = None
@@ -334,8 +351,8 @@ class ChallengeRow(Row):
 
 
 class ManifestRow(Row):
-    """One row per fetch run. As JSONL rather than one JSON object per
-    directory, `cat data/raw/*/manifest.jsonl` is a table of every sweep.
+    """One document per snapshot directory; `jq -s` over
+    `data/raw/*/manifest.json` is a table of every sweep.
     """
 
     snapshot: str | None = None
@@ -424,6 +441,28 @@ class ReviewRow(Row):
     CURATOR_NOTE: str = ""
 
 
+class ApiResponse(Row):
+    """One archived Claude response, written by `extract/llm.py` before parsing.
+
+    `request` summarises the call (prompt version, input hash, pmid) in place
+    of the request text, which the snapshot already holds. `response` is the
+    API's message as returned, thinking included.
+    """
+
+    digest: str
+    written_at: str
+    site: Literal["extract", "triage", "figure", "challenge"]
+    requested_model: str
+    effort: str | None
+    max_tokens: int
+    betas: list[str]
+    request: Loose
+    response: Loose
+
+
+# Files named `<digest>.<stamp>.response.json`, one per call, matched by suffix.
+RESPONSE_SUFFIX = ".response.json"
+
 # Basename -> model. For a `.jsonl` file the model describes one row and
 # `jsonl.write`/`jsonl.append` consult this on every write; for a `.json` file
 # it describes the whole document and `write_document` does. Adding a file
@@ -451,7 +490,10 @@ MODELS: dict[str, type[BaseModel]] = {
 def model_for(path) -> type[BaseModel] | None:
     from pathlib import Path
 
-    return MODELS.get(Path(path).name)
+    name = Path(path).name
+    if name.endswith(RESPONSE_SUFFIX):
+        return ApiResponse
+    return MODELS.get(name)
 
 
 def validate(path, row) -> None:
@@ -471,7 +513,7 @@ def write_document(path, obj) -> None:
     import json
     from pathlib import Path
 
+    from col4a1a2.jsonl import _replace_atomically
+
     validate(path, obj)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n",
-                          encoding="utf-8")
+    _replace_atomically(Path(path), json.dumps(obj, indent=2, ensure_ascii=False) + "\n")

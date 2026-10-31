@@ -63,7 +63,6 @@ from col4a1a2.extract.verify import find_quote, normalise
 log = logging.getLogger("col4a1a2")
 
 CHALLENGE_PROMPT_VERSION = "c1"
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_CHALLENGE_TOKENS = 32000
 
 # Fields the reviewer needs to judge a record. Dropping the free-text phenotype
@@ -253,8 +252,14 @@ def check(challenge: PaperChallenge, records: list[dict], source_text: str) -> C
 
 def challenge_paper(client, *, pmid: str, source_text: str, records: list[dict],
                     model: str, effort: str | None = None,
-                    max_tokens: int = MAX_CHALLENGE_TOKENS) -> tuple[PaperChallenge, dict]:
-    """One call per paper. Raises ChallengeFailed rather than returning nothing."""
+                    max_tokens: int = MAX_CHALLENGE_TOKENS, archive=None,
+                    refresh: bool = False) -> tuple[PaperChallenge, dict, dict]:
+    """One call per paper. Raises ChallengeFailed rather than returning nothing.
+
+    Returns the challenge, its usage, and the provenance its cached row carries.
+    """
+    from col4a1a2.extract.llm import call
+
     eff = effort or effort_for(len(records))
     payload = json.dumps(records, ensure_ascii=False, indent=1)
     user = (
@@ -262,30 +267,25 @@ def challenge_paper(client, *, pmid: str, source_text: str, records: list[dict],
         f"=== RECORDS TO REVIEW ({len(records)}) ===\n{payload}\n=== RECORDS END ===\n\n"
         f"Return exactly {len(records)} verdicts, one per record_key above."
     )
-    resp = client.beta.messages.parse(
-        model=model,
-        max_tokens=max_tokens,
-        output_config={"effort": eff},
+    reply = call(
+        client, site="challenge", model=model, effort=eff, max_tokens=max_tokens,
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user}],
-        output_format=PaperChallenge,
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
+        output_format=PaperChallenge, archive=archive, refresh=refresh,
+        request={"prompt_version": CHALLENGE_PROMPT_VERSION, "pmid": pmid,
+                 "input_sha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest(),
+                 "records_digest": records_digest(records)},
     )
-    stop = getattr(resp, "stop_reason", None)
+    stop = reply.stop_reason
     if stop == "refusal":
-        raise ChallengeFailed(f"refused: {getattr(resp, 'stop_details', None)}")
+        raise ChallengeFailed(f"refused: {reply.stop_details}")
     if stop == "max_tokens":
         raise ChallengeFailed("output hit max_tokens before the review was complete")
-    if resp.parsed_output is None:
+    if reply.parsed is None:
         raise ChallengeFailed(f"no parsed output (stop_reason={stop})")
-    usage = {
-        "input": resp.usage.input_tokens,
-        "output": resp.usage.output_tokens,
-        "cache_read": getattr(resp.usage, "cache_read_input_tokens", 0) or 0,
-        "effort": eff,
-    }
-    return resp.parsed_output, usage
+    usage = {k: reply.usage[k] for k in ("input", "output", "cache_read")}
+    usage["effort"] = eff
+    return reply.parsed, usage, reply.provenance()
 
 
 class ChallengeCache:
@@ -303,42 +303,36 @@ class ChallengeCache:
 
     def __init__(self, path: Path):
         self.path = path
-        self.entries: dict[tuple[str, str, str], dict] = {}
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").split("\n"):
-                if not line.strip():
-                    continue
-                try:
-                    r = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                self.entries[(r.get("text_sha256", ""), r.get("records_digest", ""),
-                              r.get("challenge_prompt_version", ""))] = r
+        self.entries: dict[tuple[str, str, str, str], dict] = {}
+        # A later row with the same key wins: that is a `--no-llm-cache` re-run.
+        for r in jsonl.read_tolerant(path, what="challenge cache"):
+            self.entries[(r.get("text_sha256", ""), r.get("records_digest", ""),
+                          r.get("challenge_prompt_version", ""), r.get("requested_model", ""))] = r
         self.hits = 0
         self.misses = 0
 
-    def get(self, text_sha256: str, records_digest: str) -> dict | None:
-        r = self.entries.get((text_sha256, records_digest, CHALLENGE_PROMPT_VERSION))
+    def get(self, text_sha256: str, records_digest: str, requested_model: str) -> dict | None:
+        r = self.entries.get((text_sha256, records_digest, CHALLENGE_PROMPT_VERSION, requested_model))
         if r is not None:
             self.hits += 1
         return r
 
-    def put(self, *, pmid: str, text_sha256: str, records_digest: str, model: str,
-            challenge: PaperChallenge, report: ChallengeReport, usage: dict) -> dict:
+    def put(self, *, pmid: str, text_sha256: str, records_digest: str,
+            challenge: PaperChallenge, report: ChallengeReport, usage: dict,
+            provenance: dict) -> dict:
         row = {
             "pmid": pmid,
             "text_sha256": text_sha256,
             "records_digest": records_digest,
             "challenge_prompt_version": CHALLENGE_PROMPT_VERSION,
             "extract_prompt_version": PROMPT_VERSION,
-            "model": model,
+            **provenance,
             "usage": usage,
             "challenge": challenge.model_dump(mode="json"),
             "report": report.as_dict(),
         }
-        self.entries[(text_sha256, records_digest, CHALLENGE_PROMPT_VERSION)] = row
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(jsonl.dumps(row) + "\n")
+        jsonl.append(self.path, row)
+        self.entries[(text_sha256, records_digest, CHALLENGE_PROMPT_VERSION,
+                      provenance["requested_model"])] = row
         self.misses += 1
         return row

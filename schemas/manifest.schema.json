@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "The whole document manifest.json. One row per fetch run. As JSONL rather than one JSON object per",
+  "description": "The whole document manifest.json. One document per snapshot directory; `jq -s` over",
   "properties": {
     "abstract_only": {
       "default": 0,

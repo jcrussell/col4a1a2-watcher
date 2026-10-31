@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 from dataclasses import dataclass
 
@@ -20,7 +19,6 @@ DEFAULT_EFFORT = "high"
 # raises ExtractionTruncated rather than degrading. Large max_tokens needs
 # streaming to avoid request timeouts, so extract_paper streams.
 MAX_TOKENS = 64000
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class ExtractionRefused(RuntimeError):
@@ -43,6 +41,13 @@ class ExtractionResult:
     cache_write_tokens: int
     stop_reason: str | None
     raw_json: str
+    requested_model: str
+    effort: str | None
+    written_at: str
+
+    def provenance(self) -> dict:
+        return {"model": self.model, "requested_model": self.requested_model,
+                "effort": self.effort, "written_at": self.written_at}
 
 
 def _system_blocks() -> list[dict]:
@@ -58,61 +63,52 @@ def count_tokens(client: anthropic.Anthropic, p: PaperInput, model: str = DEFAUL
     return int(r.input_tokens)
 
 
-def _beta_parse_supports_fallbacks(client: anthropic.Anthropic) -> bool:
-    params = inspect.signature(client.beta.messages.stream).parameters
-    return "fallbacks" in params and "betas" in params
-
-
 def extract_paper(
     client: anthropic.Anthropic,
     p: PaperInput,
     *,
     model: str = DEFAULT_MODEL,
     effort: str = DEFAULT_EFFORT,
+    archive=None,
+    refresh: bool = False,
 ) -> ExtractionResult:
     """Run one paper through Claude and return the validated PaperExtraction.
 
-    Uses the beta parse endpoint with server-side refusal fallbacks when the
-    installed SDK exposes them; otherwise the stable parse endpoint.
+    Streams, because the SDK refuses a non-streaming request at this
+    max_tokens, and asks for server-side refusal fallbacks where the installed
+    SDK supports them. The raw response is archived before it is validated, so
+    a response that fails validation can still be inspected.
     """
-    kwargs = dict(
-        model=model,
-        max_tokens=MAX_TOKENS,
-        system=_system_blocks(),
-        messages=_messages(p),
-        output_format=PaperExtraction,
-        output_config={"effort": effort},
+    import hashlib
+
+    from col4a1a2.extract.llm import call
+
+    reply = call(
+        client, site="extract", model=model, effort=effort, max_tokens=MAX_TOKENS,
+        system=_system_blocks(), messages=_messages(p), output_format=PaperExtraction,
+        stream=True, archive=archive, refresh=refresh,
+        request={"prompt_version": PROMPT_VERSION, "pmid": p.pmid,
+                 "input_sha256": hashlib.sha256(p.text.encode("utf-8")).hexdigest()},
     )
-    # Streaming is mandatory at this max_tokens: the SDK refuses a non-streaming
-    # request that could exceed its ten-minute ceiling. get_final_message()
-    # returns the same parsed object the non-streaming helper would.
-    if _beta_parse_supports_fallbacks(client):
-        with client.beta.messages.stream(betas=[FALLBACK_BETA], fallbacks="default", **kwargs) as st:
-            resp = st.get_final_message()
-    else:
-        with client.messages.stream(**kwargs) as st:
-            resp = st.get_final_message()
-
-    stop = getattr(resp, "stop_reason", None)
-    if stop == "refusal":
-        details = getattr(resp, "stop_details", None)
-        raise ExtractionRefused(f"refused: {details}")
-    if stop == "max_tokens":
+    if reply.stop_reason == "refusal":
+        raise ExtractionRefused(f"refused: {reply.stop_details}")
+    if reply.stop_reason == "max_tokens":
         raise ExtractionTruncated("output hit max_tokens; raise MAX_TOKENS or split the paper")
-
-    parsed = resp.parsed_output
+    parsed = reply.parsed
     if parsed is None:
         raise RuntimeError("no parsed output returned")
-    usage = resp.usage
     return ExtractionResult(
         extraction=parsed,
-        model=getattr(resp, "model", model),
+        model=reply.model,
         prompt_version=PROMPT_VERSION,
         schema_version=SCHEMA_VERSION,
-        input_tokens=usage.input_tokens,
-        output_tokens=usage.output_tokens,
-        cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
-        cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
-        stop_reason=stop,
+        input_tokens=reply.usage["input"],
+        output_tokens=reply.usage["output"],
+        cache_read_tokens=reply.usage["cache_read"],
+        cache_write_tokens=reply.usage["cache_write"],
+        stop_reason=reply.stop_reason,
         raw_json=parsed.model_dump_json(),
+        requested_model=reply.requested_model,
+        effort=reply.effort,
+        written_at=reply.written_at,
     )

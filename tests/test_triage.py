@@ -9,20 +9,22 @@ from col4a1a2.sources.pubtator import gene_linked_variants
 def test_cache_round_trips_and_keys_on_prompt_version(tmp_path):
     p = tmp_path / "triage.jsonl"
     c = TriageCache(p)
-    assert c.get("111") is None
-    c.put("111", TriageDecision(read_full_text=True, reason="case report"), {"input": 10, "output": 2})
+    assert c.get("111", "m") is None
+    c.put("111", TriageDecision(read_full_text=True, reason="case report"), {"input": 10, "output": 2},
+          {"model": "m", "requested_model": "m", "effort": "low", "written_at": "2026-10-31T00:00:00+00:00"})
 
     reread = TriageCache(p)
-    r = reread.get("111")
+    assert reread.get("111", "other-model") is None, "a second model must not see the first's verdict"
+    r = reread.get("111", "m")
     assert r is not None and r["read_full_text"] is True
     assert r["triage_prompt_version"] == TRIAGE_PROMPT_VERSION
     assert reread.hits == 1
 
     # A bumped prompt version must miss, so decisions are re-made rather than reused.
-    stale = json.loads(p.read_text().splitlines()[0])
+    stale = json.loads(p.read_text().split("\n")[0])
     stale["triage_prompt_version"] = "t0"
     p.write_text(json.dumps(stale) + "\n")
-    assert TriageCache(p).get("111") is None
+    assert TriageCache(p).get("111", "m") is None
 
 
 def test_gene_linked_variants_filters_by_corresponding_gene():

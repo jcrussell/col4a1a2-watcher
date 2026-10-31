@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import logging
 from pathlib import Path
 
@@ -28,7 +27,6 @@ from pydantic import BaseModel, Field
 
 from col4a1a2.sources.fulltext import FigureRef, rows_to_text, text_deficit
 
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 log = logging.getLogger("col4a1a2")
 
@@ -113,45 +111,46 @@ def transcribe_figure(
     *,
     model: str = FIGURE_MODEL,
     effort: str = FIGURE_EFFORT,
-) -> tuple[FigureTranscription, dict]:
-    """One vision call. The caption is supplied as text so the model need not guess."""
+    archive=None,
+    refresh: bool = False,
+) -> tuple[FigureTranscription, dict, dict]:
+    """One vision call. The caption is supplied as text so the model need not guess.
+
+    Returns the transcription, its usage, and the provenance its cached row carries.
+    """
+    from col4a1a2.extract.llm import call
+
     caption = fig.caption_title or fig.caption
     prompt = (
         f"Figure label as the article gives it: {fig.label or 'unknown'}\n"
         f"Caption as the article gives it: {caption or '(none)'}\n\n"
         "Transcribe this figure."
     )
-    resp = client.beta.messages.parse(
-        model=model,
-        max_tokens=MAX_FIGURE_TOKENS,
-        output_config={"effort": effort},
+    reply = call(
+        client, site="figure", model=model, effort=effort, max_tokens=MAX_FIGURE_TOKENS,
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                          "data": base64.standard_b64encode(image).decode()}},
             {"type": "text", "text": prompt},
         ]}],
-        output_format=FigureTranscription,
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
+        output_format=FigureTranscription, archive=archive, refresh=refresh,
+        request={"prompt_version": FIGURE_PROMPT_VERSION, "fig_id": fig.fig_id,
+                 "image_sha256": hashlib.sha256(image).hexdigest()},
     )
     # Thinking is always on for this model and counts against max_tokens, so a
     # dense figure can spend the whole budget before emitting a text block, and a
-    # safety decline emits none either. In both cases parsed_output is None
-    # rather than raising, so check the stop reason before trusting it.
-    stop = getattr(resp, "stop_reason", None)
+    # safety decline emits none either. In both cases there is nothing to parse,
+    # so check the stop reason before trusting the output.
+    stop = reply.stop_reason
     if stop == "refusal":
-        raise TranscriptionFailed(f"refused: {getattr(resp, 'stop_details', None)}")
+        raise TranscriptionFailed(f"refused: {reply.stop_details}")
     if stop == "max_tokens":
         raise TranscriptionFailed("output hit max_tokens before a transcription was produced")
-    if resp.parsed_output is None:
+    if reply.parsed is None:
         raise TranscriptionFailed(f"no parsed output (stop_reason={stop})")
-    usage = {
-        "input": resp.usage.input_tokens,
-        "output": resp.usage.output_tokens,
-        "cache_read": getattr(resp.usage, "cache_read_input_tokens", 0) or 0,
-    }
-    return resp.parsed_output, usage
+    usage = {k: reply.usage[k] for k in ("input", "output", "cache_read")}
+    return reply.parsed, usage, reply.provenance()
 
 
 def transcription_to_text(fig: FigureRef, t: FigureTranscription) -> str:
@@ -192,16 +191,10 @@ class FigureCache:
 
     def __init__(self, path: Path):
         self.path = path
-        self.entries: dict[tuple[str, str], dict] = {}
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").split("\n"):
-                if not line.strip():
-                    continue
-                try:
-                    r = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                self.entries[(r["image_sha256"], r.get("figure_prompt_version", ""))] = r
+        self.entries: dict[tuple[str, str, str], dict] = {}
+        for r in jsonl.read_tolerant(path, what="figure cache"):
+            self.entries[(r["image_sha256"], r.get("figure_prompt_version", ""),
+                          r.get("requested_model", ""))] = r
         self.hits = 0
         self.misses = 0
 
@@ -209,27 +202,25 @@ class FigureCache:
     def digest(image: bytes) -> str:
         return hashlib.sha256(image).hexdigest()
 
-    def get(self, image_sha256: str) -> dict | None:
-        r = self.entries.get((image_sha256, FIGURE_PROMPT_VERSION))
+    def get(self, image_sha256: str, requested_model: str) -> dict | None:
+        r = self.entries.get((image_sha256, FIGURE_PROMPT_VERSION, requested_model))
         if r is not None:
             self.hits += 1
         return r
 
     def put(self, *, pmcid: str, fig: FigureRef, image_sha256: str,
-            transcription: FigureTranscription, usage: dict) -> dict:
+            transcription: FigureTranscription, usage: dict, provenance: dict) -> dict:
         r = {
             "pmcid": pmcid,
             "fig_id": fig.fig_id,
             "label": fig.label,
             "image_sha256": image_sha256,
             "figure_prompt_version": FIGURE_PROMPT_VERSION,
-            "model": FIGURE_MODEL,
+            **provenance,
             "transcription": transcription.model_dump(),
             "usage": usage,
         }
-        self.entries[(image_sha256, FIGURE_PROMPT_VERSION)] = r
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(jsonl.dumps(r) + "\n")
+        jsonl.append(self.path, r)
+        self.entries[(image_sha256, FIGURE_PROMPT_VERSION, provenance["requested_model"])] = r
         self.misses += 1
         return r

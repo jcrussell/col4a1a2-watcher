@@ -38,6 +38,17 @@
   "additionalProperties": false,
   "description": "One row of figures.jsonl.",
   "properties": {
+    "effort": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Effort"
+    },
     "fig_id": {
       "title": "Fig Id",
       "type": "string"
@@ -62,20 +73,31 @@
       "title": "Pmcid",
       "type": "string"
     },
+    "requested_model": {
+      "title": "Requested Model",
+      "type": "string"
+    },
     "transcription": {
       "$ref": "#/$defs/Loose"
     },
     "usage": {
       "$ref": "#/$defs/Usage"
+    },
+    "written_at": {
+      "title": "Written At",
+      "type": "string"
     }
   },
   "required": [
+    "model",
+    "requested_model",
+    "effort",
+    "written_at",
     "pmcid",
     "fig_id",
     "label",
     "image_sha256",
     "figure_prompt_version",
-    "model",
     "transcription",
     "usage"
   ],
