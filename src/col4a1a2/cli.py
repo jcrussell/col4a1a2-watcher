@@ -577,9 +577,7 @@ def _paper_inputs(snap: Path) -> list[PaperInput]:
 
 
 def cmd_extract(a: argparse.Namespace) -> int:
-    import anthropic
     from col4a1a2.extract.client import (
-        DEFAULT_MODEL,
         ExtractionRefused,
         ExtractionTruncated,
         count_tokens,
@@ -828,14 +826,11 @@ def cmd_review(a: argparse.Namespace) -> int:
     papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
     rows = latest_extractions(snap / "extractions.jsonl")
 
-    from col4a1a2.extract.challenge import record_key, slim_records
+    from col4a1a2.extract.challenge import record_key
     challenges: dict[str, dict] = {}
     cpath = st.curated_dir / "challenges.jsonl"
-    if cpath.exists():
-        for line in cpath.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                c = json.loads(line)
-                challenges[c["pmid"]] = c
+    for c in jsonl.read_tolerant(cpath, what="challenges"):
+        challenges[c["pmid"]] = c
 
     def clean(v) -> str:
         # The measurement that justified TSV covered extraction fields only;

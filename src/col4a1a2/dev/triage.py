@@ -19,6 +19,7 @@ import re
 import sys
 from pathlib import Path
 
+from col4a1a2 import jsonl
 from col4a1a2.config import REPO
 
 PERSON = re.compile(
@@ -53,19 +54,13 @@ def llm_decisions() -> dict[str, bool]:
     """
     path = REPO / "data/curated/triage.jsonl"
     out: dict[str, bool] = {}
-    if path.exists():
-        for line in path.read_text().splitlines():
-            if line.strip():
-                r = json.loads(line)
-                out[r["pmid"]] = bool(r["read_full_text"])
+    for r in jsonl.read_tolerant(path, what="triage cache"):
+        out[r["pmid"]] = bool(r["read_full_text"])
     return out
 
 
 def load(snapshot: Path) -> tuple[dict, dict]:
-    papers = {
-        r["pmid"]: r
-        for r in (json.loads(l) for l in (snapshot / "papers.jsonl").read_text().splitlines() if l.strip())
-    }
+    papers = {r["pmid"]: r for r in jsonl.read(snapshot / "papers.jsonl")}
     labels = json.loads((REPO / "data/curated/labels.json").read_text())["labels"]
     return papers, labels
 

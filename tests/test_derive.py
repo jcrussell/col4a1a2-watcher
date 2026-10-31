@@ -6,11 +6,11 @@ correctly, because p.(Gly423Trpfs*19) is a frameshift and p.(Gly2=) is
 synonymous. Those seven are pinned below.
 """
 
-import json
 from pathlib import Path
 
 import pytest
 
+from col4a1a2 import jsonl
 from col4a1a2.extract.derive import check_extraction, check_record, derive_variant_type
 
 
@@ -111,8 +111,7 @@ def test_checks_are_quiet_on_the_real_corpus():
     if not snap.exists():
         pytest.skip("corpus snapshot not present")
     rows = {}
-    for line in snap.read_text(encoding="utf-8").splitlines():
-        r = json.loads(line)
+    for r in jsonl.read(snap):
         if not r.get("error"):
             rows[r["pmid"]] = r
     findings = [f for r in rows.values() for f in check_extraction(r["extraction"])]

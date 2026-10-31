@@ -13,8 +13,6 @@ documentation.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
 from col4a1a2.config import REPO
 

@@ -16,7 +16,6 @@ import json
 import sys
 import time
 
-from col4a1a2.config import REPO
 
 import anthropic
 

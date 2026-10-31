@@ -135,6 +135,11 @@ class Ledger:
         for banned in ("text", "abstract", "body", "evidence_quotes"):
             if banned in row:
                 raise ValueError(f"ledger rows must not carry {banned!r}: the file is tracked")
+        # Validated here rather than by filename, so a ledger at any path is
+        # checked, tests included.
+        from col4a1a2.schemas import LedgerEvent
+
+        LedgerEvent.model_validate(row)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(jsonl.dumps(row) + "\n")

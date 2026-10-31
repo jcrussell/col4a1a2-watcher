@@ -31,11 +31,12 @@ against the real ones.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from col4a1a2.extract.schema import PaperExtraction
+from col4a1a2.ledger import DROPPED_AT, STAGES
 
 
 class Row(BaseModel):
@@ -191,8 +192,9 @@ class LedgerEvent(Row):
     is_open_access: bool | None = None
     has_pmcid: bool | None = None
     found_by: list[str] | None = None
-    dropped_at: str | None = None
-    stage: str | None = None
+    # Closed vocabularies, so a retired value such as `limit` cannot return.
+    dropped_at: Literal[DROPPED_AT] | None = None
+    stage: Literal[STAGES] | None = None
     snapshot: str | None = None
     triage: TriageVerdict | None = None
     challenge: ChallengeSummary | None = None
@@ -292,9 +294,9 @@ class ExtractionRow(Row):
     pmcid: str | None = None
     model: str | None = None
     prompt_version: str
-    # Every row written carries it: without it a paper cannot be told apart
-    # from the same paper whose supplements have since arrived.
-    text_sha256: str | None = None
+    # Without it a paper cannot be told apart from the same paper whose
+    # supplements have since arrived.
+    text_sha256: str
     schema_version: str | None = None
     stop_reason: str | None = None
     usage: Usage | None = None
@@ -351,8 +353,8 @@ class ManifestRow(Row):
     triage_keep_before_limit: int = 0
     candidates_triaged: int | None = None
     candidates_before_filters: int | None = None
-    # Superseded name, kept so the five manifests written before the rename
-    # still validate: it was computed after the open-access filter had
+    # Superseded name, kept so the manifests written before the rename still
+    # validate; nothing writes it now: it was computed after the open-access filter had
     # reassigned its own input, so it understated the pool roughly fourfold.
     candidates_before_limit: int | None = None
     candidates_cut_by_limit: int | None = None

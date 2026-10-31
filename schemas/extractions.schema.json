@@ -203,16 +203,8 @@
       "title": "Stop Reason"
     },
     "text_sha256": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Text Sha256"
+      "title": "Text Sha256",
+      "type": "string"
     },
     "usage": {
       "anyOf": [
@@ -228,7 +220,8 @@
   },
   "required": [
     "pmid",
-    "prompt_version"
+    "prompt_version",
+    "text_sha256"
   ],
   "title": "ExtractionRow",
   "type": "object"

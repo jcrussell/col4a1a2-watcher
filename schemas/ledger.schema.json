@@ -293,6 +293,12 @@
     "dropped_at": {
       "anyOf": [
         {
+          "enum": [
+            "",
+            "no_pmid",
+            "oa_filter",
+            "no_metadata"
+          ],
           "type": "string"
         },
         {
@@ -544,6 +550,13 @@
     "stage": {
       "anyOf": [
         {
+          "enum": [
+            "candidate",
+            "triaged",
+            "fetched",
+            "extracted",
+            "challenged"
+          ],
           "type": "string"
         },
         {

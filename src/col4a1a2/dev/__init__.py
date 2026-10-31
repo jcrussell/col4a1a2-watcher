@@ -15,7 +15,7 @@ from __future__ import annotations
 import importlib
 import sys
 
-VERBS = ("probe", "triage", "citations", "backfill", "export", "fixtures")
+VERBS = ("probe", "triage", "citations", "export", "fixtures")
 
 
 def _summary(verb: str) -> str:

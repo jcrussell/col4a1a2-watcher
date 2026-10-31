@@ -8,6 +8,7 @@ to leave no trace at all, and those are the cases most of these tests cover.
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from col4a1a2.ledger import DROPPED_AT, Ledger, has_extraction, identify
 
@@ -152,7 +153,7 @@ def test_a_deterministically_failing_paper_stops_being_selected(tmp_path):
 
 def test_summary_counts_sum_to_the_identity_total(tmp_path):
     led = Ledger(tmp_path / "l.jsonl")
-    for i, drop in enumerate(["", "no_pmid", "oa_filter", "limit", "limit"]):
+    for i, drop in enumerate(["", "no_pmid", "oa_filter", "no_metadata", "no_metadata"]):
         led.record_candidate(pmid=f"p{i}", doi=None, title=f"t{i}", journal=None,
                              first_pub_date=None, is_open_access=True, has_pmcid=True,
                              found_by={"europepmc"}, dropped_at=drop)
@@ -178,9 +179,9 @@ def test_an_unchanged_candidate_is_not_re_appended(tmp_path):
 
     # A real change still lands.
     third = Ledger(path)
-    third.record_candidate(**{**kw, "dropped_at": "limit"})
+    third.record_candidate(**{**kw, "dropped_at": "no_metadata"})
     assert third.appended == 1
-    assert Ledger(path).fold()["1"]["dropped_at"] == "limit"
+    assert Ledger(path).fold()["1"]["dropped_at"] == "no_metadata"
 
 
 def test_in_memory_state_tracks_appends_within_one_run(tmp_path):
@@ -225,3 +226,14 @@ def test_a_challenged_paper_is_not_re_extracted(tmp_path):
     led.record(identity="1", stage="challenged")
     assert Ledger(tmp_path / "l.jsonl").needs_extraction("1", "aaa", "v1") is False
     assert has_extraction(Ledger(tmp_path / "l.jsonl").fold()["1"])
+
+
+def test_a_retired_disposition_is_rejected_on_write(tmp_path):
+    """`limit` was removed as a disposition yet 747 events still carried it,
+    and the summary kept printing it. The schema now refuses it outright."""
+    led = Ledger(tmp_path / "l.jsonl")
+    with pytest.raises(ValidationError):
+        led.record(identity="1", stage="candidate", dropped_at="limit")
+    with pytest.raises(ValidationError):
+        led.record(identity="1", stage="queued")
+    assert not (tmp_path / "l.jsonl").exists()
