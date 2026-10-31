@@ -794,6 +794,17 @@ def cmd_challenge(a: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------- review
 
+# The spot-check sheet's columns, declared rather than derived from whatever the
+# first queued record happens to carry. The two CURATOR_ fields are left empty
+# for a human to fill, and are what `data/curated/gold/` is built from.
+REVIEW_COLUMNS = [
+    "pmid", "record_key", "citation", "gene", "as_written", "hgvs_c", "hgvs_p",
+    "n_probands", "n_families", "confidence", "flagged_because", "verdict",
+    "problem", "refuting_quote", "proposed_n_probands", "quote_1",
+    "CURATOR_VERDICT", "CURATOR_NOTE",
+]
+
+
 def cmd_review(a: argparse.Namespace) -> int:
     """Emit the human spot-check queue as TSV, from both review signals."""
     import csv as _csv
@@ -852,13 +863,20 @@ def cmd_review(a: argparse.Namespace) -> int:
                 "quote_1": clean((v["evidence_quotes"] or [""])[0])[:300],
                 "CURATOR_VERDICT": "", "CURATOR_NOTE": "",
             })
-    missed = [(p, m) for p, c in challenges.items() for m in (c.get("report") or {}).get("missed_grounded", [])]
-    if not out and not missed:
-        print("nothing queued for review")
-        return 0
+    # Scoped to this snapshot's papers. Reading every challenge ever written
+    # would attribute corpus-wide counts to one snapshot, which is how the
+    # same 275 reports were printed under each of four snapshots.
+    in_snapshot = {r["pmid"] for r in rows}
+    missed = [(p, m) for p, c in challenges.items() if p in in_snapshot
+              for m in (c.get("report") or {}).get("missed_grounded", [])]
     path = Path(a.tsv) if a.tsv else snap / "review_queue.tsv"
+    # Always write the file, with the declared columns, even when the queue is
+    # empty: a curator reading an empty queue and a curator finding no file at
+    # all are different situations, and deriving the columns from the first row
+    # crashed on the one snapshot that had nothing to review.
     with path.open("w", newline="", encoding="utf-8") as f:
-        w = _csv.DictWriter(f, fieldnames=list(out[0].keys()), delimiter="\t",
+        w = _csv.DictWriter(f, fieldnames=REVIEW_COLUMNS, delimiter="\t",
+                            extrasaction="raise",
                             quoting=_csv.QUOTE_NONE, escapechar="\\")
         w.writeheader()
         w.writerows(out)
