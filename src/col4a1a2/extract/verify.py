@@ -86,10 +86,6 @@ class GroundingReport:
     def needs_review(self) -> bool:
         return bool(self.ungrounded) or bool(self.low_confidence_variants) or bool(self.figure_sourced)
 
-    @property
-    def grounded_fraction(self) -> float:
-        return 1.0 if self.total_quotes == 0 else self.grounded_quotes / self.total_quotes
-
 
 def ground(
     extraction: PaperExtraction,

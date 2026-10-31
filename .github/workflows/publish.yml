@@ -1,12 +1,12 @@
-# Build the public release from tracked files and deploy it to GitHub Pages.
+# Build the public release from tracked files and deploy it to GitHub Pages,
+# on a version tag only (v0.1.0, ...), so the site always matches a release.
 # Confident records only: `--all` is for people inspecting the data and never
 # runs here. No API key and no network beyond installing packages.
 name: publish
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    tags: ["v*"]
 
 permissions:
   contents: read

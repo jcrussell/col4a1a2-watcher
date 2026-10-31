@@ -238,9 +238,6 @@ class PoliteClient:
     def get(self, url: str, **kw) -> Response:
         return self.request("GET", url, **kw)
 
-    def post(self, url: str, data: bytes, **kw) -> Response:
-        return self.request("POST", url, data=data, **kw)
-
     def download(
         self,
         url: str,

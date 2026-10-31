@@ -23,12 +23,8 @@ data/responses/
 # Held by any command that writes, so two runs never interleave.
 data/.lock
 
-# Derived outputs.
-data/built/
+# The release; CI builds and deploys its own from a tag.
 _site/
-reports/*/html/
 
-# Reference papers, and planning scratch that became AGENTS.md and docs/.
-/*.pdf
+# Reference papers, kept locally for reading.
 docs/refs/
-plan.md

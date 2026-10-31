@@ -20,6 +20,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from col4a1a2 import __version__
+
 # The defaults live beside the code they govern; config can override each one.
 from col4a1a2.extract.figures import MAX_FIGURE_TOKENS, MAX_FIGURES_PER_PAPER
 from col4a1a2.sources.supplements import BUNDLE_DEADLINE_S, BUNDLE_RATE_KEY
@@ -198,7 +200,8 @@ def load_settings(
     return Settings(
         config_path=path,
         contact_email=raw["contact_email"],
-        user_agent=raw["user_agent"],
+        # `{version}` is filled from the package, so the version is written once.
+        user_agent=raw["user_agent"].replace("{version}", __version__),
         europepmc_query=epmc["query"],
         europepmc_page_size=int(epmc.get("page_size", 100)),
         pubtator_queries=tuple(pt.get("queries", ())),

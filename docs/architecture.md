@@ -40,7 +40,7 @@ Rejected candidates are still recorded in the snapshot and the ledger, with the 
 
 **`extract`** sends each kept paper to Claude and stores one structured record per paper in the tracked `data/curated/extractions.jsonl`, naming the snapshot that holds its text, together with the served and requested model, effort, prompt version, schema version, token usage and a quote-grounding report. Papers already extracted at the current prompt version, requested model and text hash are skipped, so the command is safe to re-run; `--budget-usd` caps one run's spend.
 
-**`publish`** builds the release from tracked files alone, so CI can run it from a checkout: an `evidence` table (one row per paper × variant) and a `literature` table (every paper considered and its status), each as CSV and JSON Lines, a Frictionless `datapackage.json` generated from the row models, and a self-contained `index.html`. By default it releases only confident records: upheld by the checked review, every quote grounded, nothing flagging them for a person. `--all` releases everything with status columns, for inspection; CI never passes it. The same commit always builds the same bytes. `.github/workflows/publish.yml` runs the tests, `check` and `publish`, and deploys to GitHub Pages.
+**`publish`** builds the release from tracked files alone, so CI can run it from a checkout: an `evidence` table (one row per paper × variant) and a `literature` table (every paper considered and its status), each as CSV and JSON Lines, a Frictionless `datapackage.json` generated from the row models, and a self-contained `index.html`. By default it releases only confident records: upheld by the checked review, every quote grounded, nothing flagging them for a person. `--all` releases everything with status columns, for inspection; CI never passes it. The same commit always builds the same bytes. `.github/workflows/ci.yml` runs the tests, `check` and a throwaway `publish` on every push and pull request; `.github/workflows/publish.yml` builds and deploys the site to GitHub Pages when a version tag (`v*`) is pushed.
 
 **`report`** (planned) diffs two snapshots into a monthly Markdown and HTML summary.
 
@@ -91,6 +91,5 @@ Bootstrap and monthly refresh run the same code; only the date window differs.
 | `data/curated/` | yes | `labels.json` (hand-assigned triage labels), `gold/` (human spot-check results), and the append-only logs `extractions.jsonl`, `triage.jsonl`, `figures.jsonl`, `challenges.jsonl`, `discovery.jsonl` and `ledger.jsonl`. The logs use a union merge driver and are folded by `written_at`, so line order never changes the result. |
 | `schemas/` | yes | JSON Schema for every artefact, exported from `schemas.py` and checked against it by the tests. |
 | `_site/` | no | The release `publish` builds; CI builds its own and deploys it. |
-| `reports/<date>/` | yes | Published Markdown reports (planned). |
 
 Snapshots are dated directories and are never edited in place.
