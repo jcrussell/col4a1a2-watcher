@@ -296,6 +296,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     log.info("Europe PMC: %d results, %d with PMID", len(epmc), len(by_pmid))
 
     pubtator_hits: dict[str, dict] = {}
+    n_lookup_requested = n_lookup_resolved = 0
     if not a.skip_pubtator:
         for q in st.pubtator_queries:
             res = pubtator.search(client, q, page_size=st.pubtator_page_size, max_results=a.max_search)
@@ -312,19 +313,24 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         log.info("PubTator: %d PMIDs in window", len(pubtator_hits))
     # PMIDs only PubTator found: look them up in Europe PMC to get PMCID/OA/abstract.
     missing = [p for p in pubtator_hits if p not in by_pmid]
-    for i in range(0, len(missing), 50):
-        chunk = missing[i : i + 50]
-        for m in europepmc.search(client, "PMID:" + " OR PMID:".join(chunk), page_size=100):
-            if m.pmid and m.pmid not in by_pmid:
-                m.source = "pubtator"
-                by_pmid[m.pmid] = m
+    resolved = europepmc.lookup_pmids(client, missing)
+    for pmid, m in resolved.items():
+        if pmid not in by_pmid:
+            m.source = "pubtator"
+            by_pmid[pmid] = m
     for pmid in missing:
         if pmid not in by_pmid:
+            # Nothing is known about this paper beyond PubTator's own row, so
+            # `is_open_access=False` here means "not retrieved". `metadata_source`
+            # carries that distinction to the open-access filter and the ledger,
+            # which used to record it as closed access on no evidence at all.
             r = pubtator_hits[pmid]
             by_pmid[pmid] = europepmc.PaperMeta(pmid=pmid, pmcid=None, doi=r.get("doi"), title=r.get("title", ""),
                                                 journal=r.get("journal"), pub_year=None,
                                                 first_pub_date=(r.get("date") or "")[:10] or None,
-                                                is_open_access=False, abstract=None, source="pubtator")
+                                                is_open_access=False, abstract=None, source="pubtator",
+                                                metadata_source="pubtator_only")
+    n_lookup_requested, n_lookup_resolved = len(missing), len(resolved)
 
     metas = list(by_pmid.values())
     # Captured before the filter reassigns `metas`: the manifest has been
@@ -340,7 +346,8 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                 pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,
                 first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
                 has_pmcid=bool(m.pmcid), found_by={m.source}, citation=citation(m),
-                dropped_at="oa_filter", snapshot=snap.name,
+                dropped_at=("no_metadata" if m.metadata_source != "europepmc" else "oa_filter"),
+                snapshot=snap.name,
             )
         log.info("open-access filter: dropped %d of %d candidates", len(dropped), len(metas))
         metas = kept_oa
@@ -409,13 +416,16 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     # Write point 3. Recorded for every triaged candidate, including the ones
     # `--limit` is about to discard, which previously survived only as a bare
     # triage decision with no title, journal, date or identifier.
-    for rank, (m, _hints, tr) in enumerate(triaged):
-        cut = bool(a.limit) and rank >= a.limit
+    for m, _hints, tr in triaged:
+        # No disposition: a paper `--limit` did not reach this run is still in
+        # play, and recording otherwise let a later limited run bury work
+        # already done. The per-run count goes in the manifest instead, and
+        # `col4a1 ledger` derives the backlog from triage and stage.
         ledger.record_candidate(
             pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,
             first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
             has_pmcid=bool(m.pmcid), found_by={m.source}, citation=citation(m),
-            dropped_at="limit" if cut else "", snapshot=snap.name,
+            dropped_at="", snapshot=snap.name,
         )
         if m.pmid:
             ledger.record_triage(m.pmid, {k: tr.get(k) for k in
@@ -519,8 +529,14 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         "papers": n, "full_text": n_full, "abstract_only": n - n_full,
         "triage_keep": sum(1 for r in rows if r["triage"]["keep"]), "triage_keep_before_limit": n_keep_all,
         "candidates_triaged": n_triaged,
+        "candidates_cut_by_limit": max(0, n_triaged - a.limit) if a.limit else 0,
         "candidates_before_filters": n_candidates_before_filters,
         "europepmc_hits_without_pmid": n_no_pmid,
+        # Requested against resolved, because the old lookup lost 98% of its
+        # PMIDs silently: the fallback invented metadata and nothing compared
+        # the two numbers. A drop here is the first sign of the next break.
+        "pmid_lookup_requested": n_lookup_requested,
+        "pmid_lookup_resolved": n_lookup_resolved,
         "ledger_events": ledger.appended,
         "discovery_slices": len(todo) + len(sealed),
         "discovery_slices_sealed": len(sealed),
@@ -863,11 +879,13 @@ def cmd_ledger(a: argparse.Namespace) -> int:
     print(f"{s['identities']} candidates over {s['events']} events  ({ledger.path})")
     print(f"  kept by the gate: {s['kept_by_gate']}   with records: {s['with_records']}"
           f"   needing review: {s['needs_review']}   wedged: {s['wedged']}")
+    print(f"  kept but not extracted: {s['kept_not_extracted']}"
+          "   (the gate wanted these and no extraction exists at their current text)")
     print("  by stage:       " + ", ".join(f"{k}={v}" for k, v in sorted(s["by_stage"].items())))
     print("  by disposition: " + ", ".join(f"{k}={v}" for k, v in sorted(s["by_disposition"].items())))
     if a.tsv:
         import csv as _csv
-        cols = ["identity", "identity_kind", "pmid", "stage", "dropped_at", "rank", "limit_at",
+        cols = ["identity", "identity_kind", "pmid", "stage", "dropped_at",
                 "is_open_access", "has_pmcid", "n_variants", "needs_review", "attempts",
                 "last_error", "first_pub_date", "journal", "title"]
         out = Path(a.tsv)

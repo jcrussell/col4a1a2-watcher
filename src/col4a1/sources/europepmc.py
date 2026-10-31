@@ -33,6 +33,14 @@ class PaperMeta:
     authors: list[str] = field(default_factory=list)
     affiliation: str | None = None
     source: str = "europepmc"
+    # Where the metadata came from, which is not the same as where the paper was
+    # found. "europepmc" means a search returned this record and its
+    # `is_open_access`/`pmcid` are facts; "pubtator_only" means the Europe PMC
+    # lookup did not resolve the PMID and everything below the title was filled
+    # in by hand, so absent OA and PMCID mean "not retrieved", not "not open
+    # access". Conflating the two cost this project 2,034 papers: see
+    # `lookup_pmids`.
+    metadata_source: str = "europepmc"
     extra: dict = field(default_factory=dict)
 
 
@@ -104,6 +112,42 @@ def search(
         if not results or not next_cursor or next_cursor == cursor:
             return out
         cursor = next_cursor
+
+
+def lookup_pmids(client: PoliteClient, pmids: list[str], *, chunk: int = 50,
+                 min_resolution: float = 0.5) -> dict[str, PaperMeta]:
+    """Europe PMC metadata for a list of PMIDs, keyed by PMID.
+
+    **`EXT_ID`, never `PMID`.** Europe PMC does not index a `PMID` field, so a
+    `PMID:11985779` query returns hitCount 0 while `EXT_ID:11985779` returns the
+    paper. This module asked the wrong question for the whole bootstrap: of
+    2,075 unique PMIDs sent through the old query, 41 resolved. The caller then
+    filled in the misses by hand with `is_open_access=False`, the open-access
+    filter dropped them, and the ledger recorded 2,034 papers as closed access
+    without ever having looked. Re-querying a random 100 of them with `EXT_ID`
+    resolved 97, of which 92 had a PMCID and 91 were flagged open access.
+
+    Two details. `EXT_ID` matches PMC-sourced records as well as MED ones -- one
+    response came back `source=PMC, pmid=null` -- so records without a PMID are
+    dropped rather than keyed wrongly. And the resolution rate is checked per
+    chunk and logged: the old failure was silent precisely because nothing
+    compared what was asked for against what came back.
+    """
+    out: dict[str, PaperMeta] = {}
+    for i in range(0, len(pmids), chunk):
+        batch = pmids[i : i + chunk]
+        query = " OR ".join(f"EXT_ID:{p}" for p in batch)
+        found = 0
+        for m in search(client, query, page_size=100):
+            if not m.pmid:
+                continue  # a PMC-keyed duplicate of a record we want by PMID
+            out.setdefault(m.pmid, m)
+            found += 1
+        if batch and found < len(batch) * min_resolution:
+            log.warning("Europe PMC PMID lookup resolved only %d of %d; "
+                        "check the query field", found, len(batch))
+    log.info("Europe PMC PMID lookup: %d of %d resolved", len(out), len(pmids))
+    return out
 
 
 def hit_count(client: PoliteClient, query: str, ttl: float | None = 86400) -> int:

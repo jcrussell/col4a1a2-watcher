@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from col4a1.ledger import Ledger, identify
+from col4a1.ledger import DROPPED_AT, Ledger, identify
 
 
 def test_identity_falls_back_through_pmid_doi_title():
@@ -26,13 +26,69 @@ def test_identity_falls_back_through_pmid_doi_title():
 
 def test_record_candidate_covers_every_disposition(tmp_path):
     led = Ledger(tmp_path / "l.jsonl")
-    for drop in ("", "no_pmid", "oa_filter", "limit"):
+    for drop in DROPPED_AT:
         led.record_candidate(pmid=None if drop == "no_pmid" else f"p{drop}", doi="10.1/x",
                              title=f"t{drop}", journal="J", first_pub_date="2020-01-01",
                              is_open_access=True, has_pmcid=True, found_by={"europepmc"},
                              dropped_at=drop)
     seen = {r.get("dropped_at") for r in Ledger(tmp_path / "l.jsonl").fold().values()}
-    assert seen == {"", "no_pmid", "oa_filter", "limit"}
+    assert seen == set(DROPPED_AT)
+
+
+def test_limit_is_not_a_disposition():
+    """`--limit` is which papers a run selected, not where a candidate left the
+    pipeline. Storing it let a later limited run bury 739 already-extracted
+    papers under `dropped_at=limit`."""
+    assert "limit" not in DROPPED_AT
+    assert "no_metadata" in DROPPED_AT
+
+
+def test_a_disposition_cannot_regress_a_paper_already_examined(tmp_path):
+    """The bug this guards: a `--limit 100` idempotence check ran after the real
+    sweep and stamped `limit` onto papers already triaged, fetched and
+    extracted, so the fold reported 652 cut by limit where the truth was 8."""
+    path = tmp_path / "l.jsonl"
+    led = Ledger(path)
+    kw = dict(doi=None, title="T", journal="J", first_pub_date="2020-01-01",
+              is_open_access=True, has_pmcid=True, found_by={"europepmc"})
+    led.record_candidate(pmid="1", **kw)
+    led.record(identity="1", stage="extracted", n_variants=3, text_sha256="h")
+    # A later, narrower run tries to drop it before triage.
+    led.record_candidate(pmid="1", dropped_at="oa_filter", **kw)
+    state = Ledger(path).fold()["1"]
+    assert state["dropped_at"] == ""
+    assert state["stage"] == "extracted"
+    assert state["n_variants"] == 3
+
+
+def test_a_disposition_still_applies_to_an_untouched_candidate(tmp_path):
+    """The guard must not freeze a candidate that really was dropped before
+    triage, or a genuine filter would stop being recordable."""
+    led = Ledger(tmp_path / "l.jsonl")
+    kw = dict(doi=None, title="T", journal="J", first_pub_date="2020-01-01",
+              has_pmcid=False, found_by={"pubtator"})
+    led.record_candidate(pmid="2", is_open_access=False, dropped_at="no_metadata", **kw)
+    assert led.fold()["2"]["dropped_at"] == "no_metadata"
+    # And metadata arriving later clears it: the candidate is back in play.
+    led.record_candidate(pmid="2", is_open_access=True, dropped_at="", **kw)
+    assert led.fold()["2"]["dropped_at"] == ""
+
+
+def test_summary_reports_kept_but_not_extracted(tmp_path):
+    """The silent loss class: the gate wanted the paper, we hold its text, and
+    no extraction exists. One paper sat here because the snapshot it was fetched
+    into was never extracted, and nothing reported it."""
+    led = Ledger(tmp_path / "l.jsonl")
+    kw = dict(doi=None, title="T", journal="J", first_pub_date="2020-01-01",
+              is_open_access=True, has_pmcid=True, found_by={"europepmc"})
+    for pmid in ("1", "2", "3"):
+        led.record_candidate(pmid=pmid, **kw)
+        led.record_triage(pmid, {"keep": True})
+    led.record(identity="1", stage="fetched", text_sha256="h")
+    led.record(identity="2", stage="extracted", text_sha256="h", n_variants=1)
+    led.record_triage("3", {"keep": False})
+    s = led.summary()
+    assert s["kept_not_extracted"] == 1
 
 
 def test_fold_is_last_by_written_at_and_order_independent(tmp_path):

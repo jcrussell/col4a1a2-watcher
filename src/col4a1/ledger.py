@@ -47,7 +47,21 @@ log = logging.getLogger("col4a1")
 LEDGER_VERSION = 1
 
 # Where a candidate left the pipeline. Empty means it is still in play.
-DROPPED_AT = ("", "no_pmid", "oa_filter", "limit")
+#
+# `limit` is deliberately absent. `--limit` is which papers a *run* selected,
+# not where a candidate left the pipeline, and storing it here made a later
+# limited run overwrite the disposition of papers already extracted: one
+# `--limit 100` idempotence check stamped `limit` onto 739 of them, so the fold
+# reported 652 papers cut by limit when the true number was 8, and 644 rows
+# carried the impossible pair `stage=fetched, dropped_at=limit`. `rank` and
+# `limit_at` were removed from this file for the same reason. Pending work is
+# derivable instead: triage kept it and no extraction exists.
+#
+# `oa_filter` and `no_metadata` are separate because conflating them is how
+# 2,034 papers came to be recorded as closed access without ever being looked
+# up: `oa_filter` means Europe PMC says the paper is not open access,
+# `no_metadata` means its metadata was never retrieved, so nothing is known.
+DROPPED_AT = ("", "no_pmid", "oa_filter", "no_metadata")
 
 # Furthest point reached. Reporting only: a paper whose text later grows is
 # still `extracted` yet needs re-extracting, so selection must key on the text
@@ -126,10 +140,20 @@ class Ledger:
         identity, kind = identify(pmid, doi, title)
         if not identity:
             return {}
+        prev_state = self._state.get(identity) or {}
+        # A disposition says where a candidate left the pipeline, so it cannot be
+        # applied to one that has since gone further: a paper already triaged,
+        # fetched or extracted was plainly not dropped before triage. Without
+        # this guard a re-run with narrower arguments silently re-drops work it
+        # has already done, and the ledger -- the project's denominator -- then
+        # cannot tell "unexamined" from "examined", which is the one thing it
+        # exists to do.
+        if dropped_at and _STAGE_RANK.get(prev_state.get("stage") or "", 0) > 0:
+            dropped_at = prev_state.get("dropped_at") or ""
         # Nothing new to say about this candidate: skip rather than append. The
         # fold is unchanged either way, and the file stays a log of changes
         # rather than of runs.
-        prev = self._state.get(identity)
+        prev = prev_state or None
         if prev is not None and all(
             prev.get(k) == v for k, v in (
                 ("dropped_at", dropped_at),
@@ -144,7 +168,7 @@ class Ledger:
             first_pub_date=first_pub_date, citation=citation,
             is_open_access=bool(is_open_access), has_pmcid=bool(has_pmcid),
             found_by=sorted(found_by) if found_by else None,
-            dropped_at=dropped_at, stage="candidate" if not dropped_at else "candidate",
+            dropped_at=dropped_at, stage="candidate",
             snapshot=snapshot,
         )
 
@@ -201,6 +225,14 @@ class Ledger:
             "kept_by_gate": sum(1 for r in state.values() if (r.get("triage") or {}).get("keep")),
             "with_records": sum(1 for r in state.values() if (r.get("n_variants") or 0) > 0),
             "needs_review": sum(1 for r in state.values() if r.get("needs_review")),
+            # The silent loss class: the gate wanted the paper, we hold its
+            # text, and no extraction exists. One paper sat here for a day
+            # because its snapshot was never extracted and nothing reported it.
+            "kept_not_extracted": sum(
+                1 for r in state.values()
+                if (r.get("triage") or {}).get("keep") and not r.get("dropped_at")
+                and r.get("stage") not in ("extracted", "challenged")
+            ),
             "wedged": sum(1 for r in state.values() if (r.get("attempts") or 0) >= 3),
         }
 
