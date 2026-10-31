@@ -60,7 +60,9 @@ def _rec(**kw):
 
 
 def test_each_check_fires_on_a_synthetic_failure():
-    fired = lambda r: {f.check for f in check_record("1", r)}
+    def fired(r):
+        return {f.check for f in check_record("1", r)}
+
     assert "inheritance_sum" in fired(_rec(n_probands=3))
     assert "families_gt_probands" in fired(_rec(n_probands=1, n_families=2))
     assert "carriers_lt_probands" in fired(_rec(n_total_carriers=0))

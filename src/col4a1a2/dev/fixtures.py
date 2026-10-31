@@ -24,8 +24,11 @@ def main(argv: list[str] | None = None) -> int:
             ["P4", "ABCC6", "NM_001171.6", "c.3421C>T", "p.Arg1141Ter", "unknown"]]
 
     from openpyxl import Workbook
-    wb = Workbook(); ws = wb.active; ws.title = "Variants"
-    for r in ROWS: ws.append(r)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Variants"
+    for r in ROWS:
+        ws.append(r)
     big = wb.create_sheet("AllGenes")
     big.append(ROWS[0])
     for i in range(200):
@@ -42,7 +45,8 @@ def main(argv: list[str] | None = None) -> int:
     t = d.add_table(rows=0, cols=len(ROWS[0]))
     for r in ROWS:
         cells = t.add_row().cells
-        for c, v in zip(cells, r): c.text = v
+        for c, v in zip(cells, r):
+            c.text = v
     d.save(FIX / "supplement_variants.docx")
 
     # A minimal PDF with a readable text table, written by hand so we own it.

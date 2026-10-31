@@ -1087,8 +1087,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--all", action="store_true", help="include papers the triage step rejected")
     e.set_defaults(func=cmd_extract)
 
-    l = sub.add_parser("list", parents=[common, snap_opt], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
-    l.set_defaults(func=cmd_list)
+    ls = sub.add_parser("list", parents=[common, snap_opt], help="list papers in a snapshot with triage flags (T=gene in title/abstract, C=clinical keyword, P=PubTator gene+variant, S=PubTator search hit)")
+    ls.set_defaults(func=cmd_list)
 
     c = sub.add_parser("challenge", parents=[common, snap_opt, pick_opt, fresh_opt, budget_opt],
                        help="adversarially review a snapshot's extracted records")

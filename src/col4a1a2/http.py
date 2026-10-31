@@ -93,9 +93,9 @@ class HttpCache:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path)
-        # Two commands can run at once -- a challenge alongside a fetch -- and
-        # without a busy timeout the second raises "database is locked" and
-        # aborts a paid run.
+        # The cache can be shared with a dev tool running alongside a command;
+        # without a busy timeout the second connection raises "database is
+        # locked" and aborts the run.
         self._db.execute("PRAGMA busy_timeout = 30000")
         # DELETE only moves pages to a freelist, so the file never shrinks.
         # Enabling incremental vacuum needs one VACUUM to take effect, which is
