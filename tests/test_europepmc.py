@@ -23,6 +23,9 @@ class FakeResponse:
     def json(self):
         return json.loads(self.body)
 
+    def require_ok(self, what):
+        return self
+
 
 class FakeClient:
     """Answers an EXT_ID query from a table of records, as Europe PMC does."""

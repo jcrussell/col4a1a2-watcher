@@ -21,6 +21,11 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# The defaults live beside the code they govern; config can override each one.
+from col4a1a2.extract.figures import MAX_FIGURE_TOKENS, MAX_FIGURES_PER_PAPER
+from col4a1a2.sources.supplements import BUNDLE_DEADLINE_S, BUNDLE_RATE_KEY
+from col4a1a2.sources.tabular import KEEP_ALL_BELOW, MAX_CHARS_PER_PAPER, MAX_ROWS_PER_SHEET
+
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = REPO / "config" / "col4a1a2.toml"
 
@@ -29,7 +34,7 @@ DEFAULT_CONFIG = REPO / "config" / "col4a1a2.toml"
 # rate key, passed explicitly by its caller.
 EXPECTED_RATE_KEYS = {
     "www.ebi.ac.uk",
-    "europepmc:supplementaryFiles",
+    BUNDLE_RATE_KEY,
     "eutils.ncbi.nlm.nih.gov",
     "www.ncbi.nlm.nih.gov",
     "ftp.ncbi.nlm.nih.gov",
@@ -87,16 +92,16 @@ class Settings:
 
     prices: dict[str, Prices] = field(default_factory=dict)
 
-    figures_max_per_paper: int = 3
-    figures_max_tokens: int = 4000
+    figures_max_per_paper: int = MAX_FIGURES_PER_PAPER
+    figures_max_tokens: int = MAX_FIGURE_TOKENS
 
     # These three alter the assembled paper text, so they are echoed into the
     # snapshot manifest; a change here re-extracts the affected papers and the
     # manifest is the only place that would explain why.
-    supplements_max_chars_per_paper: int = 24_000
-    supplements_max_rows_per_sheet: int = 200
-    supplements_keep_all_below_rows: int = 60
-    bundle_deadline_s: float = 60.0
+    supplements_max_chars_per_paper: int = MAX_CHARS_PER_PAPER
+    supplements_max_rows_per_sheet: int = MAX_ROWS_PER_SHEET
+    supplements_keep_all_below_rows: int = KEEP_ALL_BELOW
+    bundle_deadline_s: float = BUNDLE_DEADLINE_S
 
     # Derived paths
     @property
@@ -131,6 +136,8 @@ class Settings:
             "supplements_keep_all_below_rows": self.supplements_keep_all_below_rows,
             "figures_max_per_paper": self.figures_max_per_paper,
             "figures_max_tokens": self.figures_max_tokens,
+            # Which bundles arrive in time decides which supplements reach the text.
+            "bundle_deadline_s": self.bundle_deadline_s,
         }
 
 
@@ -207,10 +214,10 @@ def load_settings(
         figure_model=models.get("figure_model", "claude-opus-5-5"),
         figure_effort=models.get("figure_effort", "low"),
         prices=prices,
-        figures_max_per_paper=int(figs.get("max_per_paper", 3)),
-        figures_max_tokens=int(figs.get("max_tokens", 4000)),
-        supplements_max_chars_per_paper=int(sup.get("max_chars_per_paper", 24_000)),
-        supplements_max_rows_per_sheet=int(sup.get("max_rows_per_sheet", 200)),
-        supplements_keep_all_below_rows=int(sup.get("keep_all_below_rows", 60)),
-        bundle_deadline_s=float(sup.get("bundle_deadline_s", 60.0)),
+        figures_max_per_paper=int(figs.get("max_per_paper", MAX_FIGURES_PER_PAPER)),
+        figures_max_tokens=int(figs.get("max_tokens", MAX_FIGURE_TOKENS)),
+        supplements_max_chars_per_paper=int(sup.get("max_chars_per_paper", MAX_CHARS_PER_PAPER)),
+        supplements_max_rows_per_sheet=int(sup.get("max_rows_per_sheet", MAX_ROWS_PER_SHEET)),
+        supplements_keep_all_below_rows=int(sup.get("keep_all_below_rows", KEEP_ALL_BELOW)),
+        bundle_deadline_s=float(sup.get("bundle_deadline_s", BUNDLE_DEADLINE_S)),
     )

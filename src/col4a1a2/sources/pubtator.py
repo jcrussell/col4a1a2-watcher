@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from col4a1a2.http import PoliteClient
+
+log = logging.getLogger("col4a1a2")
 
 BASE = "https://www.ncbi.nlm.nih.gov/research/pubtator3-api"
 
@@ -25,9 +29,7 @@ def search(
             params={"text": text, "page_size": str(page_size), "page": str(page)},
             ttl=ttl,
         )
-        if not resp.ok:
-            raise RuntimeError(f"PubTator search failed: HTTP {resp.status}")
-        data = resp.json()
+        data = resp.require_ok("PubTator search").json()
         results = data.get("results", [])
         out.extend(results)
         if max_results is not None and len(out) >= max_results:
@@ -39,7 +41,13 @@ def search(
 
 
 def export_biocjson(client: PoliteClient, pmids: list[str], chunk: int = 100) -> dict[str, dict]:
-    """Return {pmid: BioC document} for the given PMIDs."""
+    """Return {pmid: BioC document} for the given PMIDs.
+
+    A failed chunk is skipped so one bad response cannot abort a fetch, but it
+    is logged, and the caller records requested against resolved in the
+    manifest: a chunk dropped silently once cost up to 100 papers their
+    PubTator triage signals with nothing to show for it.
+    """
     docs: dict[str, dict] = {}
     for i in range(0, len(pmids), chunk):
         batch = pmids[i : i + chunk]
@@ -49,6 +57,8 @@ def export_biocjson(client: PoliteClient, pmids: list[str], chunk: int = 100) ->
             ttl=None,
         )
         if not resp.ok:
+            log.warning("PubTator export failed for %d PMIDs (HTTP %d); their annotations are missing",
+                        len(batch), resp.status)
             continue
         data = resp.json()
         items = data.get("PubTator3", data) if isinstance(data, dict) else data

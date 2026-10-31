@@ -56,12 +56,12 @@ def test_unquoted_host_key_is_rejected_not_silently_accepted(tmp_path):
 def test_clinical_regex_is_code_not_config():
     """One definition only. It is a classifier, versioned with its code, and
     immune to TOML's string-literal escaping rules there."""
-    from col4a1a2.cli import CLINICAL_DEFAULT
+    from col4a1a2.patterns import CLINICAL_RE
 
     with CONFIG.open("rb") as f:
         raw = tomllib.load(f)
     assert "triage" not in raw, "the regex must not be duplicated into config"
-    assert r"c\.\d" in CLINICAL_DEFAULT
+    assert r"c\.\d" in CLINICAL_RE.pattern
 
 
 def test_paths_derive_from_the_cache_dir(tmp_path):
@@ -95,7 +95,9 @@ def test_text_affecting_settings_are_reported_for_the_manifest():
     st = load_settings(CONFIG)
     keys = st.text_affecting()
     assert set(keys) >= {"supplements_max_chars_per_paper", "figures_max_per_paper"}
-    assert all(isinstance(v, int) for v in keys.values())
+    assert set(keys) >= {"supplements_max_rows_per_sheet", "supplements_keep_all_below_rows",
+                         "figures_max_tokens", "bundle_deadline_s"}
+    assert all(isinstance(v, (int, float)) for v in keys.values())
 
 
 def test_prices_cost_is_linear_and_counts_cache_separately():

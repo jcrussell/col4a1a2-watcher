@@ -44,11 +44,12 @@ def main(argv: list[str] | None = None) -> int:
     from col4a1a2.cli import make_anthropic
     from col4a1a2.config import load_settings
 
-    client = make_anthropic(load_settings())
+    st = load_settings()
+    client = make_anthropic(st)
     t0 = time.time()
     try:
         resp = client.beta.messages.parse(
-            model="claude-opus-5-5",
+            model=st.extract_model,
             max_tokens=2000,
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": PROBE}],

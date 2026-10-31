@@ -248,6 +248,30 @@
       "default": null,
       "title": "Pmid Lookup Resolved"
     },
+    "pubtator_export_requested": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pubtator Export Requested"
+    },
+    "pubtator_export_resolved": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pubtator Export Resolved"
+    },
     "pubtator_queries": {
       "items": {
         "type": "string"
@@ -283,6 +307,21 @@
       ],
       "default": null,
       "title": "Supplement Files Parsed"
+    },
+    "text_affecting": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Text Affecting"
     },
     "triage_keep": {
       "default": 0,

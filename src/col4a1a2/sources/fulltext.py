@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
+from col4a1a2.patterns import HGVS_LIKE
+
 XLINK = "{http://www.w3.org/1999/xlink}href"
 
 DROP_TAGS = {"ref-list", "fn-group", "ack", "glossary", "app-group", "back", "author-notes", "license"}
@@ -18,8 +20,6 @@ VARIANT_CONTEXT = re.compile(
     r"\b(variant|variants|mutation|mutations|de novo|missense|nonsense|frameshift|splice|"
     r"glycine|exon|pedigree|segregat\w*|genotype|Sanger|chromatogram|domain)\b", re.I)
 
-# Anything that looks like HGVS. Used by the figure cost gate and by supplement row filtering.
-HGVS_LIKE = re.compile(r"\bc\.\d+|\bp\.\(?[A-Z][a-z]{2}\d+|\bp\.\(?[A-Z]\d+|\b[A-Z][a-z]{2}\d+[A-Z][a-z]{2}\b")
 
 
 @dataclass(frozen=True)

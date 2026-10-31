@@ -20,7 +20,9 @@ import sys
 from pathlib import Path
 
 from col4a1a2 import jsonl
-from col4a1a2.config import REPO
+from col4a1a2.patterns import CLINICAL_RE, GENE_RE, HGVS_LIKE
+from col4a1a2.config import Settings, load_settings
+from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache
 
 PERSON = re.compile(
     r"\b(proband|probands|patient|patients|family|families|kindred|pedigree|"
@@ -30,13 +32,11 @@ METHOD = re.compile(
     r"RNA-seq|knockdown|knockout|overexpress\w*|GWAS|genome[- ]wide association|"
     r"biomarker|molecular docking|immunohistochem\w*|mouse|mice|zebrafish|rat|"
     r"iPSC|cell line|in vitro|differentially expressed|eQTL|summary statistics)\b", re.I)
-CLINICAL = re.compile(
-    r"\b(variant|mutation|pathogenic|de novo|heterozygous|Gould|HANAC|porencephal\w*|"
-    r"schizencephal\w*|h(?:a)?emorrhag\w*|leukoencephalopath\w*|PADMAL|cataract|"
-    r"tortuosity|h(?:a)?ematuria|nephropath\w*|myopath\w*|stroke)\b", re.I)
-GENE = re.compile(r"COL4A[12]", re.I)
+# The deployed rule's own vocabulary, so this tool scores what actually runs.
+CLINICAL = CLINICAL_RE
+GENE = GENE_RE
 TRANSCRIPT = re.compile(r"NM_001845|NM_001846")
-HGVS = re.compile(r"\bc\.\d+[+-]?\d*[ACGT_>a-z]|\bp\.(?:[A-Z][a-z]{2}\d+|[A-Z]\d+)")
+HGVS = HGVS_LIKE
 
 
 def hgvs_near_gene(body: str, window: int = 300) -> int:
@@ -46,22 +46,20 @@ def hgvs_near_gene(body: str, window: int = 300) -> int:
     )
 
 
-def llm_decisions() -> dict[str, bool]:
-    """Recorded Haiku decisions, from the tracked log rather than one snapshot.
+def llm_decisions(st: Settings) -> dict[str, bool]:
+    """Recorded decisions of the configured triage model, from the tracked log.
 
     The log covers every candidate ever triaged, while a snapshot only holds the
     papers that window kept, so the log is the authoritative record.
     """
-    path = REPO / "data/curated/triage.jsonl"
-    out: dict[str, bool] = {}
-    for r in jsonl.read_tolerant(path, what="triage cache"):
-        out[r["pmid"]] = bool(r["read_full_text"])
-    return out
+    cache = TriageCache(st.triage_cache)
+    return {pmid: bool(r["read_full_text"]) for (pmid, version, model), r in cache.entries.items()
+            if version == TRIAGE_PROMPT_VERSION and model == st.triage_model}
 
 
-def load(snapshot: Path) -> tuple[dict, dict]:
+def load(st: Settings, snapshot: Path) -> tuple[dict, dict]:
     papers = {r["pmid"]: r for r in jsonl.read(snapshot / "papers.jsonl")}
-    labels = json.loads((REPO / "data/curated/labels.json").read_text())["labels"]
+    labels = json.loads((st.curated_dir / "labels.json").read_text())["labels"]
     return papers, labels
 
 
@@ -108,16 +106,18 @@ def score(name: str, keep_fn, sig: dict, truth: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     ap = argparse.ArgumentParser(prog="col4a1a2-dev triage")
-    ap.add_argument("--snapshot", default="data/raw/2026-10-29")
+    ap.add_argument("--snapshot", default="2026-10-29",
+                    help="a snapshot name under the configured snapshot root, or a path")
     ap.add_argument("--borderline-is-yes", action="store_true",
                     help="count the 'borderline' label as a true positive")
     ap.add_argument("--llm", action="store_true", help="also call Haiku live (costs money)")
     a = ap.parse_args(argv)
 
+    st = load_settings()
     snapshot = Path(a.snapshot)
-    if not snapshot.is_absolute():
-        snapshot = REPO / snapshot
-    papers, labels = load(snapshot)
+    if not snapshot.exists():
+        snapshot = st.snapshot_root / a.snapshot
+    papers, labels = load(st, snapshot)
 
     known = {p: labels[p] for p in papers if p in labels}
     if not known:
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         p: (lab["label"] == "yes" or (a.borderline_is_yes and lab["label"] == "borderline"))
         for p, lab in known.items()
     }
-    recorded = llm_decisions()
+    recorded = llm_decisions(st)
     sig = {p: {**signals(papers[p]), "llm_keep": recorded.get(p)} for p in known}
 
     print(f"{len(known)} labelled papers, {sum(truth.values())} positive "
@@ -150,11 +150,9 @@ def main(argv: list[str] | None = None) -> int:
         print("\n(no recorded Haiku decisions; run fetch-papers with a key, or pass --llm)")
 
     if a.llm:
-        from col4a1a2.config import load_settings
         from col4a1a2.cli import make_anthropic
         from col4a1a2.extract.triage import triage_paper
         print("\nlive Haiku calls:")
-        st = load_settings()
         client = make_anthropic(st)
         live, tin, tout = {}, 0, 0
         for p in known:
@@ -166,7 +164,9 @@ def main(argv: list[str] | None = None) -> int:
             mark = "" if d.read_full_text == truth[p] else "  <-- disagrees with label"
             print(f"  {p} {'READ' if d.read_full_text else 'skip':>4}  {d.reason[:66]}{mark}")
         score("live Haiku gate", lambda p, _s: live[p], sig, truth)
-        print(f"tokens in={tin} out={tout}  cost=${(tin * 1.0 + tout * 5.0) / 1e6:.4f}")
+        price = st.price_for(st.triage_model)
+        cost = f"${price.cost(input=tin, output=tout):.4f}" if price else "unpriced"
+        print(f"tokens in={tin} out={tout}  cost={cost}")
     return 0
 
 

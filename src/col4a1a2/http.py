@@ -78,6 +78,16 @@ class Response:
     def ok(self) -> bool:
         return 200 <= self.status < 300
 
+    def require_ok(self, what: str) -> "Response":
+        """Raise unless 2xx. A failed page must never read as an empty one."""
+        if not self.ok:
+            raise HttpError(f"{what} failed: HTTP {self.status} ({self.url})")
+        return self
+
+
+class HttpError(RuntimeError):
+    """A request that came back non-2xx after the client's own retries."""
+
 
 class HttpCache:
     def __init__(self, path: Path) -> None:

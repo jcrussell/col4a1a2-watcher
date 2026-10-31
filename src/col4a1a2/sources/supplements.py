@@ -20,11 +20,11 @@ from io import BytesIO
 from pathlib import Path
 
 from col4a1a2.http import DownloadTimeout, PoliteClient, ResponseTooLarge, TooManyFailures
+from col4a1a2.sources.europepmc import BASE
 from col4a1a2.sources.fulltext import FigureRef, SupplementRef
 
 log = logging.getLogger("col4a1a2")
 
-BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 
 # A bundle is not immutable: publishers deposit supplements late, and the cache
 # stores any status below 500, so a 404 cached forever would be wrong.

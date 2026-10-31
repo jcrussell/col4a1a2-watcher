@@ -8,7 +8,6 @@ import json
 import hashlib
 import logging
 import os
-import re
 import sys
 from dataclasses import dataclass, field as dc_field
 from pathlib import Path
@@ -22,7 +21,7 @@ from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import records_digest
 from col4a1a2.digest import sha256_text
 from col4a1a2.extract.llm import Policy, ResponseArchive, SpendMeter
-from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
+from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, keyword_signals, triage_paper
 from col4a1a2 import jsonl, schemas
 from col4a1a2.http import PoliteClient
 from col4a1a2.ledger import Ledger
@@ -31,11 +30,6 @@ from col4a1a2.sources.europepmc import citation
 from col4a1a2.sources.fulltext import TextRegion, jats_inventory, jats_to_text
 
 log = logging.getLogger("col4a1a2")
-CLINICAL_DEFAULT = (
-    r"variant|mutation|pathogenic|de novo|heterozygous|c\.\d|p\.\(?[A-Z][a-z]{2}\d|Gould|HANAC|porencephal|"
-    r"schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|"
-    r"Axenfeld|tortuosity|hematuria|haematuria|nephropath|cramps|myopath|cerebral palsy|stroke|proband|famil"
-)
 
 
 def make_client(settings: Settings) -> PoliteClient:
@@ -86,6 +80,7 @@ def _enrich(
     pmcid: str,
     dest: Path,
     *,
+    st: Settings,
     want_supplements: bool,
     want_figures: bool,
     force_figures: bool,
@@ -108,7 +103,7 @@ def _enrich(
 
     bundle = sup.load_cached(dest)
     if bundle is None:
-        bundle = sup.fetch_bundle(client, pmcid)
+        bundle = sup.fetch_bundle(client, pmcid, deadline_s=st.bundle_deadline_s)
     else:
         log.info("%s: reusing %d bundle members already on disk", pmcid, len(bundle.members))
     if not bundle.ok:
@@ -125,7 +120,7 @@ def _enrich(
     if want_supplements:
         # One budget for the whole paper, not per file: a paper with eight parsed
         # supplements would otherwise contribute eight times the cap.
-        char_budget = tabular.MAX_CHARS_PER_PAPER
+        char_budget = st.supplements_max_chars_per_paper
         # Keyed by basename and by stem, because some publishers emit hrefs with
         # no extension; without the stem fallback the region would be labelled
         # "mmc1.xlsx" instead of "eTable 2", in both the prompt and the provenance.
@@ -145,7 +140,9 @@ def _enrich(
                 e.supplement_meta.append(meta)
                 continue
             try:
-                sheets = tabular.filter_sheets(tabular.parse(m.data, m.ext))
+                sheets = tabular.filter_sheets(tabular.parse(m.data, m.ext),
+                                               keep_all_below=st.supplements_keep_all_below_rows,
+                                               max_rows=st.supplements_max_rows_per_sheet)
             except tabular.UnsupportedSupplement as exc:
                 meta["skip_reason"] = str(exc)
                 e.supplement_meta.append(meta)
@@ -168,7 +165,8 @@ def _enrich(
 
         probe = type(pt)(pmid=pt.pmid, pmcid=pt.pmcid, title=pt.title, abstract=pt.abstract,
                          body=pt.body, n_tables=pt.n_tables, supplements=list(e.supplements))
-        chosen, gate = figmod.select_figures(figs, probe.as_prompt_text(), force=force_figures)
+        chosen, gate = figmod.select_figures(figs, probe.as_prompt_text(), force=force_figures,
+                                             max_figures=st.figures_max_per_paper)
         e.gate = gate
         for fig in chosen:
             member = next((bundle.find(h) for h in fig.graphic_hrefs if bundle.find(h)), None)
@@ -190,7 +188,9 @@ def _enrich(
             if cached is None:
                 try:
                     tr, usage, prov = figmod.transcribe_figure(acl, member.data, mt, fig,
-                                                               image_sha256=digest, **fig_llm.kwargs())
+                                                               image_sha256=digest,
+                                                               max_tokens=st.figures_max_tokens,
+                                                               **fig_llm.kwargs())
                     cached = fig_cache.put(pmcid=pmcid, fig=fig, image_sha256=digest,
                                            transcription=tr, usage=usage, provenance=prov)
                 except Exception as exc:
@@ -345,12 +345,10 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
 
     # Triage before downloading any full text: PubTator annotations come from the
     # title/abstract export and are cheap; full texts are fetched only for kept papers.
-    annots = pubtator.export_biocjson(client, [m.pmid for m in metas if m.pmid]) if not a.skip_pubtator else {}
+    want_annots = [m.pmid for m in metas if m.pmid] if not a.skip_pubtator else []
+    n_pubtator_requested = len(want_annots)
+    annots = pubtator.export_biocjson(client, want_annots) if want_annots else {}
     gene_ids = set(st.pubtator_gene_ids)
-    gene_re = re.compile(r"\bCOL4A[12]\b", re.I)
-    # The regex is a classifier, versioned with the code that uses it, and it is
-    # immune to TOML/YAML string-literal hazards here. It is deliberately not config.
-    clinical_re = re.compile(CLINICAL_DEFAULT, re.I)
 
     # The LLM gate runs on title + abstract only, before any full text is fetched.
     # Without a key (or with --no-llm-triage) we fall back to the keyword rule,
@@ -369,19 +367,8 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         doc = annots.get(m.pmid, {})
         hints = pubtator.annotations(doc) if m.pmid in annots else []
         linked = pubtator.gene_linked_variants(doc, gene_ids) if doc else []
-        ta = f"{m.title} {m.abstract or ''}"
-        tr = {
-            "title_abstract_mention": bool(gene_re.search(ta)),
-            "clinical_keyword": bool(clinical_re.search(ta)),
-            "pubtator_gene_variant": any(h["type"] == "Gene" and str(h.get("identifier")) in gene_ids for h in hints)
-                                     and any(h["type"] in ("Variant", "Mutation") for h in hints),
-            "pubtator_gene_linked_variant": bool(linked),
-            "pubtator_linked_hgvs": [v["hgvs"] for v in linked if v.get("hgvs")],
-            "pubtator_search_hit": m.pmid in pubtator_hits,
-        }
-        keyword_keep = (tr["pubtator_search_hit"] or tr["pubtator_gene_variant"]
-                        or (tr["title_abstract_mention"] and tr["clinical_keyword"]))
-        tr["keyword_keep"] = keyword_keep
+        tr = keyword_signals(m.title, m.abstract, hints=hints, linked=linked,
+                             search_hit=m.pmid in pubtator_hits, gene_ids=gene_ids)
         if use_llm:
             cached = tcache.get(m.pmid, triage_llm.model, refresh=triage_llm.refresh)
             if cached is None:
@@ -401,7 +388,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             # 1.00 on the snapshot, so it overrides a negative model decision.
             tr["keep"] = tr["llm_keep"] or tr["pubtator_gene_linked_variant"]
         else:
-            tr["keep"] = keyword_keep
+            tr["keep"] = tr["keyword_keep"]
         triaged.append((m, hints, tr))
 
     triaged.sort(key=lambda x: (x[2]["keep"], x[2]["pubtator_gene_linked_variant"],
@@ -467,7 +454,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                 try:
                     enr = _enrich(
                         client, pt, xml, m.pmcid, st.bundle_store / m.pmcid,
-                        want_supplements=want_supplements, want_figures=want_figures,
+                        st=st, want_supplements=want_supplements, want_figures=want_figures,
                         force_figures=a.figures, acl=acl, fig_cache=fig_cache,
                         fig_llm=fig_llm,
                     )
@@ -534,6 +521,11 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         # the two numbers. A drop here is the first sign of the next break.
         "pmid_lookup_requested": n_lookup_requested,
         "pmid_lookup_resolved": n_lookup_resolved,
+        "pubtator_export_requested": n_pubtator_requested,
+        "pubtator_export_resolved": len(annots),
+        # Anything that changes the assembled text changes the resume key, so
+        # the manifest is where a reader finds out why papers were re-extracted.
+        "text_affecting": st.text_affecting(),
         "ledger_events": ledger.appended,
         "discovery_slices": len(todo) + len(sealed),
         "discovery_slices_sealed": len(sealed),

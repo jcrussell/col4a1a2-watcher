@@ -20,11 +20,11 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from col4a1a2.sources.fulltext import HGVS_LIKE, rows_to_text
+from col4a1a2.patterns import GENE_IN_CELL, HGVS_LIKE
+from col4a1a2.sources.fulltext import rows_to_text
 
 log = logging.getLogger("col4a1a2")
 
-GENE_RE = re.compile(r"COL4A[12]", re.I)
 # Variant notation that HGVS_LIKE alone misses: bare protein shorthand and
 # three-letter forms without a c./p. prefix.
 EXTRA_VARIANT_RE = re.compile(r"\b[A-Z]\d{2,5}[A-Z]\b|\bGly\d+[A-Z][a-z]{2}\b|\bexon\s*\d+\b", re.I)
@@ -57,7 +57,7 @@ class Sheet:
 
 def is_relevant(cells: list[str]) -> bool:
     joined = " ".join(cells)
-    return bool(GENE_RE.search(joined) or HGVS_LIKE.search(joined) or EXTRA_VARIANT_RE.search(joined))
+    return bool(GENE_IN_CELL.search(joined) or HGVS_LIKE.search(joined) or EXTRA_VARIANT_RE.search(joined))
 
 
 def filter_rows(
@@ -181,7 +181,13 @@ def parse(data: bytes, ext: str) -> list[Sheet]:
     raise UnsupportedSupplement(f"unsupported extension {ext!r}")
 
 
-def filter_sheets(sheets: list[Sheet], *, max_total_rows: int = 400) -> list[Sheet]:
+def filter_sheets(
+    sheets: list[Sheet],
+    *,
+    max_total_rows: int = 400,
+    keep_all_below: int = KEEP_ALL_BELOW,
+    max_rows: int = MAX_ROWS_PER_SHEET,
+) -> list[Sheet]:
     """Filter a whole file's sheets, deciding when the small-sheet bypass applies.
 
     `filter_rows` lets a small sheet through whole so a single short variant
@@ -194,7 +200,9 @@ def filter_sheets(sheets: list[Sheet], *, max_total_rows: int = 400) -> list[She
     sheet per page and `_docx` one per table, so a sheet-count gate would strip
     the bypass from any multi-page PDF and cut each page's few lines down.
     """
-    return filter_sheets_by_rows(sheets, max_total_rows=max_total_rows)
+    total = sum(sh.rows_total for sh in sheets)
+    bypass = 0 if total > max_total_rows else keep_all_below
+    return [filter_rows(sh, keep_all_below=bypass, max_rows=max_rows) for sh in sheets]
 
 
 def sheets_to_text(
@@ -232,15 +240,3 @@ def sheets_to_text(
         used += len(chunk)
         rendered += 1
     return "\n".join(out), rendered
-
-
-def filter_sheets_by_rows(sheets: list[Sheet], *, max_total_rows: int = 400) -> list[Sheet]:
-    """Decide the small-sheet bypass from total row count, not sheet count.
-
-    `_pdf` emits one Sheet per page and `_docx` one per table, so counting
-    sheets would strip the bypass from any PDF over a few pages and gut each
-    page's handful of lines. Total rows is what actually costs tokens.
-    """
-    total = sum(sh.rows_total for sh in sheets)
-    bypass = 0 if total > max_total_rows else KEEP_ALL_BELOW
-    return [filter_rows(sh, keep_all_below=bypass) for sh in sheets]

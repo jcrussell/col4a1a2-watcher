@@ -203,7 +203,7 @@ def test_enrich_parses_supplements_end_to_end(tmp_path, fixtures):
 
     pt = jats_to_text(jats)
     e = cli._enrich(FakeClient(buf.getvalue()), pt, jats, "PMC9", tmp_path / "PMC9",
-                    want_supplements=True, want_figures=False, force_figures=False)
+                    st=_settings(), want_supplements=True, want_figures=False, force_figures=False)
     assert len(e.supplements) == 1
     label, text = e.supplements[0]
     assert label == "eTable 2"
@@ -227,7 +227,7 @@ def test_enrich_reports_an_unsupported_supplement_without_raising(tmp_path):
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr("movie.avi", b"video")
     e = cli._enrich(FakeClient(buf.getvalue()), jats_to_text(jats), jats, "PMC9", tmp_path / "PMC9",
-                    want_supplements=True, want_figures=False, force_figures=False)
+                    st=_settings(), want_supplements=True, want_figures=False, force_figures=False)
     assert e.supplements == []
     assert "unsupported" in e.supplement_meta[0]["skip_reason"]
 
@@ -253,3 +253,40 @@ def test_members_are_written_before_the_marker(tmp_path):
     member = dest / "a.csv"
     assert marker.stat().st_mtime_ns >= member.stat().st_mtime_ns
     assert sup.load_cached(dest) is not None
+
+
+
+def _settings(**over):
+    import dataclasses
+    from pathlib import Path
+
+    from col4a1a2.config import load_settings
+
+    st = load_settings(Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml")
+    return dataclasses.replace(st, **over)
+
+
+def test_enrich_honours_the_configured_supplement_cap(tmp_path):
+    """The supplement caps were parsed from config and then ignored: the code
+    read module constants, so editing the TOML changed nothing."""
+    import io
+    import zipfile
+
+    from col4a1a2 import cli
+    from col4a1a2.sources.fulltext import jats_to_text
+
+    rows = "\n".join(f"COL4A1,c.{i}G>A,proband {i}" for i in range(1, 60))
+    jats = b"""<article><front><article-meta><article-title>T</article-title></article-meta></front>
+      <body><sec><p>x</p><supplementary-material id="S1"><label>eTable 1</label>
+        <media xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="t.csv"/>
+      </supplementary-material></sec></body></article>"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("t.csv", "gene,variant,who\n" + rows)
+    wide = cli._enrich(FakeClient(buf.getvalue()), jats_to_text(jats), jats, "PMC9", tmp_path / "a",
+                       st=_settings(), want_supplements=True, want_figures=False, force_figures=False)
+    narrow = cli._enrich(FakeClient(buf.getvalue()), jats_to_text(jats), jats, "PMC9", tmp_path / "b",
+                         st=_settings(supplements_max_rows_per_sheet=5),
+                         want_supplements=True, want_figures=False, force_figures=False)
+    assert "c.50G>A" in wide.supplements[0][1]
+    assert "c.50G>A" not in narrow.supplements[0][1], "the configured row cap must apply"

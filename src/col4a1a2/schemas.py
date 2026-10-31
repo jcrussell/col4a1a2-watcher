@@ -377,6 +377,9 @@ class ManifestRow(Row):
     candidates_cut_by_limit: int | None = None
     europepmc_hits_without_pmid: int | None = None
     pmid_lookup_requested: int | None = None
+    pubtator_export_requested: int | None = None
+    pubtator_export_resolved: int | None = None
+    text_affecting: dict[str, float] | None = None
     pmid_lookup_resolved: int | None = None
     ledger_events: int | None = None
     discovery_slices: int | None = None

@@ -101,9 +101,7 @@ def search(
             },
             ttl=ttl,
         )
-        if not resp.ok:
-            raise RuntimeError(f"Europe PMC search failed: HTTP {resp.status}")
-        data = resp.json()
+        data = resp.require_ok("Europe PMC search").json()
         results = data.get("resultList", {}).get("result", [])
         out.extend(_to_meta(r) for r in results)
         if max_results is not None and len(out) >= max_results:
@@ -156,7 +154,7 @@ def hit_count(client: PoliteClient, query: str, ttl: float | None = 86400) -> in
         params={"query": query, "format": "json", "pageSize": "1"},
         ttl=ttl,
     )
-    return int(resp.json().get("hitCount", 0))
+    return int(resp.require_ok("Europe PMC hit count").json().get("hitCount", 0))
 
 
 def full_text_xml(client: PoliteClient, pmcid: str) -> bytes | None:
@@ -184,9 +182,9 @@ def references(client: PoliteClient, pmid: str, *, page_size: int = 1000,
             params={"format": "json", "pageSize": str(page_size), "page": str(page)},
             ttl=ttl,
         )
-        if not resp.ok:
-            return out
-        data = resp.json()
+        # Raises rather than returning what it has: a partial bibliography
+        # would read as "this paper does not cite that one".
+        data = resp.require_ok(f"Europe PMC references for {pmid}").json()
         refs = (data.get("referenceList") or {}).get("reference") or []
         for r in refs:
             out.append({

@@ -30,6 +30,7 @@ import logging
 
 from col4a1a2.digest import sha256_text
 from col4a1a2.extract.cache import KeyedCache
+from col4a1a2.patterns import CLINICAL_RE, GENE_RE
 from pydantic import BaseModel, Field
 
 TRIAGE_PROMPT_VERSION = "t1"
@@ -93,3 +94,26 @@ def triage_paper(client, title: str, abstract: str | None, *, model: str, effort
         request={"prompt_version": TRIAGE_PROMPT_VERSION, "input_sha256": sha256_text(user)},
     )
     return reply.require(TriageFailed), reply.usage_row(), reply.provenance()
+
+
+def keyword_signals(title: str, abstract: str | None, *, hints: list[dict], linked: list[dict],
+                    search_hit: bool, gene_ids: set[str]) -> dict:
+    """The keyword triage signals and the rule built from them.
+
+    The rule is the fallback when the model gate is unavailable, and the
+    signals are recorded for every paper either way, so the dev triage tool can
+    score the rule that is actually deployed.
+    """
+    ta = f"{title} {abstract or ''}"
+    tr = {
+        "title_abstract_mention": bool(GENE_RE.search(ta)),
+        "clinical_keyword": bool(CLINICAL_RE.search(ta)),
+        "pubtator_gene_variant": any(h["type"] == "Gene" and str(h.get("identifier")) in gene_ids for h in hints)
+                                 and any(h["type"] in ("Variant", "Mutation") for h in hints),
+        "pubtator_gene_linked_variant": bool(linked),
+        "pubtator_linked_hgvs": [v["hgvs"] for v in linked if v.get("hgvs")],
+        "pubtator_search_hit": search_hit,
+    }
+    tr["keyword_keep"] = (tr["pubtator_search_hit"] or tr["pubtator_gene_variant"]
+                          or (tr["title_abstract_mention"] and tr["clinical_keyword"]))
+    return tr
