@@ -50,7 +50,7 @@ The files are a small database, so they get the few guarantees a database would 
 - **`publish` builds from tracked files only.** `data/curated/`, `config/` and the code; never `data/raw/`. That is what lets CI build the release from a checkout, and a test runs it with no snapshot directory at all.
 - **Confident by default.** The release holds records the checked review upheld, with every quote grounded and nothing flagged (`extract.rows.is_confident`). `--all` exists for people inspecting the data; CI never passes it.
 - **Deterministic.** Sorted rows and a version taken from the data, never the clock, so the same commit builds the same bytes.
-- **The release is built, never committed, and deployed only from a tag.** `_site/` is gitignored; pushing a `v*` tag runs `.github/workflows/publish.yml`, which builds and deploys it. `ci.yml` runs the tests, `check` and a throwaway build on every push.
+- **The release is built, never committed, and deployed only from a tag.** `_site/` is gitignored; pushing a `v*` tag runs `.github/workflows/publish.yml`, which builds and deploys it; running that workflow by hand is a dry run that builds and uploads the site without deploying. Tag a release only after `ci.yml` and a dry run are green on GitHub. `ci.yml` runs the tests, `check` and a throwaway build on every push.
 - **One version, in `pyproject.toml`.** `col4a1a2.__version__` reads it from the package metadata and the User-Agent's `{version}` is filled from that; tag releases `v<version>`.
 - **No spot-check rate without a schema.** `publish` refuses to run while `data/curated/gold/` has files and no model in `schemas.py`.
 
