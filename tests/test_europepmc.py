@@ -11,7 +11,7 @@ closed without ever looking one up.
 
 import json
 
-from col4a1.sources.europepmc import PaperMeta, lookup_pmids
+from col4a1a2.sources.europepmc import PaperMeta, lookup_pmids
 
 
 class FakeResponse:

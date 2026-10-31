@@ -116,7 +116,7 @@ and extraction records. Grounding already protects the last of those against
 fabricated detail, but it answers only "does this sentence appear in the text",
 not "does this sentence support the claim".
 
-So `col4a1 challenge` runs one call per extracted paper that tries to refute
+So `col4a1a2 challenge` runs one call per extracted paper that tries to refute
 each record, and the reviewer's own output is verified before any of it is
 stored. A disputed verdict must cite the contradicting sentence verbatim, and
 that sentence goes through the same grounding machinery as an evidence quote.
@@ -148,7 +148,7 @@ that should not be records at all, so the count needs a relevance filter before
 it can be read as recall.
 
 Nothing the reviewer proposes is applied. Count corrections are named
-`proposed_*`, `extractions.jsonl` is never rewritten, and `col4a1 review`
+`proposed_*`, `extractions.jsonl` is never rewritten, and `col4a1a2 review`
 hands the whole queue to a human as TSV.
 
 ## Deterministic checks

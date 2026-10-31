@@ -31,7 +31,7 @@ Milestone 1 is complete except for the human spot-check.
 ## Known gaps
 
 - **Supplementary files and figures are now read**, which closes what was the largest loss. Spreadsheets, Word documents, delimited files and PDFs are parsed deterministically; figures are transcribed by a vision model, but only for papers whose text does not already name its variants. What remains out of reach: supplements that the article's publisher hosts and PMC does not, scanned PDFs (detected and recorded, never guessed at), and TIFF figures, which the vision API does not accept.
-- **No precision estimate exists yet**, for extraction or for review, because `data/curated/gold/` is empty. `col4a1 review` now emits the queue; filling it is human work and the one thing blocking a stated accuracy figure.
+- **No precision estimate exists yet**, for extraction or for review, because `data/curated/gold/` is empty. `col4a1a2 review` now emits the queue; filling it is human work and the one thing blocking a stated accuracy figure.
 - **`missed_variants` needs a relevance filter** before its count can be read as recall: common SNPs from association sections ground correctly but should never be records.
 - **Deduplication is designed but not built.** See `docs/methods.md`.
 - Non-open-access papers yield title and abstract only.

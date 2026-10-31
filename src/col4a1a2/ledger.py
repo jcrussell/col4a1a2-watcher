@@ -40,9 +40,9 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from col4a1 import jsonl
+from col4a1a2 import jsonl
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 LEDGER_VERSION = 1
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from col4a1.sources import tabular
+from col4a1a2.sources import tabular
 
 FIX = Path(__file__).parent / "fixtures"
 

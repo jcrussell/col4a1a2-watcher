@@ -65,7 +65,7 @@ def read_tolerant(path: Path, *, what: str = "file") -> list[dict]:
     """
     import logging
 
-    log = logging.getLogger("col4a1")
+    log = logging.getLogger("col4a1a2")
     out: list[dict] = []
     if not path.exists():
         return out

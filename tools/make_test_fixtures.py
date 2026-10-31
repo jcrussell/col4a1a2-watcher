@@ -4,8 +4,9 @@ Authored by us, so no publisher bytes are redistributed and the fixture licence
 rule in tests/fixtures/README.md does not apply.
 """
 import csv, io, pathlib, sys
-sys.path.insert(0, "/home/ubuntu/repos/col4a1/src")
-FIX = pathlib.Path("/home/ubuntu/repos/col4a1/tests/fixtures")
+REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
+FIX = REPO / "tests" / "fixtures"
 FIX.mkdir(parents=True, exist_ok=True)
 
 ROWS = [["Patient", "Gene", "Transcript", "Coding", "Protein", "Inheritance"],

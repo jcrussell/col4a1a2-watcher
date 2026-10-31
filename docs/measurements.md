@@ -271,7 +271,7 @@ fetched, and in 36 cases extracted and challenged.
 run-scoped; this was the last of the class. `--limit` now records no
 disposition, the per-run count goes in the manifest as
 `candidates_cut_by_limit`, and the backlog is derived instead:
-`col4a1 ledger` reports `kept_not_extracted`, which found PMID 36360323 --
+`col4a1a2 ledger` reports `kept_not_extracted`, which found PMID 36360323 --
 triage-kept, 63,613 characters of full text fetched, sitting in a snapshot that
 was never extracted. One paper of 133, known to the ledger, read by nothing.
 

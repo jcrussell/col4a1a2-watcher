@@ -1,6 +1,6 @@
 # Data sources, rates and licences
 
-Every host below is reached through `src/col4a1/http.py`. Rates are configured in `config/col4a1.toml`; anything not listed defaults to one request per second.
+Every host below is reached through `src/col4a1a2/http.py`. Rates are configured in `config/col4a1a2.toml`; anything not listed defaults to one request per second.
 
 ## In use
 

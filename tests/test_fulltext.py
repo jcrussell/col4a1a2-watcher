@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from col4a1.sources.fulltext import jats_to_text
+from col4a1a2.sources.fulltext import jats_to_text
 
 FIX = Path(__file__).parent / "fixtures"
 

@@ -3,7 +3,7 @@ The vision call itself is never exercised offline."""
 
 from pathlib import Path
 
-from col4a1.extract.figures import (
+from col4a1a2.extract.figures import (
     FIGURE_PROMPT_VERSION,
     FigureCache,
     FigureTranscription,
@@ -11,7 +11,7 @@ from col4a1.extract.figures import (
     select_figures,
     transcription_to_text,
 )
-from col4a1.sources.fulltext import FigureRef, jats_inventory, jats_to_text, text_deficit
+from col4a1a2.sources.fulltext import FigureRef, jats_inventory, jats_to_text, text_deficit
 
 FIX = Path(__file__).parent / "fixtures"
 

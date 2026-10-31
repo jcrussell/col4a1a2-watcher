@@ -1,6 +1,6 @@
 # Codebook: per-paper variant evidence extraction
 
-This defines every field Claude fills in `PaperExtraction` (see `src/col4a1/extract/schema.py`) and how a human spot-checker should judge it. The system prompt (`src/col4a1/extract/prompts/v1.md`) is the operational version of these rules; keep the two in sync and bump `PROMPT_VERSION` when either changes.
+This defines every field Claude fills in `PaperExtraction` (see `src/col4a1a2/extract/schema.py`) and how a human spot-checker should judge it. The system prompt (`src/col4a1a2/extract/prompts/v1.md`) is the operational version of these rules; keep the two in sync and bump `PROMPT_VERSION` when either changes.
 
 ## Unit of extraction
 

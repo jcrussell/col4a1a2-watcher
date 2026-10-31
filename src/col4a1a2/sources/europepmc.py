@@ -7,7 +7,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from col4a1.http import PoliteClient
+from col4a1a2.http import PoliteClient
 
 log = logging.getLogger(__name__)
 

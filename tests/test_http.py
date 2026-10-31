@@ -1,4 +1,4 @@
-from col4a1.http import RateLimiter
+from col4a1a2.http import RateLimiter
 
 
 def test_rate_limiter_spaces_requests_per_host():
@@ -27,7 +27,7 @@ def test_rate_limiter_spaces_requests_per_host():
 def test_cache_sets_incremental_vacuum_and_a_busy_timeout(tmp_path):
     """DELETE alone never shrinks the file, and enabling incremental vacuum
     requires a VACUUM that is cheap now and painful at gigabytes."""
-    from col4a1.http import HttpCache
+    from col4a1a2.http import HttpCache
 
     c = HttpCache(tmp_path / "http.sqlite")
     assert c._db.execute("PRAGMA auto_vacuum").fetchone()[0] == 2  # 2 = INCREMENTAL

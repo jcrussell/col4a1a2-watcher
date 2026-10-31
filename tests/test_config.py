@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from col4a1.config import EXPECTED_RATE_KEYS, ConfigError, Prices, load_settings
+from col4a1a2.config import EXPECTED_RATE_KEYS, ConfigError, Prices, load_settings
 
-CONFIG = Path(__file__).resolve().parents[1] / "config" / "col4a1.toml"
+CONFIG = Path(__file__).resolve().parents[1] / "config" / "col4a1a2.toml"
 
 
 def test_committed_config_loads():
@@ -56,7 +56,7 @@ def test_unquoted_host_key_is_rejected_not_silently_accepted(tmp_path):
 def test_clinical_regex_is_code_not_config():
     """One definition only. It is a classifier, versioned with its code, and
     immune to TOML's string-literal escaping rules there."""
-    from col4a1.cli import CLINICAL_DEFAULT
+    from col4a1a2.cli import CLINICAL_DEFAULT
 
     with CONFIG.open("rb") as f:
         raw = tomllib.load(f)

@@ -19,10 +19,10 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 
-from col4a1.http import DownloadTimeout, PoliteClient, ResponseTooLarge, TooManyFailures
-from col4a1.sources.fulltext import FigureRef, SupplementRef
+from col4a1a2.http import DownloadTimeout, PoliteClient, ResponseTooLarge, TooManyFailures
+from col4a1a2.sources.fulltext import FigureRef, SupplementRef
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 

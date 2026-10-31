@@ -1,4 +1,4 @@
-# col4a1
+# col4a1a2
 
 A literature watcher for the collagen IV genes **COL4A1** and **COL4A2** (Gould syndrome, HANAC, PADMAL and related phenotypes).
 
@@ -17,19 +17,19 @@ export ANTHROPIC_API_KEY=...      # needed by `extract` and by the triage gate
 
 ```bash
 # Search Europe PMC and PubTator, triage on abstracts, download kept full texts
-uv run col4a1 fetch-papers --date-from 2026-04-01 --date-to 2026-10-29 --oa-only
+uv run col4a1a2 fetch-papers --date-from 2026-04-01 --date-to 2026-10-29 --oa-only
 
 # Inspect a snapshot: triage flags and keep/skip per paper
-uv run col4a1 list --snapshot data/raw/2026-10-29
+uv run col4a1a2 list --snapshot data/raw/2026-10-29
 
 # Count input tokens per paper without extracting
-uv run col4a1 extract --snapshot data/raw/2026-10-29 --count-only
+uv run col4a1a2 extract --snapshot data/raw/2026-10-29 --count-only
 
 # Extract (skips papers already done at the current prompt version)
-uv run col4a1 extract --snapshot data/raw/2026-10-29
+uv run col4a1a2 extract --snapshot data/raw/2026-10-29
 
 # Print the extracted records
-uv run col4a1 show --snapshot data/raw/2026-10-29
+uv run col4a1a2 show --snapshot data/raw/2026-10-29
 ```
 
 Add `--no-llm-triage` to fetch without an API key, using the keyword fallback.
@@ -57,6 +57,6 @@ uv run python tools/triage_eval.py --snapshot data/raw/2026-10-29
 - Full texts come from Europe PMC and PubMed Central open-access articles, are stored locally only, and are never redistributed. Test fixtures are limited to CC BY articles, attributed in `tests/fixtures/README.md`.
 - Extracted records carry a PMID, a prepared citation and short verbatim quotes.
 - The evidence table will be released CC BY 4.0. Code is Apache-2.0.
-- Every non-Anthropic request goes through one rate-limited, cached, serial client (`src/col4a1/http.py`).
+- Every non-Anthropic request goes through one rate-limited, cached, serial client (`src/col4a1a2/http.py`).
 
 **Research use only.** Records are machine-extracted and spot-checked at a stated rate. Nothing here is clinical advice.

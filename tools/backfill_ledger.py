@@ -17,8 +17,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from col4a1.config import load_settings  # noqa: E402
-from col4a1.ledger import Ledger  # noqa: E402
+from col4a1a2.config import load_settings  # noqa: E402
+from col4a1a2.ledger import Ledger  # noqa: E402
 
 
 def main() -> int:

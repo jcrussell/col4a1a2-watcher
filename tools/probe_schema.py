@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Check that a Pydantic schema is accepted by the structured-outputs grammar.
 
-    uv run python tools/probe_schema.py col4a1.extract.schema:PaperExtraction
+    uv run python tools/probe_schema.py col4a1a2.extract.schema:PaperExtraction
 
 Structured outputs compile the schema into a grammar with a size budget, and
 exceeding it fails the whole request with `400 Schema is too complex` rather

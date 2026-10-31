@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from col4a1.extract.derive import check_extraction, check_record, derive_variant_type
+from col4a1a2.extract.derive import check_extraction, check_record, derive_variant_type
 
 
 @pytest.mark.parametrize("hgvs_p,hgvs_c,expected", [

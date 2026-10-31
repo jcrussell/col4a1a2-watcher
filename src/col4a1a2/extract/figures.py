@@ -23,14 +23,14 @@ import json
 import logging
 from pathlib import Path
 
-from col4a1 import jsonl
+from col4a1a2 import jsonl
 from pydantic import BaseModel, Field
 
-from col4a1.sources.fulltext import FigureRef, rows_to_text, text_deficit
+from col4a1a2.sources.fulltext import FigureRef, rows_to_text, text_deficit
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 FIGURE_PROMPT_VERSION = "f1"
 FIGURE_MODEL = "claude-opus-5-5"

@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 import anthropic
 
-from col4a1.extract.prompt import PROMPT_VERSION, PaperInput, system_prompt, user_content
-from col4a1.extract.schema import SCHEMA_VERSION, PaperExtraction
+from col4a1a2.extract.prompt import PROMPT_VERSION, PaperInput, system_prompt, user_content
+from col4a1a2.extract.schema import SCHEMA_VERSION, PaperExtraction
 
 log = logging.getLogger(__name__)
 

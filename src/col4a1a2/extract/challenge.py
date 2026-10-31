@@ -56,11 +56,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from col4a1 import jsonl
-from col4a1.extract.prompt import PROMPT_VERSION
-from col4a1.extract.verify import find_quote, normalise
+from col4a1a2 import jsonl
+from col4a1a2.extract.prompt import PROMPT_VERSION
+from col4a1a2.extract.verify import find_quote, normalise
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 CHALLENGE_PROMPT_VERSION = "c1"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"

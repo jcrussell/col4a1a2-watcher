@@ -6,9 +6,9 @@ import zipfile
 
 import pytest
 
-from col4a1.http import DownloadTimeout, Response, ResponseTooLarge
-from col4a1.sources import supplements as sup
-from col4a1.sources.fulltext import FigureRef, SupplementRef, jats_inventory
+from col4a1a2.http import DownloadTimeout, Response, ResponseTooLarge
+from col4a1a2.sources import supplements as sup
+from col4a1a2.sources.fulltext import FigureRef, SupplementRef, jats_inventory
 
 
 def _zip(members: dict[str, bytes]) -> bytes:
@@ -186,8 +186,8 @@ def test_enrich_parses_supplements_end_to_end(tmp_path, fixtures):
     import io
     import zipfile
 
-    from col4a1 import cli
-    from col4a1.sources.fulltext import jats_to_text
+    from col4a1a2 import cli
+    from col4a1a2.sources.fulltext import jats_to_text
 
     xlsx = (fixtures / "supplement_variants.xlsx").read_bytes()
     jats = b"""<article><front><article-meta>
@@ -216,8 +216,8 @@ def test_enrich_reports_an_unsupported_supplement_without_raising(tmp_path):
     import io
     import zipfile
 
-    from col4a1 import cli
-    from col4a1.sources.fulltext import jats_to_text
+    from col4a1a2 import cli
+    from col4a1a2.sources.fulltext import jats_to_text
 
     jats = b"""<article><front><article-meta><article-title>T</article-title></article-meta></front>
       <body><sec><p>x</p><supplementary-material id="S1"><label>Movie 1</label>

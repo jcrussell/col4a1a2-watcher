@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG = REPO / "config" / "col4a1.toml"
+DEFAULT_CONFIG = REPO / "config" / "col4a1a2.toml"
 
 # Hosts we are willing to talk to at a rate other than the 1/s default. A key
 # here that is not a hostname (the supplement bucket) is a deliberate synthetic

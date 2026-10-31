@@ -1,7 +1,7 @@
 [project]
-name = "col4a1"
+name = "col4a1a2-watcher"
 version = "0.1.0"
-description = "Add your description here"
+description = "A monthly literature watcher that builds an open per-variant table of published COL4A1/COL4A2 carriers"
 readme = "README.md"
 authors = [
     { name = "Jon Crussell", email = "joncrussell@gmail.com" }
@@ -20,7 +20,12 @@ dependencies = [
 ]
 
 [project.scripts]
-col4a1 = "col4a1.cli:main"
+col4a1a2 = "col4a1a2.cli:main"
+
+[tool.uv.build-backend]
+# The distribution is col4a1a2-watcher but the module is col4a1a2: without this
+# the backend would look for src/col4a1a2_watcher.
+module-name = "col4a1a2"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]

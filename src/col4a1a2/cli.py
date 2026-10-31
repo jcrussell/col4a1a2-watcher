@@ -15,18 +15,18 @@ from pathlib import Path
 
 import anthropic
 
-from col4a1.config import ConfigError, Settings, load_settings
-from col4a1.discovery import DiscoveryLog, plan as plan_slices
-from col4a1.extract.prompt import PaperInput
-from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
-from col4a1 import jsonl
-from col4a1.http import PoliteClient
-from col4a1.ledger import Ledger
-from col4a1.sources import europepmc, ncbi, pubtator
-from col4a1.sources.europepmc import citation
-from col4a1.sources.fulltext import TextRegion, jats_inventory, jats_to_text
+from col4a1a2.config import ConfigError, Settings, load_settings
+from col4a1a2.discovery import DiscoveryLog, plan as plan_slices
+from col4a1a2.extract.prompt import PaperInput
+from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, triage_paper
+from col4a1a2 import jsonl
+from col4a1a2.http import PoliteClient
+from col4a1a2.ledger import Ledger
+from col4a1a2.sources import europepmc, ncbi, pubtator
+from col4a1a2.sources.europepmc import citation
+from col4a1a2.sources.fulltext import TextRegion, jats_inventory, jats_to_text
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 REPO = Path(__file__).resolve().parents[2]
 # Bundle members live outside any snapshot. The endpoint they come from fails or
 # stalls for most requests, so a successful download is valuable and must be
@@ -113,8 +113,8 @@ def _enrich(
     so a paper whose supplementary table supplies the variants never pays for
     vision and never gains model-transcribed evidence it does not need.
     """
-    from col4a1.sources import supplements as sup
-    from col4a1.sources import tabular
+    from col4a1a2.sources import supplements as sup
+    from col4a1a2.sources import tabular
 
     e = _Enrichment()
     if not (want_supplements or want_figures):
@@ -178,7 +178,7 @@ def _enrich(
             e.supplement_meta.append(meta)
 
     if want_figures and acl is not None and fig_cache is not None:
-        from col4a1.extract import figures as figmod
+        from col4a1a2.extract import figures as figmod
 
         probe = type(pt)(pmid=pt.pmid, pmcid=pt.pmcid, title=pt.title, abstract=pt.abstract,
                          body=pt.body, n_tables=pt.n_tables, supplements=list(e.supplements))
@@ -424,7 +424,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         # No disposition: a paper `--limit` did not reach this run is still in
         # play, and recording otherwise let a later limited run bury work
         # already done. The per-run count goes in the manifest instead, and
-        # `col4a1 ledger` derives the backlog from triage and stage.
+        # `col4a1a2 ledger` derives the backlog from triage and stage.
         ledger.record_candidate(
             pmid=m.pmid, doi=m.doi, title=m.title, journal=m.journal,
             first_pub_date=m.first_pub_date, is_open_access=m.is_open_access,
@@ -446,7 +446,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     acl = make_anthropic(st) if want_figures else None
     fig_cache = None
     if want_figures:
-        from col4a1.extract.figures import FigureCache
+        from col4a1a2.extract.figures import FigureCache
         fig_cache = FigureCache(st.figure_transcripts)
 
     rows = []
@@ -573,7 +573,7 @@ def _paper_inputs(snap: Path) -> list[PaperInput]:
 
 def cmd_extract(a: argparse.Namespace) -> int:
     import anthropic
-    from col4a1.extract.client import (
+    from col4a1a2.extract.client import (
         DEFAULT_MODEL,
         ExtractionRefused,
         ExtractionTruncated,
@@ -582,8 +582,8 @@ def cmd_extract(a: argparse.Namespace) -> int:
     )
     from pydantic import ValidationError as PydanticValidationError
 
-    from col4a1.extract.prompt import PROMPT_VERSION
-    from col4a1.extract.verify import ground
+    from col4a1a2.extract.prompt import PROMPT_VERSION
+    from col4a1a2.extract.verify import ground
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY is not set; export it and re-run.", file=sys.stderr)
@@ -711,7 +711,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     """Adversarially review extracted records, and verify the reviewer's output."""
     import anthropic  # noqa: F401  (imported for its exceptions via make_anthropic)
 
-    from col4a1.extract.challenge import (
+    from col4a1a2.extract.challenge import (
         ChallengeCache,
         ChallengeFailed,
         challenge_paper,
@@ -803,7 +803,7 @@ def cmd_review(a: argparse.Namespace) -> int:
     papers = {r["pmid"]: r for r in read_jsonl(snap / "papers.jsonl")}
     rows = latest_extractions(snap / "extractions.jsonl")
 
-    from col4a1.extract.challenge import record_key, slim_records
+    from col4a1a2.extract.challenge import record_key, slim_records
     challenges: dict[str, dict] = {}
     cpath = st.curated_dir / "challenges.jsonl"
     if cpath.exists():
@@ -973,13 +973,13 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     for name in ("httpx", "httpx2", "anthropic"):
         logging.getLogger(name).setLevel(logging.WARNING)
-    ap = argparse.ArgumentParser(prog="col4a1", description="COL4A1/COL4A2 literature watcher")
+    ap = argparse.ArgumentParser(prog="col4a1a2", description="COL4A1/COL4A2 literature watcher")
     # Carried by every subcommand via parents=[common]. Deliberately NOT also on
     # the top-level parser: two parsers writing one dest means the later write
     # silently wins. The consequence is that these flags go *after* the
-    # subcommand -- `col4a1 extract --config X`, not `col4a1 --config X extract`.
+    # subcommand -- `col4a1a2 extract --config X`, not `col4a1a2 --config X extract`.
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--config", help="path to col4a1.toml (default config/col4a1.toml)")
+    common.add_argument("--config", help="path to col4a1a2.toml (default config/col4a1a2.toml)")
     common.add_argument("--cache-dir", help="override the cache directory from config")
     sub = ap.add_subparsers(dest="cmd", required=True)
 

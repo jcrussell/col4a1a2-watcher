@@ -28,13 +28,13 @@ import json
 import logging
 from pathlib import Path
 
-from col4a1 import jsonl
+from col4a1a2 import jsonl
 from pydantic import BaseModel, Field
 
 TRIAGE_PROMPT_VERSION = "t1"
 TRIAGE_MODEL = "claude-haiku-5-5"
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 SYSTEM = """You decide whether a paper is worth reading in full for a COL4A1/COL4A2 variant-evidence database.
 

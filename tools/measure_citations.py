@@ -21,9 +21,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from col4a1.cli import make_client  # noqa: E402
-from col4a1.config import load_settings  # noqa: E402
-from col4a1.sources import europepmc  # noqa: E402
+from col4a1a2.cli import make_client  # noqa: E402
+from col4a1a2.config import load_settings  # noqa: E402
+from col4a1a2.sources import europepmc  # noqa: E402
 
 
 def main() -> int:

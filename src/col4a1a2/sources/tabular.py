@@ -20,9 +20,9 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from col4a1.sources.fulltext import HGVS_LIKE, rows_to_text
+from col4a1a2.sources.fulltext import HGVS_LIKE, rows_to_text
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 GENE_RE = re.compile(r"COL4A[12]", re.I)
 # Variant notation that HGVS_LIKE alone misses: bare protein shorthand and

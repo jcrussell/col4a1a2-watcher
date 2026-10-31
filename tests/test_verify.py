@@ -1,8 +1,8 @@
-from col4a1.extract.schema import (
+from col4a1a2.extract.schema import (
     Confidence, Gene, InheritanceCounts, PaperExtraction, PaperType, PhenotypeStatus, Phenotypes, Segregation,
     VariantEvidence,
 )
-from col4a1.extract.verify import ground, normalise, quote_in_text
+from col4a1a2.extract.verify import ground, normalise, quote_in_text
 
 TEXT = "The proband carried the c.1537G>A (p.Gly513Ser) variant — inherited from her mother. Renal ultrasound was normal."
 
@@ -50,7 +50,7 @@ def test_schema_roundtrip_and_json_schema():
 
 
 def test_region_attribution_separates_supplement_from_figure_evidence():
-    from col4a1.sources.fulltext import PaperText
+    from col4a1a2.sources.fulltext import PaperText
 
     pt = PaperText(pmid="1", pmcid="PMC1", title="T", abstract="", body="The proband carried c.1A>T.",
                    n_tables=0,
@@ -79,7 +79,7 @@ def test_region_attribution_separates_supplement_from_figure_evidence():
 def test_a_body_quote_does_not_launder_figure_sourced_evidence():
     """Pairing a figure quote with a generic body sentence must not hide the
     figure provenance: that is how 38 figure-derived records first slipped past."""
-    from col4a1.sources.fulltext import PaperText
+    from col4a1a2.sources.fulltext import PaperText
 
     pt = PaperText(pmid="1", pmcid=None, title="T", abstract="",
                    body="Variant positions are depicted in Figure 4.", n_tables=0,
@@ -96,7 +96,7 @@ def test_a_body_quote_does_not_launder_figure_sourced_evidence():
 
 
 def test_quote_spanning_two_regions_does_not_ground():
-    from col4a1.sources.fulltext import PaperText
+    from col4a1a2.sources.fulltext import PaperText
 
     pt = PaperText(pmid="1", pmcid=None, title="T", abstract="", body="ends here", n_tables=0,
                    supplements=[("eTable", "starts there")])
@@ -109,7 +109,7 @@ def test_quote_spanning_two_regions_does_not_ground():
 
 
 def test_as_prompt_text_is_unchanged_when_nothing_is_appended():
-    from col4a1.sources.fulltext import PaperText
+    from col4a1a2.sources.fulltext import PaperText
 
     pt = PaperText(pmid="1", pmcid=None, title="T", abstract="A", body="B", n_tables=0)
     assert pt.as_prompt_text() == "TITLE: T\n\nABSTRACT:\nA\n\nBODY:\nB"

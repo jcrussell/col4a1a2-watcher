@@ -2,8 +2,8 @@
 
 import json
 
-from col4a1.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, TriageDecision
-from col4a1.sources.pubtator import gene_linked_variants
+from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, TriageDecision
+from col4a1a2.sources.pubtator import gene_linked_variants
 
 
 def test_cache_round_trips_and_keys_on_prompt_version(tmp_path):

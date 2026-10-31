@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from col4a1.ledger import DROPPED_AT, Ledger, identify
+from col4a1a2.ledger import DROPPED_AT, Ledger, identify
 
 
 def test_identity_falls_back_through_pmid_doi_title():

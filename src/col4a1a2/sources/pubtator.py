@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from col4a1.http import PoliteClient
+from col4a1a2.http import PoliteClient
 
 BASE = "https://www.ncbi.nlm.nih.gov/research/pubtator3-api"
 

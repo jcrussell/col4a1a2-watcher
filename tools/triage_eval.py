@@ -156,7 +156,7 @@ def main() -> int:
 
     if a.llm:
         import anthropic
-        from col4a1.extract.triage import triage_paper
+        from col4a1a2.extract.triage import triage_paper
         print("\nlive Haiku calls:")
         client = anthropic.Anthropic()
         live, tin, tout = {}, 0, 0

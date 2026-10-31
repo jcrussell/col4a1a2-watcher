@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from col4a1.sources.fulltext import TextRegion
+from col4a1a2.sources.fulltext import TextRegion
 from pathlib import Path
 
 PROMPT_VERSION = "v2"

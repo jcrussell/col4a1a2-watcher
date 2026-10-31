@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from col4a1.extract.challenge import (
+from col4a1a2.extract.challenge import (
     CHALLENGE_PROMPT_VERSION,
     ChallengeCache,
     ChallengeFailed,
@@ -187,15 +187,15 @@ def test_the_fake_client_exercises_the_beta_branch_of_extract_paper(fake_anthrop
     """extract/client.py inspects stream()'s signature for `betas` and
     `fallbacks`. A fake declared `def stream(self, **kw)` would silently
     exercise only the stable branch forever."""
-    from col4a1.extract.client import _beta_parse_supports_fallbacks
+    from col4a1a2.extract.client import _beta_parse_supports_fallbacks
 
     assert _beta_parse_supports_fallbacks(fake_anthropic()) is True
 
 
 def test_extract_paper_is_now_covered_at_all(fake_anthropic, fake_response):
-    from col4a1.extract.client import ExtractionRefused, extract_paper
-    from col4a1.extract.prompt import PaperInput
-    from col4a1.extract.schema import PaperExtraction, PaperType
+    from col4a1a2.extract.client import ExtractionRefused, extract_paper
+    from col4a1a2.extract.prompt import PaperInput
+    from col4a1a2.extract.schema import PaperExtraction, PaperType
 
     p = PaperInput(pmid="1", pmcid=None, title="T", text="TITLE: T", abstract_only=False)
     ex = PaperExtraction(pmid="1", paper_type=PaperType.case_report,

@@ -46,9 +46,9 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from col4a1 import jsonl
+from col4a1a2 import jsonl
 
-log = logging.getLogger("col4a1")
+log = logging.getLogger("col4a1a2")
 
 # Measured: a twelve-month open window covers ~98% of indexing lag.
 DEFAULT_RECENCY_DAYS = 365

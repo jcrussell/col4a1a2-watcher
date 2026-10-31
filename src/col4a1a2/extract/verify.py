@@ -7,8 +7,8 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from col4a1.extract.schema import Confidence, PaperExtraction
-from col4a1.sources.fulltext import TextRegion
+from col4a1a2.extract.schema import Confidence, PaperExtraction
+from col4a1a2.sources.fulltext import TextRegion
 
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—−"), "-")
 _QUOTES = {0x2018: "'", 0x2019: "'", 0x201C: '"', 0x201D: '"', 0x00A0: " "}

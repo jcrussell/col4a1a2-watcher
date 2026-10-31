@@ -4,7 +4,7 @@ import datetime as dt
 
 import pytest
 
-from col4a1.discovery import (
+from col4a1a2.discovery import (
     DiscoveryLog,
     Slice,
     is_sealed,
