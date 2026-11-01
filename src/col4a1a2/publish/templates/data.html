@@ -1,0 +1,47 @@
+  <div id="tabs" class="tabs" role="tablist">
+    <button role="tab" id="tab-variants" aria-selected="true">Variants</button>
+    <button role="tab" id="tab-evidence" aria-selected="false">Evidence</button>
+    <button role="tab" id="tab-literature" aria-selected="false">Literature</button>
+  </div>
+
+  <section id="pane-variants">
+    <p class="lede">One row per variant, in order along the protein. Click a row for its papers.</p>
+    <div class="controls">
+      <input id="va-q" type="search" placeholder="Search variant, phenotype or PMID…" aria-label="Search variants">
+      <select id="va-gene" aria-label="Gene"><option value="">Both genes</option><option>COL4A1</option><option>COL4A2</option></select>
+    </div>
+    <div class="filters" id="va-filters" hidden></div>
+    <div class="wrap"><table id="va-table"><thead></thead><tbody></tbody></table></div>
+    <div class="pager" id="va-pager"></div>
+    <details class="help"><summary>What the columns mean</summary><p class="lede" id="va-note"></p><dl id="va-help"></dl></details>
+  </section>
+
+  <section id="pane-evidence" hidden>
+    <p class="lede">@@EVIDENCE_LEDE@@ Click a row for the paper's own words.</p>
+    <div class="controls">
+      <input id="ev-q" type="search" placeholder="Search variant, phenotype, paper or PMID…" aria-label="Search evidence">
+      <select id="ev-gene" aria-label="Gene"><option value="">Both genes</option><option>COL4A1</option><option>COL4A2</option></select>
+      <select id="ev-verdict" aria-label="Review outcome" hidden><option value="">Any review outcome</option></select>
+    </div>
+    <div class="filters" id="ev-filters" hidden></div>
+    <div class="wrap"><table id="ev-table"><thead></thead><tbody></tbody></table></div>
+    <div class="pager" id="ev-pager"></div>
+    <details class="help"><summary>What the columns mean</summary><dl id="ev-help"></dl></details>
+  </section>
+
+  <section id="pane-literature" hidden>
+    <p class="lede">One row per paper considered, read or not. Click a title to open it in PubMed.</p>
+    <div class="controls">
+      <input id="lit-q" type="search" placeholder="Search title, journal or PMID…" aria-label="Search literature">
+      <select id="lit-status" aria-label="Status">
+        <option value="kept" title="Judged relevant from title and abstract">Relevant</option>
+        <option value="kept_not_read" title="Relevant, but no open full text to read">Watch list</option>
+        <option value="extracted" title="Read in full and extracted">Read</option>
+        <option value="" title="Every paper considered">All</option>
+      </select>
+    </div>
+    <div class="wrap"><table id="lit-table"><thead></thead><tbody></tbody></table></div>
+    <div class="pager" id="lit-pager"></div>
+    <details class="help"><summary>What the columns mean</summary><dl id="lit-help"></dl></details>
+  </section>
+

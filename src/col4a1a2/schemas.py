@@ -562,6 +562,10 @@ class VariantRow(Row):
                                         "HGVS on the reference transcript when there is no protein change")
     gene: str = Field(description="COL4A1 or COL4A2")
     grouped_by: str = Field(description="protein or coding: which key the records were grouped on")
+    protein_position: int | None = Field(description="Residue the variant falls at: from its protein change, or "
+                                                     "its coding position divided by three (splice and intronic "
+                                                     "changes); empty in an untranslated region. Rows are in this "
+                                                     "order")
     coding_keys: list[str] = Field(description="Every coding-DNA change in the group; several mean different "
                                                "nucleotide changes with the same protein consequence")
     grch38: list[str] = Field(description="GRCh38 positions of the coding changes, as Ensembl VEP places them")

@@ -10,7 +10,7 @@
 # reviewed code change).
 
 contact_email = "joncrussell@gmail.com"
-user_agent = "col4a1a2-watcher/{version} (https://github.com/joncrussell/col4a1a2-watcher; joncrussell@gmail.com)"
+user_agent = "col4a1a2-watcher/{version} ({repository}; joncrussell@gmail.com)"
 
 [europepmc]
 # Title or abstract, never full text: a full-text match on COL4A1 pulls in ten

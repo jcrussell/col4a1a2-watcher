@@ -104,6 +104,19 @@ def fold_rows(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
+# What each `paper_status` value means, for people reading the release.
+STATUS_MEANINGS = {
+    "extracted": "Read in full and extracted",
+    "kept_not_read": "Judged relevant from title and abstract; no open full text to read",
+    "kept_pending": "Judged relevant; open full text held, extraction pending",
+    "not_relevant": "Judged not relevant from title and abstract",
+    "not_triaged": "Not yet assessed",
+    "dropped:no_pmid": "Found without a PubMed ID (mostly preprints); not assessed",
+    "dropped:oa_filter": "Not open access; set aside before assessment",
+    "dropped:no_metadata": "No metadata could be retrieved; not assessed",
+}
+
+
 def paper_status(state: dict, *, extracted: bool = False) -> str:
     """What became of a paper, as one word: the literature table's `status`.
 

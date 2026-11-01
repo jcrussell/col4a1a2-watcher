@@ -258,3 +258,13 @@ def test_another_model_does_not_count_as_extracted(tmp_path):
     led.record(identity="1", stage="extracted", text_sha256="aaa", prompt_version="v1",
                requested_model="m", attempts=0)
     assert led.needs_extraction("1", "aaa", "v1", "other") is True
+
+
+def test_every_status_a_paper_can_have_is_explained():
+    from col4a1a2.ledger import DROPPED_AT, STATUS_MEANINGS, paper_status
+
+    seen = {paper_status({"dropped_at": d}) for d in DROPPED_AT if d}
+    seen |= {paper_status({}, extracted=True), paper_status({}), paper_status({"triage": {"keep": False}}),
+             paper_status({"triage": {"keep": True}}),
+             paper_status({"triage": {"keep": True}, "is_open_access": True, "has_pmcid": True})}
+    assert seen == set(STATUS_MEANINGS)

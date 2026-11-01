@@ -119,3 +119,10 @@ def test_checks_are_quiet_on_the_real_corpus():
     assert n_records == 233
     assert len(findings) <= 8, f"{len(findings)} findings over {n_records} records: {findings}"
     assert any(f.check == "cnv_gain_typed_as_deletion" and f.pmid == "33375380" for f in findings)
+
+
+def test_the_variant_type_glossary_covers_exactly_the_values_the_model_is_given():
+    from col4a1a2.extract.schema import VARIANT_TYPES, VariantEvidence
+
+    given = {t.strip() for t in VariantEvidence.model_fields["variant_type"].description.split(",")}
+    assert set(VARIANT_TYPES) == given

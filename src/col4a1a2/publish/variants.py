@@ -32,6 +32,7 @@ invisibly, and consortia reuse cohorts.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 
 # Below this, `n_tested` describes a clinical series; at or above it, a
@@ -39,9 +40,34 @@ from collections import defaultdict
 # full run (`docs/measurements.md`).
 SCREEN_MIN = 1000
 
-RESIDUAL_RISK = ("Counts are ranges, not merges: probands_min assumes every possible overlap between papers is "
-                 "real, probands_max that papers are independent. A large cohort reporting totals without "
-                 "per-patient detail can still overlap earlier case reports invisibly, and consortia reuse cohorts.")
+# The reference proteins as the site draws them: length, and Pfam domains
+# reported by Ensembl release 116 for ENSP00000364979 (COL4A1) and
+# ENSP00000353654 (COL4A2). The triple-helical region spans the first to the
+# last collagen triple-helix repeat (PF01391); NC1 spans the two
+# non-collagenous domains (PF01413). Pfam is CC0.
+PROTEINS = {
+    "COL4A1": {"length": 1669, "regions": [{"name": "triple-helical region", "start": 46, "end": 1440},
+                                           {"name": "NC1 domain", "start": 1447, "end": 1667}]},
+    "COL4A2": {"length": 1712, "regions": [{"name": "triple-helical region", "start": 61, "end": 1389},
+                                           {"name": "NC1 domain", "start": 1491, "end": 1710}]},
+}
+
+_RESIDUE = re.compile(r":p\.[A-Z][a-z]{2}(\d+)")
+_CODING = re.compile(r":c\.(\d+)")
+
+
+def protein_position(key: str) -> int | None:
+    """The residue a key falls at: its protein change, else its coding position over three; None in a UTR."""
+    m = _RESIDUE.search(key)
+    if m:
+        return int(m.group(1))
+    m = _CODING.search(key)
+    return (int(m.group(1)) + 2) // 3 if m else None
+
+
+RESIDUAL_RISK = ("Proband counts are ranges: probands_min if every possible overlap between papers is real, "
+                 "probands_max if the papers are independent. A cohort reporting only totals can still overlap "
+                 "earlier case reports invisibly.")
 
 
 def group_key(e: dict) -> str:
@@ -62,19 +88,19 @@ def _papers(records: list[dict], field: str) -> int:
 
 
 def roll_up(evidence: list[dict]) -> list[dict]:
-    """One row per variant key, sorted by gene and key."""
+    """One row per variant key, in protein order within each gene."""
     groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for e in evidence:
         if group_key(e):
             groups[(e["gene"], group_key(e))].append(e)
     out = []
-    for (gene, key), recs in sorted(groups.items()):
+    for (gene, key), recs in groups.items():
         primary = [r for r in recs if r["paper_type"] != "review"]
         clinical = [r for r in primary if r["n_tested"] < SCREEN_MIN]
         probands, families = _range(clinical, "n_probands"), _range(clinical, "n_families")
         years = sorted(r["year"] for r in recs if r["year"])
         out.append({
-            "variant_id": key, "gene": gene,
+            "variant_id": key, "gene": gene, "protein_position": protein_position(key),
             "grouped_by": "protein" if recs[0].get("protein_key") else "coding",
             "coding_keys": sorted({r["variant_key"] for r in recs if r["key_level"] == "coding"}),
             "grch38": sorted({r["grch38"] for r in recs if r["grch38"]}),
@@ -97,4 +123,6 @@ def roll_up(evidence: list[dict]) -> list[dict]:
             "normalization_flags": ", ".join(sorted({f.strip() for r in recs
                                                      for f in r["normalization_flags"].split(",") if f.strip()})),
         })
+    # Along the protein, as the variants are read; UTR changes last.
+    out.sort(key=lambda r: (r["gene"], r["protein_position"] is None, r["protein_position"] or 0, r["variant_id"]))
     return out

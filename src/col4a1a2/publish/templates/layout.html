@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@@TITLE@@</title>
+<meta name="description" content="@@DESCRIPTION@@">
+<style>
+@@CSS@@</style>
+<script>
+/* A saved theme applies before the page draws, so it never flashes the other one. */
+try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+@@NAV@@
+<main id="top" class="@@CLASS@@">
+  <h1>@@HEADING@@</h1>
+  <p class="notice" role="note">@@NOTICE@@</p>
+@@MAIN@@@@FOOTER@@</main>
+<script>
+(function () {
+  var b = document.getElementById("theme-toggle"), root = document.documentElement;
+  var dark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function current() { return root.dataset.theme || (dark && dark.matches ? "dark" : "light"); }
+  // CSS shows the moon or the sun; this keeps the label in step for hover and screen readers.
+  function label() {
+    var next = current() === "dark" ? "light" : "dark";
+    b.setAttribute("aria-label", "Switch to " + next + " mode");
+    b.title = "Switch to " + next + " mode";
+  }
+  b.addEventListener("click", function () {
+    root.dataset.theme = current() === "dark" ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+    label();
+  });
+  if (dark && dark.addEventListener) dark.addEventListener("change", label);
+  label();
+})();
+</script>
+@@SCRIPT@@</body>
+</html>

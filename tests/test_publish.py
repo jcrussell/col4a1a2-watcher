@@ -110,17 +110,16 @@ def test_every_output_carries_the_notice(world, tmp_path):
     rel = publish.gather(st)
     written = publish.write(rel, tmp_path / "s")
     pkg = json.loads((tmp_path / "s" / "data" / "datapackage.json").read_text())
-    html = (tmp_path / "s" / "index.html").read_text()
+    pages = [(tmp_path / "s" / n).read_text() for n in ("index.html", "data.html", "downloads.html")]
     readme = (tmp_path / "s" / "data" / "README.txt").read_text()
     # Every table is shipped beside the README that carries the notice.
     assert all(p.parent == tmp_path / "s" / "data" for p in written if p.suffix in (".csv", ".jsonl"))
-    for text in (pkg["description"], html, readme, *[r["description"] for r in pkg["resources"]]):
+    for text in (pkg["description"], *pages, readme, *[r["description"] for r in pkg["resources"]]):
         assert "Machine-extracted" in text and "not clinical advice" in text
         assert "not yet spot-checked by a person" in text
     # CC BY covers our fields; the quotes stay under each article's copyright.
-    for text in (pkg["licenses"][0]["description"], html, readme):
-        assert "CC BY 4.0" in text and "not covered by CC BY" in text
-        assert all(col in text for col in publish.EXCERPT_COLUMNS)
+    for text in (pkg["licenses"][0]["description"], *pages, readme):
+        assert "CC BY 4.0" in text and "copyright, not CC BY" in text
     assert set(publish.EXCERPT_COLUMNS) <= set(schemas.EvidenceRow.model_fields)
     for col in publish.EXCERPT_COLUMNS:
         assert "not CC BY" in schemas.EvidenceRow.model_fields[col].description
@@ -130,10 +129,13 @@ def test_every_output_carries_the_notice(world, tmp_path):
 def test_the_page_makes_no_requests_elsewhere(world, tmp_path):
     st, _ = world
     publish.write(publish.gather(st), tmp_path / "s")
-    html = (tmp_path / "s" / "index.html").read_text()
-    hosts = set(re.findall(r'(?:src|href)="(https?://[^/"]+)', html))
-    assert hosts <= {"https://creativecommons.org"}, hosts
-    assert "<script src" not in html and "<link" not in html
+    for name in ("index.html", "data.html"):
+        html = (tmp_path / "s" / name).read_text()
+        hosts = set(re.findall(r'(?:src|href)="(https?://[^/"]+)', html))
+        # Links, not requests: the licence and the repository. Nothing is loaded from elsewhere.
+        assert hosts <= {"https://creativecommons.org", "https://github.com"}, (name, hosts)
+        assert "<script src" not in html and "<link" not in html, name
+        assert "@@" not in html.split('id="data-json">')[0], f"{name}: an unfilled placeholder"
 
 
 def test_a_gold_file_without_a_schema_stops_the_release(world):
@@ -172,7 +174,7 @@ def test_a_placeholder_inside_the_data_is_left_alone(world, tmp_path):
     rows[0]["extraction"]["variants"][0]["phenotype_details"] = "@@NOTICE@@ <b>x</b>"
     jsonl.write(st.extractions, rows)
     publish.write(publish.gather(st), tmp_path / "s")
-    html = (tmp_path / "s" / "index.html").read_text()
+    html = (tmp_path / "s" / "data.html").read_text()
     assert "@@NOTICE@@ \\u003cb\\u003ex" in html, "data must be embedded verbatim and escaped"
 
 
@@ -206,5 +208,40 @@ def test_the_variants_table_ships_with_its_residual_risk(world, tmp_path):
     readme = (tmp_path / "s" / "data" / "README.txt").read_text()
     pkg = json.loads((tmp_path / "s" / "data" / "datapackage.json").read_text())
     res = next(r for r in pkg["resources"] if r["name"] == "variants")
-    for text in (readme, res["description"], (tmp_path / "s" / "index.html").read_text()):
+    for text in (readme, res["description"], (tmp_path / "s" / "data.html").read_text()):
         assert "overlap earlier case reports invisibly" in text
+
+
+def test_every_column_on_the_page_carries_its_published_description(world, tmp_path):
+    st, _ = world
+    publish.write(publish.gather(st), tmp_path / "s")
+    html = (tmp_path / "s" / "data.html").read_text()
+    payload = json.loads(re.search(r'id="data-json">(.*?)</script>', html, re.S).group(1))
+    for name, model in (("variants", schemas.VariantRow), ("evidence", schemas.EvidenceRow),
+                        ("literature", schemas.LiteratureRow)):
+        assert payload["columns"][name] == {f: i.description for f, i in model.model_fields.items()}
+    assert "renal_hanac" in payload["glossary"]["phenotype_systems"]
+    home = (tmp_path / "s" / "index.html").read_text()
+    home_payload = json.loads(re.search(r'id="data-json">(.*?)</script>', home, re.S).group(1))
+    assert set(home_payload["proteins"]) == {"COL4A1", "COL4A2"}, "the protein map draws both genes"
+    assert "evidence" not in home_payload, "the About page carries only what the map needs"
+    assert set(payload["statuses"]) >= {r["status"] for r in payload["literature"]}
+    assert 'href="https://github.com/jcrussell/col4a1a2-watcher"' in html
+
+
+def test_the_downloads_page_explains_every_file_and_column(world, tmp_path):
+    st, _ = world
+    rel = publish.gather(st)
+    written = publish.write(rel, tmp_path / "s")
+    page = (tmp_path / "s" / "downloads.html").read_text()
+    assert tmp_path / "s" / "downloads.html" in written
+    assert "Machine-extracted" in page and "not clinical advice" in page and "copyright, not CC BY" in page
+    for model in (schemas.VariantRow, schemas.EvidenceRow, schemas.LiteratureRow):
+        for name in model.model_fields:
+            assert f"<td>{name}</td>" in page, name
+    # Every local link points at a file the release contains.
+    for href in re.findall(r'href="(data/[^"#]+)"', page):
+        assert (tmp_path / "s" / href).exists(), href
+    assert "<script src" not in page and "<link" not in page
+    assert 'aria-current="page">Downloads' in page
+    assert 'href="downloads.html"' in (tmp_path / "s" / "index.html").read_text()

@@ -1,6 +1,6 @@
 """The per-variant table: counts are ranges, reviews are pointers, screens are apart."""
 
-from col4a1a2.publish.variants import SCREEN_MIN, roll_up
+from col4a1a2.publish.variants import PROTEINS, SCREEN_MIN, protein_position, roll_up
 
 
 def _e(pmid, n=1, fam=1, **kw):
@@ -73,3 +73,18 @@ def test_a_change_with_no_protein_consequence_groups_on_its_coding_key():
 def test_records_without_a_key_stay_out_and_genes_stay_apart():
     rows = roll_up([_e("1", variant_key="", protein_key=""), _e("2"), _e("3", gene="COL4A2")])
     assert [(r["gene"], r["n_papers"]) for r in rows] == [("COL4A1", 1), ("COL4A2", 1)]
+
+
+def test_rows_run_along_the_protein_with_utr_changes_last():
+    rows = roll_up([_e("1", protein_key="NP_001836.3:p.Gly1239Arg", variant_key="NM_001845.6:c.3715G>A"),
+                    _e("2", protein_key="", variant_key="NM_001845.6:c.*34G>T"),
+                    _e("3", protein_key="NP_001836.3:p.Gly474Arg"),
+                    _e("4", protein_key="", variant_key="NM_001845.6:c.4756-9G>A")])
+    assert [r["protein_position"] for r in rows] == [474, 1239, 1586, None]
+
+
+def test_positions_fall_inside_the_drawn_proteins():
+    assert protein_position("NM_001845.6:c.1G>A") == 1 and protein_position("NM_001845.6:c.3G>A") == 1
+    assert protein_position("NM_001845.6:c.4G>A") == 2
+    for gene, p in PROTEINS.items():
+        assert all(1 <= r["start"] < r["end"] <= p["length"] for r in p["regions"]), gene

@@ -19,6 +19,9 @@ dependencies = [
     "python-docx>=1.2.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/jcrussell/col4a1a2-watcher"
+
 [project.scripts]
 col4a1a2 = "col4a1a2.cli:main"
 col4a1a2-dev = "col4a1a2.dev:main"

@@ -119,6 +119,18 @@
       "title": "Probands Min",
       "type": "integer"
     },
+    "protein_position": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Residue the variant falls at: from its protein change, or its coding position divided by three (splice and intronic changes); empty in an untranslated region. Rows are in this order",
+      "title": "Protein Position"
+    },
     "records_prior_report": {
       "description": "Records whose paper says the family was reported before",
       "title": "Records Prior Report",
@@ -147,6 +159,7 @@
     "variant_id",
     "gene",
     "grouped_by",
+    "protein_position",
     "coding_keys",
     "grch38",
     "variant_types",

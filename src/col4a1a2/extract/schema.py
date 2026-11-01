@@ -61,14 +61,34 @@ class Confidence(str, Enum):
 
 # The closed vocabulary for `phenotype_systems`. A token list rather than six
 # enum fields: it costs 1 property instead of 7 and stays machine-queryable.
-PHENOTYPE_SYSTEMS = (
-    "cerebrovascular",   # porencephaly, ICH/IVH, schizencephaly, stroke, perinatal brain injury
-    "small_vessel",      # leukoencephalopathy, microbleeds, lacunes, PADMAL
-    "renal_hanac",       # hematuria, cysts, nephropathy, HANAC features
-    "ocular",            # cataract, anterior segment dysgenesis, retinal arterial tortuosity
-    "muscle",            # cramps, raised CK, myopathy
-    "other",
-)
+# The meanings are the codebook's, for people reading the release; they are
+# not sent to the model, whose definitions live in the prompt.
+PHENOTYPE_SYSTEMS = {
+    "cerebrovascular": "Porencephaly, intracerebral or intraventricular hemorrhage, schizencephaly, stroke, "
+                       "perinatal brain injury",
+    "small_vessel": "Leukoencephalopathy, white-matter hyperintensities, microbleeds, lacunes, PADMAL, "
+                    "dilated perivascular spaces",
+    "renal_hanac": "Hematuria, renal cysts, nephropathy, HANAC features",
+    "ocular": "Cataract, anterior segment dysgenesis, Axenfeld-Rieger, retinal arterial tortuosity, glaucoma",
+    "muscle": "Cramps, raised creatine kinase, myopathy",
+    "other": "Any other affected system",
+}
+
+# What each `variant_type` value means, for people reading the release. The
+# values themselves are listed in the field description sent to the model; a
+# test keeps the two sets equal.
+VARIANT_TYPES = {
+    "missense_glycine": "Substitution of a glycine, typically in the collagen triple helix",
+    "missense_other": "Any other amino-acid substitution",
+    "splice": "Changes splicing",
+    "nonsense": "Creates a stop codon",
+    "frameshift": "Shifts the reading frame",
+    "inframe_indel": "Deletes or inserts whole codons",
+    "intronic": "Intronic, away from the splice site",
+    "utr": "In an untranslated region",
+    "deletion_cnv": "Copy-number change or larger rearrangement",
+    "other": "None of the above",
+}
 
 
 class VariantEvidence(BaseModel):

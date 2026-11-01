@@ -1,0 +1,206 @@
+/* Collagen IV is seen in a stained section, so the palette is a slide's:
+   cool glass, trichrome blue-green for collagen and structure, and eosin for
+   the one thing that must stand out, a glycine substitution. Each color
+   carries one meaning. */
+:root {
+  /* Each color once, light then dark: light-dark() follows color-scheme, which is the
+     system's choice unless the toggle in the nav sets data-theme. The dark values are
+     a dark field: the same stains under different light. */
+  color-scheme: light dark;
+  --slide: light-dark(#f3f6f5, #0e1719); --surface: light-dark(#fbfcfc, #142124);
+  --ink: light-dark(#1b2a2f, #e3eceb); --muted: light-dark(#566a6f, #93a6a9); --rule: light-dark(#d3dddb, #24363a);
+  --head: light-dark(#e6eceb, #1c2a2d);
+  --trichrome: light-dark(#1e6e73, #63bfc4); --trichrome-wash: light-dark(#e2eeed, #1a3134);
+  --on-trichrome: light-dark(#ffffff, #0e1719);
+  --eosin: light-dark(#b8336a, #f07fa8); --eosin-wash: light-dark(#f6e3eb, #3a1d29);
+  --note-bg: light-dark(#f6efd9, #2a2412); --note-ink: light-dark(#4f3f10, #ecdba6); --note-rule: light-dark(#c9a94a, #7d6a2c);
+  --good: light-dark(#2d6a3e, #8fcf9e); --bad: light-dark(#9b2c2c, #f0a3a3); --mid: light-dark(#7a5a00, #e2c46f);
+  --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style", Georgia, serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  /* Two widths only: the 1180px column for the map and tables, and one reading
+     measure for every block of prose. In rem, not ch, so a block's own font
+     size cannot change its width. */
+  --measure: 46rem;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+html { scroll-padding-top: 64px; }
+body { margin: 0; background: var(--slide); color: var(--ink);
+  font: 16px/1.55 var(--serif); font-variant-numeric: lining-nums; -webkit-text-size-adjust: 100%; }
+a { color: var(--trichrome); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--trichrome); outline-offset: 2px; }
+
+/* Nomenclature: HGVS in mono. */
+.variant, code { font-family: var(--mono); font-size: 0.86em; }
+
+/* Top bar */
+.topnav { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--rule); }
+.topnav .inner { max-width: 1180px; margin: 0 auto; padding: 0 16px; height: 52px; display: flex; align-items: center; gap: 16px; }
+.brand { color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.brand .gene { font-weight: 700; }
+.topnav nav { margin-left: auto; display: flex; gap: 2px; }
+.topnav nav a { color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 4px; white-space: nowrap; font-size: 0.95em; }
+.topnav nav a:hover { background: var(--trichrome-wash); }
+.theme { display: inline-flex; align-items: center; color: var(--muted); background: none; border: 1px solid var(--rule);
+  border-radius: 4px; padding: 5px; margin-left: 8px; cursor: pointer; }
+.theme:hover { color: var(--ink); border-color: var(--muted); }
+.theme svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* A moon offers dark mode, a sun offers light: whichever is not showing. */
+.theme .i-sun { display: none; }
+:root[data-theme="dark"] .theme .i-sun { display: block; }
+:root[data-theme="dark"] .theme .i-moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme .i-sun { display: block; }
+  :root:not([data-theme="light"]) .theme .i-moon { display: none; }
+}
+.topnav nav a[aria-current="page"] { color: var(--trichrome); box-shadow: inset 0 -2px 0 var(--trichrome); border-radius: 0; }
+
+main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 56px; }
+/* One type scale for every page. */
+h1 { font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.1rem); line-height: 1.15; font-weight: 600; letter-spacing: -0.01em;
+  margin: 0 0 12px; text-wrap: balance; }  /* a heading is not prose: it takes the full column */
+h2 { font-size: 1.3rem; line-height: 1.25; font-weight: 600; margin: 40px 0 8px; letter-spacing: -0.005em; }
+h3 { font-size: 1.05rem; line-height: 1.3; font-weight: 700; margin: 20px 0 6px; }
+.sub { color: var(--muted); margin: 0 0 18px; max-width: var(--measure); font-size: 1.04em; }
+.notice { border-left: 3px solid var(--note-rule); background: var(--note-bg); color: var(--note-ink);
+  padding: 10px 14px; margin: 0 0 26px; max-width: var(--measure); font-size: 0.94em; }
+
+/* The protein map: both proteins, every variant where it falls. */
+.map { margin: 0 0 8px; }
+.map svg { display: block; width: 100%; height: auto; overflow: visible; }
+.map .label { font: 700 15px var(--serif); fill: var(--ink); }
+.map .length { font: 12px var(--serif); fill: var(--muted); }
+.map .backbone { fill: var(--rule); }
+.map .helix { fill: var(--trichrome-wash); stroke: var(--trichrome); stroke-width: 1; }
+.map .nc1 { fill: var(--trichrome); }
+.map .region { font: 12px var(--serif); fill: var(--muted); }
+.map .stem { stroke: var(--trichrome); stroke-width: 1.4; }
+.map .head { fill: var(--trichrome); }
+.map .gly .stem { stroke: var(--eosin); }
+.map .gly .head { fill: var(--eosin); }
+.map .mark { cursor: pointer; }
+.map .mark:hover .head, .map .mark.on .head { r: 5.5; }
+.map .mark:hover .stem, .map .mark.on .stem { stroke-width: 2.6; }
+.map-key { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 0.88em; margin: 4px 0 18px; max-width: var(--measure); }
+.map-key i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.map-key .k-gly i { background: var(--eosin); }
+.map-key .k-other i { background: var(--trichrome); }
+.summary { margin: 0 0 22px; max-width: var(--measure); }
+
+/* About page */
+main > .which { max-width: var(--measure); }
+.steps { max-width: var(--measure); padding-left: 1.4em; margin: 8px 0; }
+.steps li { padding-left: 4px; }
+.steps li + li { margin-top: 8px; }
+main > h2 + p, .steps + p { max-width: var(--measure); }
+
+
+/* Tabs and tables */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 12px; overflow-x: auto; }
+.tabs button { font: inherit; border: 0; background: none; color: var(--muted); padding: 8px 12px;
+  border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--trichrome); font-weight: 700; }
+.lede { color: var(--muted); font-size: 0.94em; margin: 0 0 10px; max-width: var(--measure); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.controls input, .controls select, .pager select { font: inherit; font-size: 0.95em; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; }
+.controls input { flex: 1 1 240px; min-width: 0; }
+.count { color: var(--muted); font-size: 0.9em; }
+.nowrap { white-space: nowrap; }
+.help .lede { margin: 0 0 12px; }
+.btn { font: inherit; font-size: 0.92em; line-height: 1.2; color: var(--trichrome); background: transparent;
+  border: 1px solid var(--trichrome); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--trichrome); color: var(--on-trichrome); }
+.btn:disabled { color: var(--muted); border-color: var(--rule); cursor: default; }
+.wrap { overflow-x: auto; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92em; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+/* The header row reads as a header: tinted, smaller, and ruled off from the rows. */
+th { cursor: pointer; user-select: none; white-space: nowrap; font-weight: 700; background: var(--head);
+  font-size: 0.88em; color: var(--ink); border-bottom: 1px solid var(--muted); padding-top: 9px; padding-bottom: 9px; }
+th .hint { text-decoration: underline dotted var(--muted); text-underline-offset: 4px; cursor: help; }
+th[aria-sort="ascending"]::after { content: " ▲"; color: var(--muted); font-size: 0.8em; }
+th[aria-sort="descending"]::after { content: " ▼"; color: var(--muted); font-size: 0.8em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
+td[title] { cursor: help; }
+tr.rec { cursor: pointer; }
+tr.rec:hover td { background: var(--trichrome-wash); }
+tr.rec.on td { box-shadow: inset 3px 0 0 var(--eosin); }
+tr.detail td { background: var(--slide); cursor: auto; padding: 12px 10px 16px; }
+/* A detail row spans the whole table, which on a phone is wider than the screen;
+   its content stays pinned to the visible part of the scrolling table. */
+.detail-inner { position: sticky; left: 10px; max-width: min(var(--measure), calc(100vw - 52px)); }
+.detail h3 { margin: 14px 0 6px; font-size: 0.95rem; }
+.detail h3:first-child { margin-top: 0; }
+.variant.none { font-family: var(--serif); color: var(--muted); }
+.chip { display: inline-block; border: 1px solid var(--rule); border-radius: 3px; padding: 0 6px; margin: 1px 3px 1px 0;
+  font-size: 0.85em; white-space: nowrap; cursor: help; }
+.chip.gly { border-color: var(--eosin); color: var(--eosin); background: var(--eosin-wash); }
+button.chip { font: inherit; font-size: 0.85em; color: inherit; background: transparent; cursor: pointer; }
+button.chip.pick:hover { border-color: var(--trichrome); color: var(--trichrome); }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 10px; }
+.filters[hidden] { display: none; }
+.chip.on { border-color: var(--trichrome); background: var(--trichrome-wash); color: var(--ink); padding: 1px 8px; }
+.chip.on .x { margin-left: 6px; color: var(--muted); }
+.chip.on:hover .x { color: var(--ink); }
+.linkish { font: inherit; font-size: 0.9em; color: var(--trichrome); background: none; border: 0; padding: 0 4px;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.v-upheld { color: var(--good); } .v-disputed { color: var(--bad); } .v-other { color: var(--mid); }
+blockquote { margin: 6px 0; padding: 2px 12px; border-left: 3px solid var(--trichrome); max-width: var(--measure); }
+.detail dl { display: grid; grid-template-columns: 10.5rem 1fr; gap: 4px 14px; margin: 4px 0 12px; }
+.detail dt { color: var(--muted); }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+/* Three columns, so the page controls sit in the middle whatever the count beside them says. */
+.pager { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: 10px 0 0; }
+.pager select { justify-self: end; }
+.pager .pages { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.pager .pages .btn { min-width: 7em; }  /* equal widths keep the page number centred */
+.pager .page-of { color: var(--muted); font-size: 0.9em; min-width: 6.5em; text-align: center; }
+.help { margin: 16px 0 0; border-top: 1px solid var(--rule); }
+.help summary { cursor: pointer; padding: 10px 0; color: var(--trichrome); }
+.help dl { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 6px 16px; margin: 0; padding: 0 0 12px; max-width: var(--measure); }
+.help dt { font-weight: 700; }
+.help dd { margin: 0; color: var(--muted); }
+footer { color: var(--muted); font-size: 0.86em; margin-top: 36px; border-top: 1px solid var(--rule); padding-top: 12px; }
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 24px; }
+footer p { margin: 0; }
+footer .version { white-space: nowrap; }
+
+/* Downloads page */
+/* Same column as the top bar, so left edges align; only the content narrows. */
+.doc > *:not(footer) { max-width: var(--measure); }
+.doc ul { padding-left: 20px; }
+.doc li + li { margin-top: 4px; }
+.which { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 12px 0; }
+.which dt a { font-family: var(--mono); font-size: 0.95em; font-weight: 700; }
+.which dd { margin: 0; color: var(--ink); }
+.files { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.file { display: inline-flex; align-items: baseline; gap: 8px; text-decoration: none; }
+.file small { opacity: 0.85; font-size: 0.86em; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 10px 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.cols td:first-child { font-family: var(--mono); font-size: 0.86em; white-space: nowrap; }
+.cols td:nth-child(2) { color: var(--muted); white-space: nowrap; }
+.doc pre { background: var(--surface); border-left: 3px solid var(--rule); padding: 10px 14px; overflow-x: auto;
+  font: 0.84em/1.5 var(--mono); }
+
+@media (max-width: 640px) {
+  .hide-sm { display: none; }
+  .topnav .inner { gap: 8px; }
+  .brand { font-size: 0.92em; flex-shrink: 0; } .brand .rest { display: none; }
+  .topnav nav a { padding: 6px 6px; font-size: 0.9em; }
+  .pager { grid-template-columns: 1fr auto; } .pager .pages { grid-column: 1 / -1; justify-self: center; grid-row: 2; }
+  .help dl, .which, .facts, .detail dl { grid-template-columns: 1fr; gap: 0; } .help dd, .which dd, .facts dd { margin-bottom: 8px; }
+  .map .region { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+/* Phones: every page's title names the genes, so the bar keeps only the links. */
+@media (max-width: 480px) { .brand { display: none; } }
+@media (max-width: 360px) {
+  .topnav .inner { padding: 0 10px; }
+  .topnav nav a { padding: 6px 4px; font-size: 0.86em; }
+  .theme { padding: 4px; margin-left: 4px; }
+}
