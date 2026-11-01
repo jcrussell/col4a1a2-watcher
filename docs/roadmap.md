@@ -20,13 +20,15 @@ In place:
 
 - `publish`: confident evidence and the literature table as CSV, JSON Lines and a datapackage, plus a static site, built and deployed by CI from tracked files.
 
-Not yet: the human spot-check, HGVS normalisation, and `report`.
+- `normalize`: every extracted variant keyed on the reference transcript through Ensembl VEP, with the disagreements between a paper's coding and protein changes flagged.
+
+Not yet: the human spot-check, the per-variant roll-up, and `report`.
 
 ## Milestones
 
 **M1. End to end on one window.** Done, except the human spot-check that seeds the gold set in `data/curated/gold/`.
 
-**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: HGVS normalisation via VEP; a gold set of thirty papers and measured precision and recall.
+**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: a per-variant roll-up over the normalized keys; a gold set of thirty papers and measured precision and recall.
 
 **M3. Watcher.** ClinVar diff, `report`, `watch` as a single scheduled command, snapshot freshness keys, idempotence tests. Runs monthly after the ClinVar release, with extraction through the Batches API at half price.
 

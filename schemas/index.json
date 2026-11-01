@@ -54,6 +54,11 @@
     "model": "ManifestRow",
     "schema": "schemas/manifest.schema.json"
   },
+  "normalized.jsonl": {
+    "format": "jsonl",
+    "model": "NormalizedRow",
+    "schema": "schemas/normalized.schema.json"
+  },
   "papers.jsonl": {
     "format": "jsonl",
     "model": "PaperRow",

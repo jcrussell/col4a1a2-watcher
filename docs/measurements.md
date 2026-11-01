@@ -457,3 +457,24 @@ Triage, figure and challenge rows kept `input`, `output` and `cache_read` and dr
 ## Extraction results tracked (2026-10-31)
 
 The 210 extraction rows moved from `data/raw/2026-10-31/extractions.jsonl` (untracked) to `data/curated/extractions.jsonl` (tracked), each gaining a `snapshot` field naming where its source text lives; the rows are otherwise byte-identical. This lets `publish` build from the repository alone, in CI. The rows carry short cited quotes and model output, never article text.
+
+## First normalization run, Ensembl release 116 (2026-11-01)
+
+`normalize` over the 233 current records: 204 distinct queries (165 coding-DNA, 33 protein-only, 6 bare coordinates), all answered, in 218 requests and 11 minutes. VEP takes about 3 s per answer and the client asks serially, so the 5/s budget is never approached. A second run made no requests.
+
+| | Records |
+|---|---|
+| Keyed on coding-DNA HGVS on the reference transcript | 182 |
+| Keyed at protein level (protein change only, reference residue verified) | 35 |
+| No key | 16: 13 structural, `p.Gly1176del` (protein-only deletions are not sent), a fusion, an unspecified "mutation", and one bare coordinate whose base is G on both builds |
+| Distinct keys | 203 |
+
+What VEP probing settled first: only the current RefSeq version resolves (`NM_001845.5` is a 400, unversioned `NM_001845` a 500), so the reference transcript is always sent and the stated one recorded; `NM_001303110.2` and `ENST00000375820` number COL4A1 as `NM_001845.6` does, and `ENST00000360467` COL4A2 as `NM_001846.4`; the protein accessions are `NP_001836.3` and `NP_001837.2`.
+
+**The extraction is internally consistent.** Of 116 coding records whose paper also gives a protein substitution, VEP's translation agrees with the paper in all 116, and VEP rejected no coding change for a wrong reference base. The check costs nothing and stays, but on this corpus it has found nothing. Flags raised: `build-inferred-grch37` 5 (all bare coordinates from one paper), `transcript-other` 4 (`NM_001303110.2`, two typos `NM_00185` and `NM_0018456.6`, and an `ENSP` accession), `build-ambiguous` 1.
+
+VEP rewrote 4 coding changes into canonical form: `c.4611_4612insG` to `c.4615dup`, `c.1265dupC` to `c.1265dup`, `c.1812_1815delGCCTinsCCC` to `c.1812_1815delinsCCC`, `c.3326-7dupT` to `c.3326-7dup`.
+
+**Grouping.** On the coding-DNA key, 12 variants appear in more than one paper, the same 12 as the crude spelling key measured earlier. Grouping at protein level, which joins protein-only records to coding ones, finds 16: p.Gly888Arg and p.Gly1239Arg (three papers each), p.Pro352Leu, p.Arg1063Ter and COL4A2 p.Gly800Arg had been split by spelling. A protein-level group can join different coding changes with the same protein consequence, so a roll-up must list the coding keys under it rather than merge them.
+
+**Revised the same day: candidates in order of precision.** A record can give more than one description of its variant, and `normalize` now tries them in order, coding change, then bare coordinates, then protein change, keying on the first that resolves and asking about the next only when one fails. Coordinates had been tried after a protein change, so 4 records carrying both were keyed on the protein when their coordinates fix the nucleotide change; 2 others have coordinates whose reference base is the same on both builds and now fall back to their protein change, with `build-ambiguous` kept as a flag. The coordinate path also gained the protein cross-check. Result over the 233 records: coding 186 (from 182), protein 31 (from 35), none 16, distinct keys 202; flags `build-inferred-grch37` 9, `build-ambiguous` 3, `transcript-other` 4. The change cost 27 requests.

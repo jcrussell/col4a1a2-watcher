@@ -38,7 +38,7 @@ Instructions for anyone, human or agent, working in this repository.
 The files are a small database, so they get the few guarantees a database would give. Enable the hook once per clone: `git config core.hooksPath .githooks`.
 
 - **`uv run col4a1a2 check` is the first thing to run after any hand edit, merge or migration.** It validates every row, finds torn lines, duplicate rows and dangling PMIDs, confirms each challenge still matches the records it reviewed, and confirms every extraction the ledger records exists in a snapshot. The pre-commit hook runs it and the tests.
-- **Tracked logs are append-only.** `ledger`, `triage`, `figures`, `challenges` and `discovery` must extend their `HEAD` version byte for byte. A deliberate rewrite is a migration: commit it with `COL4A1A2_ALLOW_REWRITE=1` and say in `docs/measurements.md` what changed and why. Even then `check` refuses a ledger rewrite that loses a paper or a triage verdict: an event can be the only record of a paper's metadata or verdict, so deleting events is never a safe way to retire them.
+- **Tracked logs are append-only.** `ledger`, `triage`, `figures`, `challenges`, `discovery`, `extractions` and `normalized` must extend their `HEAD` version byte for byte. A deliberate rewrite is a migration: commit it with `COL4A1A2_ALLOW_REWRITE=1` and say in `docs/measurements.md` what changed and why. Even then `check` refuses a ledger rewrite that loses a paper or a triage verdict: an event can be the only record of a paper's metadata or verdict, so deleting events is never a safe way to retire them.
 - **Data before index.** Write the result row, then the ledger event. A crash between them leaves a result the ledger does not know about (a warning) rather than a ledger entry pointing at nothing, which would make resume skip a paper that has no result.
 - **One writer at a time.** Writing verbs hold `data/.lock`; a second run exits naming the PID that holds it.
 - **Writes are atomic or single-line.** `jsonl.write` and `schemas.write_document` write a temp file and rename it; `jsonl.append` writes one line and refuses to append after a torn one. Never open a data file for writing yourself.
@@ -64,6 +64,7 @@ Each rule has one home and callers import it. Two copies of a rule drift apart, 
 | Calling Claude: system block, schema as sent and its grammar shape, stop-reason handling, usage, provenance, spend | `extract/llm.py` |
 | Caches of model answers (newest `written_at` wins) | `extract/cache.py` |
 | Resume and the ledger fold | `ledger.py` (`needs_extraction`, `is_extraction`, `fold_rows`) |
+| Variant keys, the reference transcripts, and normalization flags | `normalize.py` |
 | Content hashes | `digest.py` |
 | Classifier regexes | `patterns.py` |
 | Reading, writing and exporting our files | `jsonl.py`, `schemas.write_document` |

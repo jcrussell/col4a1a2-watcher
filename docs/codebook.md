@@ -61,7 +61,7 @@ A system examined and found normal is **not** listed, and nothing records that i
 
 ## Variant naming
 
-`as_written` is copied verbatim. `hgvs_c` / `hgvs_p` only when given or unambiguous; never converted between numbering systems by the model. `transcript_if_stated` matters because a `c.` number means nothing without it. Normalisation to NM_001845.6 / NM_001846.4 and GRCh38 happens later via Ensembl VEP, not in extraction.
+`as_written` is copied verbatim. `hgvs_c` / `hgvs_p` only when given or unambiguous; never converted between numbering systems by the model. `transcript_if_stated` matters because a `c.` number means nothing without it. Normalization to NM_001845.6 / NM_001846.4 and GRCh38 happens afterwards in `normalize`, through Ensembl VEP, never in extraction; see `docs/methods.md`.
 
 `variant_type`: `missense_glycine` (substitution of a Gly), `missense_other`, `splice`, `nonsense`, `frameshift`, `inframe_indel`, `intronic`, `utr`, `deletion_cnv`, `other`. The vocabulary has no class for a copy-number gain, so a duplication lands in `deletion_cnv`; `derive.py` flags it.
 

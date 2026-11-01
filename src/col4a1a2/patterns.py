@@ -34,3 +34,17 @@ CLINICAL_RE = re.compile(
     r"schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|"
     r"Axenfeld|tortuosity|hematuria|haematuria|nephropath|cramps|myopath|cerebral palsy|stroke|proband|famil",
     re.I)
+
+# A variant written as bare genomic coordinates on chromosome 13 with no
+# build, e.g. "13: 110804862: C: T" or "chr13:110804862 C>T". `normalize`
+# infers the build from the reference base.
+GENOMIC_AS_WRITTEN = re.compile(r"^(?:chr)?(13)[\s:]+(\d[\d,]*)[\s:]+([ACGT])[\s:>/]+([ACGT])$", re.I)
+
+# A RefSeq or Ensembl accession with an optional version, as papers state them.
+ACCESSION = re.compile(r"(N[MPRC]_\d+|ENS[TP]\d+)(?:\.(\d+))?")
+
+# VEP's 400 for protein input. A correct reference residue still cannot be
+# placed on the genome when several codons fit, which VEP reports as not
+# unique; a wrong residue gets a translation mismatch. Measured on release 116.
+VEP_PROTEIN_NOT_UNIQUE = re.compile(r"Could not uniquely determine nucleotide change")
+VEP_REFERENCE_MISMATCH = re.compile(r"does not match (?:reference allele|input sequence)")

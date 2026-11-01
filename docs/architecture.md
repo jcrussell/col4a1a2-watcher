@@ -46,7 +46,7 @@ Rejected candidates are still recorded in the snapshot and the ledger, with the 
 
 **`challenge`** asks a second model call to refute each extracted record, and verifies the reviewer's own output before storing it: a disputed verdict must cite a sentence that grounds against the paper text, or it is recorded as fabricated rather than believed.
 
-`review` writes the human spot-check queue to `review.jsonl` in the snapshot from both review signals (grounding and challenge), with an optional TSV export; its flags are the same `extract.rows.review_flags` that `publish` uses to decide what is confident. `list`, `show` and `ledger` are read-only views; `ledger` reports the denominator. `check` validates every tracked file and is run by `.githooks/pre-commit`.
+`review` writes the human spot-check queue to `review.jsonl` in the snapshot from both review signals (grounding and challenge), with an optional TSV export; its flags are the same `extract.rows.review_flags` that `publish` uses to decide what is confident. `normalize` asks Ensembl VEP for one canonical spelling of each extracted variant on the reference transcript and appends its answers to the tracked `data/curated/normalized.jsonl`, which `publish` joins to the records without touching the network. `list`, `show` and `ledger` are read-only views; `ledger` reports the denominator. `check` validates every tracked file and is run by `.githooks/pre-commit`.
 
 ## Modules
 
@@ -72,6 +72,8 @@ Rejected candidates are still recorded in the snapshot and the ledger, with the 
 | `extract/challenge.py` | Adversarial review of records, and the verification of the reviewer's own claims. |
 | `discovery.py` | Time-sliced Europe PMC search. A closed date range against a fixed query is sealed and cached forever; the query string is hashed into the slice key, so editing it re-opens every slice. |
 | `config.py` | The one TOML file, resolved into a frozen `Settings` passed to every command. |
+| `normalize.py` | One key per variant from Ensembl VEP on the reference transcript: the query for a record, the stored answer, and the published columns and flags (`link`). |
+| `sources/ensembl.py` | Ensembl REST: VEP on HGVS or a GRCh38 position, reference bases, GRCh37 to GRCh38 mapping, the release number. |
 | `patterns.py` | Classifier regexes: gene mentions, HGVS-like tokens, the clinical vocabulary of the keyword triage rule. |
 | `schemas.py`, `jsonl.py` | The row and document model for every file we write, found by filename, and the JSONL reader/writer that validates against it. `col4a1a2-dev schemas` writes these models to `schemas/` as JSON Schema. |
 | `digest.py` | sha256 of bytes, text and canonical JSON, used by every resume and cache key. |
@@ -88,7 +90,7 @@ Bootstrap and monthly refresh run the same code; only the date window differs.
 | `data/responses/<YYYY-MM>/` | no | Every raw Claude response, thinking included, one JSON document per call, archived before parsing. Paid for, so outside `data/cache/` and never evicted; untracked because thinking can paraphrase article text. |
 | `data/cache/http.sqlite` | no | Response cache, so a repeated fetch makes no network requests. |
 | `data/cache/bundles/<pmcid>/` | no | Supplementary files and figure images, shared across snapshots. The endpoint they come from fails or stalls for most requests, so a successful download is reused by every later run rather than re-attempted. |
-| `data/curated/` | yes | `labels.json` (hand-assigned triage labels), `gold/` (human spot-check results), and the append-only logs `extractions.jsonl`, `triage.jsonl`, `figures.jsonl`, `challenges.jsonl`, `discovery.jsonl` and `ledger.jsonl`. The logs use a union merge driver and are folded by `written_at`, so line order never changes the result. |
+| `data/curated/` | yes | `labels.json` (hand-assigned triage labels), `gold/` (human spot-check results), and the append-only logs `extractions.jsonl`, `triage.jsonl`, `figures.jsonl`, `challenges.jsonl`, `discovery.jsonl`, `normalized.jsonl` and `ledger.jsonl`. The logs use a union merge driver and are folded by `written_at`, so line order never changes the result. |
 | `schemas/` | yes | JSON Schema for every artefact, exported from `schemas.py` and checked against it by the tests. |
 | `_site/` | no | The release `publish` builds; CI builds its own and deploys it. |
 

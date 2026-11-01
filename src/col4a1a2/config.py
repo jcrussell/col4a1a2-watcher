@@ -127,6 +127,11 @@ class Settings:
         return self.curated_dir / "extractions.jsonl"
 
     @property
+    def normalized(self) -> Path:
+        """Ensembl's answers to normalization queries: tracked, so `publish` stays offline."""
+        return self.curated_dir / "normalized.jsonl"
+
+    @property
     def figure_cache(self) -> Path:
         return self.curated_dir / "figures.jsonl"
 

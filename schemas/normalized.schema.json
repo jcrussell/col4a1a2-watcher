@@ -1,0 +1,141 @@
+{
+  "additionalProperties": false,
+  "description": "One row of normalized.jsonl. Ensembl's answer to one normalization query. Append-only; newest per `query_key` wins.",
+  "properties": {
+    "allele_string": {
+      "title": "Allele String",
+      "type": "string"
+    },
+    "build_inferred": {
+      "anyOf": [
+        {
+          "enum": [
+            "GRCh37",
+            "GRCh38",
+            "ambiguous",
+            "neither"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Build Inferred"
+    },
+    "chrom": {
+      "title": "Chrom",
+      "type": "string"
+    },
+    "consequence": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Consequence",
+      "type": "array"
+    },
+    "end": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "End"
+    },
+    "ensembl_release": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ensembl Release"
+    },
+    "error": {
+      "title": "Error",
+      "type": "string"
+    },
+    "gene": {
+      "title": "Gene",
+      "type": "string"
+    },
+    "hgvs_c": {
+      "title": "Hgvs C",
+      "type": "string"
+    },
+    "hgvs_p": {
+      "title": "Hgvs P",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "hgvs_c",
+        "hgvs_p",
+        "genomic"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "notation": {
+      "title": "Notation",
+      "type": "string"
+    },
+    "query_key": {
+      "title": "Query Key",
+      "type": "string"
+    },
+    "start": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Start"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "rejected"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "transcript_id": {
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "written_at": {
+      "title": "Written At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "query_key",
+    "kind",
+    "gene",
+    "notation",
+    "transcript_id",
+    "ensembl_release",
+    "status",
+    "error",
+    "build_inferred",
+    "chrom",
+    "start",
+    "end",
+    "allele_string",
+    "hgvs_c",
+    "hgvs_p",
+    "consequence",
+    "written_at"
+  ],
+  "title": "NormalizedRow",
+  "type": "object"
+}

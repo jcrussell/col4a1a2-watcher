@@ -44,7 +44,7 @@ from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 
 APPEND_ONLY = ("ledger.jsonl", "triage.jsonl", "figures.jsonl", "challenges.jsonl", "discovery.jsonl",
-               "extractions.jsonl")
+               "extractions.jsonl", "normalized.jsonl")
 ALLOW_REWRITE = "COL4A1A2_ALLOW_REWRITE"
 
 
@@ -122,6 +122,7 @@ class Checker:
         self.duplicates(cur / "triage.jsonl", data["triage.jsonl"])
         self.duplicates(cur / "figures.jsonl", data["figures.jsonl"])
         self.duplicates(cur / "challenges.jsonl", data["challenges.jsonl"])
+        self.duplicates(cur / "normalized.jsonl", data["normalized.jsonl"])
 
         for name in ("triage.jsonl", "challenges.jsonl"):
             orphans = sorted({r["pmid"] for r in data[name]} - identities)

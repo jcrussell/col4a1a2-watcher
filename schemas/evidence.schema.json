@@ -55,6 +55,11 @@
       "title": "Gene",
       "type": "string"
     },
+    "grch38": {
+      "description": "GRCh38 chromosome:position:reference/alternate, as VEP places it",
+      "title": "Grch38",
+      "type": "string"
+    },
     "hgvs_c": {
       "description": "Coding-DNA HGVS if the paper gives it or it is unambiguous; empty if not",
       "title": "Hgvs C",
@@ -85,6 +90,11 @@
       "title": "Inh Unknown",
       "type": "integer"
     },
+    "key_level": {
+      "description": "coding, protein (the paper gives only a protein change; its reference residue is verified), or none",
+      "title": "Key Level",
+      "type": "string"
+    },
     "n_families": {
       "description": "Kindreds with the variant in this paper; 0 when carriers came from screening a cohort and no family was studied",
       "title": "N Families",
@@ -111,6 +121,11 @@
       ],
       "description": "All reported carriers including relatives; empty if not stated",
       "title": "N Total Carriers"
+    },
+    "normalization_flags": {
+      "description": "Why normalization disagrees with the paper, comma-separated (c-p-mismatch: VEP's translation of the coding change or coordinates is not the paper's protein change): reference-mismatch, c-p-mismatch, vep-rejected, transcript-other, build-inferred-grch37, build-ambiguous (bare coordinates whose reference base matches both builds), not-normalized; empty if none",
+      "title": "Normalization Flags",
+      "type": "string"
     },
     "phenotype_details": {
       "description": "The phenotype as reported, including age at onset if stated",
@@ -140,6 +155,11 @@
     "prompt_version": {
       "description": "Version of the extraction prompt",
       "title": "Prompt Version",
+      "type": "string"
+    },
+    "protein_key": {
+      "description": "Protein HGVS on the reference protein, as VEP translates it",
+      "title": "Protein Key",
       "type": "string"
     },
     "quotes_grounded": {
@@ -182,6 +202,11 @@
       "title": "Transcript If Stated",
       "type": "string"
     },
+    "variant_key": {
+      "description": "One spelling per variant, from Ensembl VEP: coding-DNA HGVS on the reference transcript (NM_001845.6, NM_001846.4), else the verified protein change; empty if it could not be resolved",
+      "title": "Variant Key",
+      "type": "string"
+    },
     "variant_type": {
       "description": "missense_glycine, missense_other, splice, nonsense, frameshift, inframe_indel, intronic, utr, deletion_cnv or other",
       "title": "Variant Type",
@@ -214,6 +239,11 @@
     "inh_de_novo_assumed",
     "inh_inherited",
     "inh_unknown",
+    "variant_key",
+    "key_level",
+    "protein_key",
+    "grch38",
+    "normalization_flags",
     "phenotype_systems",
     "phenotype_details",
     "functional_evidence",

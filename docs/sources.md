@@ -10,6 +10,7 @@ Every host below is reached through `src/col4a1a2/http.py`. Rates are configured
 | Europe PMC `supplementaryFiles` | One ZIP per paper holding supplementary files and figure image renditions | 0.25/s | Same article licences. The ZIP is built per request, so it gets its own much slower bucket; at 2/s it returns errors. Members stay in the untracked bundle store and are never redistributed. |
 | PubTator 3 (NCBI) | Entity-aware search, BioC annotations, variant mentions linked to a gene | 2/s | Public NCBI resource. |
 | NCBI E-utilities | Full-text fallback, ClinVar record counts | 2/s | Public. Requests carry a contact address, as NCBI asks. |
+| Ensembl REST (`rest.ensembl.org`) | VEP consequences on the reference transcripts (coordinates, HGVS, consequence terms only), forward-strand reference bases on GRCh37 and GRCh38, and GRCh37-to-GRCh38 mapping, for `normalize` | 5/s; Ensembl allows 55,000/hour (15/s average) and answers 429 with `Retry-After` | "Ensembl imposes no restrictions on access to, or use of, the data provided" (disclaimer, checked 2026-11-01); some bundled data carries third-party terms. Every VEP plugin is off by default and none is requested, which keeps out AlphaMissense, REVEL, SpliceAI and ClinPred. Co-located variants and SIFT/PolyPhen in default responses stay in the HTTP cache and are never tracked. Ensembl asks to be cited. |
 | Anthropic API | Triage on title and abstract, figure transcription, extraction on full text, adversarial review | n/a | Outputs belong to the account holder. |
 
 ## Planned
@@ -17,7 +18,6 @@ Every host below is reached through `src/col4a1a2/http.py`. Rates are configured
 | Source | What for | Rate |
 |---|---|---|
 | ClinVar bulk files (NCBI FTP) | Monthly diff of variant classifications | 1/s, bulk file not per-variant queries |
-| Ensembl VEP REST | Normalising HGVS to reference transcripts and GRCh38 | 5/s |
 | gnomAD GraphQL | Allele frequency, which sets the prior for whether two reports of a variant are the same family | 0.15/s |
 
 Reference transcripts are NM_001845.6 for COL4A1 and NM_001846.4 for COL4A2.

@@ -462,6 +462,33 @@ class ApiResponse(Row):
     response: Loose
 
 
+class NormalizedRow(Row):
+    """Ensembl's answer to one normalization query. Append-only; newest per `query_key` wins.
+
+    Only coordinates, HGVS and consequence terms are kept. Co-located variants,
+    SIFT, PolyPhen and every plugin score stay out: some carry third-party
+    terms, and none is needed to key a variant.
+    """
+
+    query_key: str
+    kind: Literal["hgvs_c", "hgvs_p", "genomic"]
+    gene: str
+    notation: str
+    transcript_id: str
+    ensembl_release: int | None
+    status: Literal["ok", "rejected"]
+    error: str
+    build_inferred: Literal["GRCh37", "GRCh38", "ambiguous", "neither"] | None
+    chrom: str
+    start: int | None
+    end: int | None
+    allele_string: str
+    hgvs_c: str
+    hgvs_p: str
+    consequence: list[str]
+    written_at: str
+
+
 class EvidenceRow(Row):
     """One published record: a variant reported in carriers in one paper."""
 
@@ -487,6 +514,19 @@ class EvidenceRow(Row):
     inh_de_novo_assumed: int = Field(description="Probands called de novo without parental testing described")
     inh_inherited: int = Field(description="Probands who inherited the variant from a parent")
     inh_unknown: int = Field(description="Probands whose inheritance is not reported")
+    variant_key: str = Field(description="One spelling per variant, from Ensembl VEP: coding-DNA HGVS on the "
+                                         "reference transcript (NM_001845.6, NM_001846.4), else the verified "
+                                         "protein change; empty if it could not be resolved")
+    key_level: str = Field(description="coding, protein (the paper gives only a protein change; its reference "
+                                       "residue is verified), or none")
+    protein_key: str = Field(description="Protein HGVS on the reference protein, as VEP translates it")
+    grch38: str = Field(description="GRCh38 chromosome:position:reference/alternate, as VEP places it")
+    normalization_flags: str = Field(description="Why normalization disagrees with the paper, comma-separated "
+                                                 "(c-p-mismatch: VEP's translation of the coding change or "
+                                                 "coordinates is not the paper's protein change): "
+                                                 "reference-mismatch, c-p-mismatch, vep-rejected, transcript-other, "
+                                                 "build-inferred-grch37, build-ambiguous (bare coordinates whose "
+                                                 "reference base matches both builds), not-normalized; empty if none")
     phenotype_systems: str = Field(description="Organ systems affected in at least one carrier, comma-separated: "
                                                "cerebrovascular, small_vessel, renal_hanac, ocular, muscle, other")
     phenotype_details: str = Field(description="The phenotype as reported, including age at onset if stated")
@@ -560,6 +600,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "extractions.jsonl": ExtractionRow,
     "review.jsonl": ReviewRow,
     "manifest.json": ManifestRow,
+    "normalized.jsonl": NormalizedRow,
     "evidence.jsonl": EvidenceRow,
     "literature.jsonl": LiteratureRow,
     "datapackage.json": DataPackage,

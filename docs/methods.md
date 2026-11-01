@@ -78,6 +78,16 @@ Every variant record carries two to five verbatim quotes. `extract/verify.py` no
 
 Grounding also records **which region** of the input each quote matched: author text, a parsed supplement, or a figure transcription. Provenance is therefore computed from the match rather than declared by the model, which is the only version of it worth auditing. The distinction matters because the guarantees differ. A quote matching a parsed supplement is as verifiable as one matching a body table, since the parse is deterministic. A quote matching a figure transcription proves only fidelity to the transcription, so those records are flagged, are not given high confidence, and go to the front of the spot-check queue. Each region is normalised separately, which makes matching marginally stricter at the seams: a quote spanning two regions does not ground, which is correct, since it is verbatim in neither source.
 
+## Normalization
+
+Papers write one variant many ways, so records are keyed before anything is grouped. `normalize` sends each record's coding-DNA change to Ensembl VEP on the reference transcript, NM_001845.6 for COL4A1 and NM_001846.4 for COL4A2, and keys the record on the HGVS VEP returns. The paper's own transcript is recorded, never sent: VEP serves only the current RefSeq version, so `NM_001845.5` is a 400 and an unversioned accession a 500. VEP's answer is canonical, which is the point: `c.4611_4612insG` comes back as `c.4615dup`, the same variant shifted 3′.
+
+- **A record with only a protein change** is sent as protein HGVS on the reference protein. VEP cannot place it on the genome when several codons fit, but it does check the reference residue, so a correct residue gives a protein-level key and a wrong one a flag.
+- **Bare coordinates with no build** are tested against the reference base on GRCh38 and GRCh37. Exactly one build must match; a GRCh37 position is then mapped to GRCh38. The flag `build-inferred-grch37` says the build was deduced, not stated, and `build-ambiguous` that the base is the same on both, so no key is given.
+- **Structural variants** are not forced into HGVS. They have no key until they get an interval model.
+
+Normalization doubles as a check on extraction, and its flags say where a paper and VEP disagree: `reference-mismatch` (the reference base or residue is not the one stated), `c-p-mismatch` (VEP's translation of the coding change is not the protein change the paper gives, compared for substitutions only), `transcript-other` (the paper names a transcript whose numbering is not known to match the reference, a typo included) and `vep-rejected`. A matching reference base alone is weak evidence that the right transcript was used, since a random base matches a quarter of the time; the coding-protein agreement is the stronger test. Nothing is corrected: a record VEP rejects has no key, never a guessed one. The flags are published beside the record and do not yet affect which records count as confident.
+
 ## Deduplication
 
 The same family can be reported in several papers, and papers carry no patient identifiers. Left alone this inflates proband counts, and the error runs one direction only: toward overstating how much evidence a variant has.

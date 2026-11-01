@@ -20,7 +20,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from col4a1a2 import jsonl, schemas
+from col4a1a2 import jsonl, normalize, schemas
 from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import record_key
@@ -81,6 +81,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
     extractions = rows_mod.latest_extractions(st.extractions, st.extract_model)
     challenges = rows_mod.current_challenges(
         jsonl.read_tolerant(st.curated_dir / "challenges.jsonl", what="challenges"), st.extract_model)
+    answers = normalize.load_answers(st.normalized)
 
     evidence: list[dict] = []
     verdicts: dict[str, int] = {}
@@ -110,6 +111,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
                 "review_flags": ", ".join(flags),
                 "extracted_by": r.get("model"), "prompt_version": r["prompt_version"],
                 "extracted_at": r["written_at"],
+                **normalize.link(v, answers),
             })
             evidence.append(_blank_strings(row, schemas.EvidenceRow))
     evidence.sort(key=lambda e: (e["gene"], e["as_written"].lower(), e["pmid"], e["record_key"]))
@@ -124,7 +126,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
     # Every input that can change a released row dates the release: a commit
     # that only adds challenges changes which records are confident.
     stamps = [r.get("written_at", "") for r in ledger_rows] + [r["written_at"] for r in extractions] \
-        + [c.get("written_at", "") for c in challenges.values()]
+        + [c.get("written_at", "") for c in challenges.values()] + [a["written_at"] for a in answers.values()]
     return Release(evidence=evidence, literature=literature, version=max(stamps, default="")[:10],
                    include_all=include_all, n_extracted=n_extracted,
                    n_spot_checked=_spot_checked(st), verdicts=verdicts)
@@ -179,7 +181,10 @@ def datapackage(rel: Release) -> dict:
         "description": f"{rel.notice()} {rel.selection()}",
         "licenses": [{**LICENSE, "description": licence_notice()}],
         "sources": [{"title": "Europe PMC", "path": "https://europepmc.org"},
-                    {"title": "PubTator 3", "path": "https://www.ncbi.nlm.nih.gov/research/pubtator3/"}],
+                    {"title": "PubTator 3", "path": "https://www.ncbi.nlm.nih.gov/research/pubtator3/"},
+                    {"title": "Ensembl VEP, for variant keys and GRCh38 positions (cite as "
+                              "https://www.ensembl.org/info/about/publications.html asks)",
+                     "path": "https://www.ensembl.org"}],
         "resources": [resource("evidence", schemas.EvidenceRow, len(rel.evidence)),
                       resource("literature", schemas.LiteratureRow, len(rel.literature))],
     }

@@ -939,6 +939,53 @@ def cmd_publish(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_normalize(a: argparse.Namespace) -> int:
+    """Ask Ensembl VEP for one canonical key per variant; append the answers."""
+    from col4a1a2 import normalize
+    from col4a1a2.sources import ensembl
+
+    st: Settings = a.settings
+    records = [v for r in rows_mod.latest_extractions(st.extractions, st.extract_model)
+               for v in (r["extraction"].get("variants") or [])]
+    stored = normalize.load_answers(st.normalized)
+    # A refresh starts from no answers, so every query a record needs is asked afresh.
+    answers = {} if a.refresh else dict(stored)
+    print(f"{len(records)} records ({sum(1 for v in records if not normalize.queries_for(v))} have nothing to ask)")
+    client = make_client(st)
+    release: list[int | None] = []
+
+    def ask_one(q: dict) -> dict | None:
+        if not release:
+            release.append(ensembl.release(client))
+        row = normalize.ask(client, q, release[0], ttl=0 if a.refresh else None)
+        if row is not None:
+            jsonl.append(st.normalized, row)
+        return row
+
+    asked, got = normalize.normalize_records(records, answers, ask_one)
+    if asked:
+        print(f"Ensembl release {release[0]}: answered {got} of {asked} "
+              f"({client.network_requests} requests, {client.cache_hits} from cache)")
+        if got < asked * 0.5:
+            log.warning("Ensembl answered only %d of %d queries; check the service before trusting the table",
+                        got, asked)
+    else:
+        print("nothing to ask: every record's queries are answered")
+    answers = normalize.load_answers(st.normalized)
+    linked = [normalize.link(v, answers) for v in records]
+    levels: dict[str, int] = {}
+    flags: dict[str, int] = {}
+    for n in linked:
+        levels[n["key_level"]] = levels.get(n["key_level"], 0) + 1
+        for f in filter(None, n["normalization_flags"].split(", ")):
+            flags[f] = flags.get(f, 0) + 1
+    keys = {n["variant_key"] for n in linked if n["variant_key"]}
+    print("key level: " + ", ".join(f"{k}={v}" for k, v in sorted(levels.items())))
+    print(f"distinct variant keys: {len(keys)}")
+    print("flags: " + (", ".join(f"{k}={v}" for k, v in sorted(flags.items())) or "none"))
+    return 0
+
+
 def cmd_check(a: argparse.Namespace) -> int:
     from col4a1a2 import check
 
@@ -997,7 +1044,7 @@ def cmd_list(a: argparse.Namespace) -> int:
 # Verbs that write. They take `Settings.lock_file` so two runs never interleave
 # appends or race on a resume decision, and so `publish` never reads a log
 # another run is halfway through appending; read-only verbs skip it.
-WRITING_VERBS = frozenset({"fetch-papers", "extract", "challenge", "review", "publish"})
+WRITING_VERBS = frozenset({"fetch-papers", "extract", "challenge", "review", "normalize", "publish"})
 
 
 class LockHeld(RuntimeError):
@@ -1111,6 +1158,13 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("ledger", parents=[common], help="summarise every candidate ever considered")
     g.add_argument("--tsv", help="also write the folded ledger to this TSV")
     g.set_defaults(func=cmd_ledger)
+
+    nz = sub.add_parser("normalize", parents=[common],
+                        help="key every extracted variant on the reference transcript with Ensembl VEP")
+    nz.add_argument("--refresh", action="store_true",
+                    help="ask Ensembl again, bypassing the HTTP cache, even for queries already answered; "
+                         "the new answer is appended and wins")
+    nz.set_defaults(func=cmd_normalize)
 
     pb = sub.add_parser("publish", parents=[common],
                         help="build the public tables and site from tracked files (what CI runs)")

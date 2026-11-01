@@ -174,3 +174,23 @@ def test_a_placeholder_inside_the_data_is_left_alone(world, tmp_path):
     publish.write(publish.gather(st), tmp_path / "s")
     html = (tmp_path / "s" / "index.html").read_text()
     assert "@@NOTICE@@ \\u003cb\\u003ex" in html, "data must be embedded verbatim and escaped"
+
+
+def test_normalization_columns_come_from_the_tracked_answers(world):
+    """`publish` reads Ensembl's stored answers and never asks Ensembl itself."""
+    from col4a1a2 import normalize
+
+    st, _ = world
+    v = publish.gather(st, include_all=True).evidence[0]
+    assert v["normalization_flags"] == "not-normalized" and v["variant_key"] == ""
+    rec = next(r for r in jsonl.read(st.extractions) if r["pmid"] == "1")["extraction"]["variants"][0]
+    q = normalize.query_for(rec)
+    jsonl.append(st.normalized, {
+        "query_key": normalize.query_key(q), **q, "ensembl_release": 116, "status": "ok", "error": "",
+        "build_inferred": None, "chrom": "13", "start": 5, "end": 5, "allele_string": "G/A",
+        "hgvs_c": q["notation"], "hgvs_p": "", "consequence": ["start_lost"],
+        "written_at": "2026-11-01T00:00:00+00:00"})
+    rel = publish.gather(st, include_all=True)
+    row = next(e for e in rel.evidence if e["record_key"] == v["record_key"])
+    assert row["variant_key"] == q["notation"] and row["grch38"] == "13:5:G/A" and row["key_level"] == "coding"
+    assert rel.version == "2026-11-01", "a new answer dates the release"
