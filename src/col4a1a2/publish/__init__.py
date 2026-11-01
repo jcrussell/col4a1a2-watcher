@@ -27,7 +27,11 @@ from col4a1a2.extract.challenge import record_key
 from col4a1a2.ledger import fold_rows, paper_status
 
 LICENSE = {"name": "CC-BY-4.0", "path": "https://creativecommons.org/licenses/by/4.0/",
-           "title": "Creative Commons Attribution 4.0"}
+           "title": "Creative Commons Attribution 4.0, except the excerpt columns"}
+# Columns that carry the papers' own words. They are quoted so each record can
+# be checked against its source, and they stay under the article's copyright:
+# we cannot license someone else's sentence, so CC BY covers everything else.
+EXCERPT_COLUMNS = ("evidence_quotes", "reported_classification")
 TEMPLATE = Path(__file__).with_name("index.html")
 EVIDENCE_COLUMNS = list(schemas.EvidenceRow.model_fields)
 LITERATURE_COLUMNS = list(schemas.LiteratureRow.model_fields)
@@ -173,12 +177,22 @@ def datapackage(rel: Release) -> dict:
         "title": "COL4A1/COL4A2 published carrier evidence",
         "version": rel.version,
         "description": f"{rel.notice()} {rel.selection()}",
-        "licenses": [LICENSE],
+        "licenses": [{**LICENSE, "description": licence_notice()}],
         "sources": [{"title": "Europe PMC", "path": "https://europepmc.org"},
                     {"title": "PubTator 3", "path": "https://www.ncbi.nlm.nih.gov/research/pubtator3/"}],
         "resources": [resource("evidence", schemas.EvidenceRow, len(rel.evidence)),
                       resource("literature", schemas.LiteratureRow, len(rel.literature))],
     }
+
+
+def licence_notice() -> str:
+    """What CC BY covers and what it cannot: one wording for every output."""
+    cols = " and ".join(EXCERPT_COLUMNS)
+    return (f"Our own fields are released under CC BY 4.0 ({LICENSE['path']}). "
+            f"The {cols} columns are short verbatim excerpts from the cited papers, "
+            "included so each record can be checked against its source; they remain under "
+            "the copyright and licence of the original article and are not covered by CC BY. "
+            "Titles and journal names are bibliographic metadata as indexed by Europe PMC.")
 
 
 def readme(rel: Release) -> str:
@@ -192,7 +206,7 @@ def readme(rel: Release) -> str:
         "literature.csv / literature.jsonl: every paper considered and what became of it.",
         "datapackage.json describes every column.",
         "",
-        "Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).",
+        "Licence: " + licence_notice(),
         "",
     ])
 
@@ -219,6 +233,8 @@ def site(rel: Release) -> str:
             .replace("@@NOTICE@@", escape(rel.notice()))
             .replace("@@SELECTION@@", escape(rel.selection()))
             .replace("@@VERSION@@", escape(rel.version))
+            .replace("@@LICENCE@@", escape(licence_notice()).replace(
+                LICENSE["path"], f'<a href="{LICENSE["path"]}">{LICENSE["path"]}</a>'))
             .replace("@@DATA@@", _embed(payload)))
 
 

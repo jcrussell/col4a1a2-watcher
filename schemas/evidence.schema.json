@@ -23,7 +23,7 @@
       "type": "string"
     },
     "evidence_quotes": {
-      "description": "Verbatim sentences from the paper supporting the record; joined with ' | ' in the CSV",
+      "description": "Verbatim sentences from the paper supporting the record; joined with ' | ' in the CSV. Excerpts under the article's copyright, not CC BY",
       "items": {
         "type": "string"
       },
@@ -153,7 +153,7 @@
       "type": "string"
     },
     "reported_classification": {
-      "description": "The authors' own classification, verbatim; empty if none",
+      "description": "The authors' own classification, verbatim; empty if none. An excerpt under the article's copyright, not CC BY",
       "title": "Reported Classification",
       "type": "string"
     },

@@ -492,13 +492,15 @@ class EvidenceRow(Row):
     phenotype_details: str = Field(description="The phenotype as reported, including age at onset if stated")
     functional_evidence: str = Field(description="One-sentence summary of functional work on the variant in this "
                                                  "paper; machine-written, not a quote")
-    reported_classification: str = Field(description="The authors' own classification, verbatim; empty if none")
+    reported_classification: str = Field(description="The authors' own classification, verbatim; empty if none. "
+                                                     "An excerpt under the article's copyright, not CC BY")
     same_family_as_prior_report: bool = Field(description="The paper says this family or proband was reported "
                                                           "before; counts may overlap with that paper")
     prior_report_reason: str = Field(description="Why the record is marked as a prior report")
     confidence: str = Field(description="high, medium or low, as assigned at extraction")
     evidence_quotes: list[str] = Field(description="Verbatim sentences from the paper supporting the record; "
-                                                   "joined with ' | ' in the CSV")
+                                                   "joined with ' | ' in the CSV. Excerpts under the article's "
+                                                   "copyright, not CC BY")
     quotes_grounded: bool = Field(description="Every quote was found verbatim in the paper's text")
     figure_sourced: bool = Field(description="The record rests on a machine transcription of a figure")
     reviewer_verdict: str = Field(description="Outcome of the adversarial review, checked against the text: upheld, "

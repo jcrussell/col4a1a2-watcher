@@ -117,6 +117,13 @@ def test_every_output_carries_the_notice(world, tmp_path):
     for text in (pkg["description"], html, readme, *[r["description"] for r in pkg["resources"]]):
         assert "Machine-extracted" in text and "not clinical advice" in text
         assert "not yet spot-checked by a person" in text
+    # CC BY covers our fields; the quotes stay under each article's copyright.
+    for text in (pkg["licenses"][0]["description"], html, readme):
+        assert "CC BY 4.0" in text and "not covered by CC BY" in text
+        assert all(col in text for col in publish.EXCERPT_COLUMNS)
+    assert set(publish.EXCERPT_COLUMNS) <= set(schemas.EvidenceRow.model_fields)
+    for col in publish.EXCERPT_COLUMNS:
+        assert "not CC BY" in schemas.EvidenceRow.model_fields[col].description
     assert [f["name"] for f in pkg["resources"][0]["schema"]["fields"]] == list(schemas.EvidenceRow.model_fields)
 
 

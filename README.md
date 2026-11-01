@@ -66,7 +66,7 @@ uv run col4a1a2-dev --help     # probe, triage, citations, export, fixtures
 
 - Full texts and supplementary files come from Europe PMC and PubMed Central open-access articles, are stored locally only, and are never redistributed. Test fixtures are limited to CC BY articles and supplement files we generate ourselves, attributed in `tests/fixtures/README.md`.
 - Extracted records carry a PMID, a prepared citation and short verbatim quotes.
-- The evidence and literature tables, and the tracked model output under `data/curated/`, are released CC BY 4.0. The code is BSD-3-Clause (`LICENSE`).
+- The evidence and literature tables, and the tracked model output under `data/curated/`, are released CC BY 4.0, except the verbatim quotes they carry (`evidence_quotes`, `reported_classification`, and the quotes inside tracked extraction and review rows). Those are short excerpts from the cited papers, kept so every fact can be checked against its source; they stay under the original article's copyright and licence, and CC BY does not cover them. The code is BSD-3-Clause (`LICENSE`).
 - Every non-Anthropic request goes through one rate-limited, cached, serial client (`src/col4a1a2/http.py`).
 
 **Research use only.** Records are machine-extracted and spot-checked at a stated rate. Nothing here is clinical advice.
