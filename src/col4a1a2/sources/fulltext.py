@@ -13,12 +13,12 @@ from col4a1a2.patterns import HGVS_LIKE
 XLINK = "{http://www.w3.org/1999/xlink}href"
 
 DROP_TAGS = {"ref-list", "fn-group", "ack", "glossary", "app-group", "back", "author-notes", "license"}
-SKIP_SECTION_TITLES = re.compile(r"^(references|acknowledg|author contributions|funding|conflict|supplementary)", re.I)
+SKIP_SECTION_TITLES = re.compile(r"^(references|acknowledg|author contributions|funding|conflict|supplementary)", re.IGNORECASE)
 
 # Variant vocabulary used to decide whether a figure is cited in a variant context.
 VARIANT_CONTEXT = re.compile(
     r"\b(variant|variants|mutation|mutations|de novo|missense|nonsense|frameshift|splice|"
-    r"glycine|exon|pedigree|segregat\w*|genotype|Sanger|chromatogram|domain)\b", re.I)
+    r"glycine|exon|pedigree|segregat\w*|genotype|Sanger|chromatogram|domain)\b", re.IGNORECASE)
 
 
 
@@ -320,11 +320,11 @@ def text_deficit(text: str) -> dict:
     cases keeps the rest of the table free of model-transcribed evidence.
     """
     n_hgvs = len(set(HGVS_LIKE.findall(text)))
-    claimed = [int(m) for m in re.findall(r"\b(\d{1,4})\s+(?:patients|probands|individuals|families|cases)\b", text, re.I)]
+    claimed = [int(m) for m in re.findall(r"\b(\d{1,4})\s+(?:patients|probands|individuals|families|cases)\b", text, re.IGNORECASE)]
     largest_claim = max(claimed) if claimed else 0
     points_elsewhere = bool(re.search(
         r"(eTable|Table S\d|Supplementary Table|supplemental Table|are (?:shown|listed|depicted|included) in (?:Figure|Fig\.?)\s*\d)",
-        text, re.I))
+        text, re.IGNORECASE))
     return {
         "n_hgvs": n_hgvs,
         "largest_claim": largest_claim,

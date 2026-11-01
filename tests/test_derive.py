@@ -8,9 +8,9 @@ records are pinned below.
 
 
 import pytest
+from conftest import corpus_file
 
 from col4a1a2 import jsonl
-from conftest import corpus_file
 from col4a1a2.extract.derive import check_extraction, check_record, derive_variant_type
 
 

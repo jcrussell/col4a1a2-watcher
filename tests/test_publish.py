@@ -5,12 +5,12 @@ import json
 import re
 
 import pytest
+from conftest import make_challenge_row, make_extraction_row, make_settings, make_triage_row, make_variant
 
 from col4a1a2 import jsonl, publish, schemas
 from col4a1a2.extract.challenge import record_key
 from col4a1a2.extract.rows import records_digest_for
 from col4a1a2.ledger import Ledger
-from conftest import make_challenge_row, make_extraction_row, make_settings, make_triage_row, make_variant
 
 
 def _challenge(row, verdicts, *, disputed=(), digest=None):
@@ -67,7 +67,7 @@ def test_the_default_release_is_confident_records_only(world):
 
 
 def test_all_releases_everything_with_the_reasons(world):
-    st, keys = world
+    st, _keys = world
     rel = publish.gather(st, include_all=True)
     by = {e["as_written"]: e for e in rel.evidence}
     assert len(by) == 5
@@ -216,13 +216,13 @@ def test_every_column_on_the_page_carries_its_published_description(world, tmp_p
     st, _ = world
     publish.write(publish.gather(st), tmp_path / "s")
     html = (tmp_path / "s" / "data.html").read_text()
-    payload = json.loads(re.search(r'id="data-json">(.*?)</script>', html, re.S).group(1))
+    payload = json.loads(re.search(r'id="data-json">(.*?)</script>', html, re.DOTALL).group(1))
     for name, model in (("variants", schemas.VariantRow), ("evidence", schemas.EvidenceRow),
                         ("literature", schemas.LiteratureRow)):
         assert payload["columns"][name] == {f: i.description for f, i in model.model_fields.items()}
     assert "renal_hanac" in payload["glossary"]["phenotype_systems"]
     home = (tmp_path / "s" / "index.html").read_text()
-    home_payload = json.loads(re.search(r'id="data-json">(.*?)</script>', home, re.S).group(1))
+    home_payload = json.loads(re.search(r'id="data-json">(.*?)</script>', home, re.DOTALL).group(1))
     assert set(home_payload["proteins"]) == {"COL4A1", "COL4A2"}, "the protein map draws both genes"
     assert "evidence" not in home_payload, "the About page carries only what the map needs"
     assert set(payload["statuses"]) >= {r["status"] for r in payload["literature"]}

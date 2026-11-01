@@ -48,4 +48,14 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 dev = [
     "git-cliff>=2.14.2",
     "pytest>=9.2.0",
+    "ruff>=0.17.3",
 ]
+
+[tool.ruff]
+# The code is laid out by hand and runs past 88 columns; this only stops the
+# import sorter wrapping imports that fit on one line.
+line-length = 120
+
+[tool.ruff.lint.flake8-comprehensions]
+# dict(key=value) builds keyword arguments, and reads as them; keep it.
+allow-dict-calls-with-keyword-arguments = true

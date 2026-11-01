@@ -2,9 +2,10 @@
 
 import json
 
+from conftest import make_challenge_row, make_extraction_row, make_settings, make_variant
+
 from col4a1a2.extract.prompt import PROMPT_VERSION
 from col4a1a2.extract.rows import challenge_for, current_challenges, latest_extractions, records_digest_for
-from conftest import make_challenge_row, make_extraction_row, make_settings, make_variant
 
 
 def test_latest_extractions_supersedes_earlier_rows_and_drops_errors(tmp_path):

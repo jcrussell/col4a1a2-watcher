@@ -27,7 +27,7 @@ log = logging.getLogger("col4a1a2")
 
 # Variant notation that HGVS_LIKE alone misses: bare protein shorthand and
 # three-letter forms without a c./p. prefix.
-EXTRA_VARIANT_RE = re.compile(r"\b[A-Z]\d{2,5}[A-Z]\b|\bGly\d+[A-Z][a-z]{2}\b|\bexon\s*\d+\b", re.I)
+EXTRA_VARIANT_RE = re.compile(r"\b[A-Z]\d{2,5}[A-Z]\b|\bGly\d+[A-Z][a-z]{2}\b|\bexon\s*\d+\b", re.IGNORECASE)
 
 HEADER_ROWS = 3        # multi-row headers are the norm in supplement tables
 KEEP_ALL_BELOW = 60    # small sheets are cheaper to include whole than to reason about

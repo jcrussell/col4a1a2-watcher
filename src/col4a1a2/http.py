@@ -14,9 +14,9 @@ import logging
 import random
 import sqlite3
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping
 from urllib.parse import urlsplit
 
 import httpx
@@ -78,7 +78,7 @@ class Response:
     def ok(self) -> bool:
         return 200 <= self.status < 300
 
-    def require_ok(self, what: str) -> "Response":
+    def require_ok(self, what: str) -> Response:
         """Raise unless 2xx. A failed page must never read as an empty one."""
         if not self.ok:
             raise HttpError(f"{what} failed: HTTP {self.status} ({self.url})")

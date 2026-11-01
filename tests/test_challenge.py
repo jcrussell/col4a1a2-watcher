@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from conftest import make_paper_extraction, make_provenance, make_variant
 
 from col4a1a2.extract.challenge import (
     CHALLENGE_PROMPT_VERSION,
@@ -18,8 +19,6 @@ from col4a1a2.extract.challenge import (
     records_digest,
     slim_records,
 )
-
-from conftest import make_variant, make_provenance, make_paper_extraction
 
 TEXT = ("The proband carried c.1537G>A. "
         "Only one family was studied. "

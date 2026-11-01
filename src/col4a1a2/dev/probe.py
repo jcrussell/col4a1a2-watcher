@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Check that a Pydantic schema is accepted by the structured-outputs grammar.
 
     uv run col4a1a2-dev probe col4a1a2.extract.schema:PaperExtraction
@@ -14,7 +13,6 @@ from __future__ import annotations
 import importlib
 import sys
 import time
-
 
 import anthropic
 

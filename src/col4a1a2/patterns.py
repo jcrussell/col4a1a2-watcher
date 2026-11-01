@@ -16,12 +16,12 @@ from __future__ import annotations
 import re
 
 # A gene symbol as a word, for titles and abstracts.
-GENE_RE = re.compile(r"\bCOL4A[12]\b", re.I)
+GENE_RE = re.compile(r"\bCOL4A[12]\b", re.IGNORECASE)
 
 # A gene symbol anywhere in a table cell, word boundary or not. Deliberately
 # looser than GENE_RE and kept that way: supplement row filtering uses it, so
 # tightening it would change which rows reach the prompt.
-GENE_IN_CELL = re.compile(r"COL4A[12]", re.I)
+GENE_IN_CELL = re.compile(r"COL4A[12]", re.IGNORECASE)
 
 # Anything that looks like HGVS. Used by the figure cost gate and by supplement
 # row filtering.
@@ -33,12 +33,12 @@ CLINICAL_RE = re.compile(
     r"variant|mutation|pathogenic|de novo|heterozygous|c\.\d|p\.\(?[A-Z][a-z]{2}\d|Gould|HANAC|porencephal|"
     r"schizencephal|h(a)?emorrhag|small[- ]vessel|leukoencephalopath|PADMAL|cataract|anterior segment|"
     r"Axenfeld|tortuosity|hematuria|haematuria|nephropath|cramps|myopath|cerebral palsy|stroke|proband|famil",
-    re.I)
+    re.IGNORECASE)
 
 # A variant written as bare genomic coordinates on chromosome 13 with no
 # build, e.g. "13: 110804862: C: T" or "chr13:110804862 C>T". `normalize`
 # infers the build from the reference base.
-GENOMIC_AS_WRITTEN = re.compile(r"^(?:chr)?(13)[\s:]+(\d[\d,]*)[\s:]+([ACGT])[\s:>/]+([ACGT])$", re.I)
+GENOMIC_AS_WRITTEN = re.compile(r"^(?:chr)?(13)[\s:]+(\d[\d,]*)[\s:]+([ACGT])[\s:>/]+([ACGT])$", re.IGNORECASE)
 
 # A RefSeq or Ensembl accession with an optional version, as papers state them.
 ACCESSION = re.compile(r"(N[MPRC]_\d+|ENS[TP]\d+)(?:\.(\d+))?")

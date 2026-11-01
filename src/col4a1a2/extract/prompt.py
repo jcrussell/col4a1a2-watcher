@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from col4a1a2.sources.fulltext import TextRegion
-from pathlib import Path
 
 PROMPT_VERSION = "v1"
 _PROMPT_DIR = Path(__file__).parent / "prompts"

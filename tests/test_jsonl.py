@@ -9,9 +9,9 @@ newline, and every reader fails with "Unterminated string".
 import json
 
 import pytest
+from conftest import corpus_file, make_provenance
 
 from col4a1a2 import jsonl
-from conftest import corpus_file, make_provenance
 
 # Everything str.splitlines() treats as a break and that we therefore escape.
 BREAKERS = ["\u2028", "\u2029", "\u0085", "\u000b", "\u000c", "\u001c", "\u001d", "\u001e"]

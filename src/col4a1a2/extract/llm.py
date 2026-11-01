@@ -158,7 +158,7 @@ class Policy:
 
 
 def _now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat()
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
 def request_digest(kwargs: dict) -> str:

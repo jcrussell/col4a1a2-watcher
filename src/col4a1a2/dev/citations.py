@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Measure how often papers reporting the same variant cite each other.
 
     uv run col4a1a2-dev citations "p.Gly773Arg" "G773R"
@@ -16,7 +15,6 @@ through the rate-limited client; no model calls.
 from __future__ import annotations
 
 import sys
-
 
 from col4a1a2.cli import make_client
 from col4a1a2.config import load_settings

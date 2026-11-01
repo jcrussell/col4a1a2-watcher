@@ -190,7 +190,7 @@ def fetch_bundle(
             continue
         try:
             m.data = zf.read(info)
-        except Exception as e:  # corrupt member; keep the rest of the bundle
+        except Exception as e:  # corrupt member; keep the rest of the bundle  # noqa: BLE001
             m.skip_reason = f"unreadable member: {type(e).__name__}"
             b.members.append(m)
             continue

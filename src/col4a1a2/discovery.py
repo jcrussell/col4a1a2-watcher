@@ -43,8 +43,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from col4a1a2.digest import sha256_text
 from col4a1a2 import jsonl
+from col4a1a2.digest import sha256_text
 
 log = logging.getLogger("col4a1a2")
 
@@ -146,7 +146,7 @@ class DiscoveryLog:
             "hits_available": hits_available,
             "hits_fetched": hits_fetched,
             "complete": complete,
-            "completed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "completed_at": dt.datetime.now(dt.UTC).isoformat(),
         }
         jsonl.append(self.path, row)
         self.rows.append(row)

@@ -3,10 +3,9 @@
 import tomllib
 
 import pytest
+from conftest import CONFIG
 
 from col4a1a2.config import EXPECTED_RATE_KEYS, ConfigError, Prices, load_settings
-
-from conftest import CONFIG
 
 
 def test_committed_config_loads():

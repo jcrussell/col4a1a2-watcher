@@ -6,9 +6,6 @@ snapshot's challenges, so a missed-variant report is not repeated under every
 snapshot as if each had produced it.
 """
 
-from col4a1a2 import jsonl
-from col4a1a2.cli import REVIEW_COLUMNS, cmd_review
-from col4a1a2.extract.rows import records_digest_for
 from conftest import (
     cmd_args,
     make_challenge_row,
@@ -18,6 +15,11 @@ from conftest import (
     make_snapshot,
     make_variant,
 )
+
+from col4a1a2 import jsonl
+from col4a1a2.cli import REVIEW_COLUMNS, cmd_review
+from col4a1a2.extract.rows import records_digest_for
+
 
 def _snapshot(tmp_path, rows, papers):
     st = make_settings(tmp_path)

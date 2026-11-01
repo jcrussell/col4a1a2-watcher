@@ -4,7 +4,7 @@ Instructions for anyone, human or agent, working in this repository.
 
 ## Tooling
 
-- **Use `uv`, never bare `pip` or `venv`.** `uv sync` to install, `uv add` to add a dependency, `uv run col4a1a2 ...` to run the CLI, `uv run pytest` for tests. `pyproject.toml` and `uv.lock` are both tracked; commit lockfile changes with the dependency change that caused them.
+- **Use `uv`, never bare `pip` or `venv`.** `uv sync` to install, `uv add` to add a dependency, `uv run col4a1a2 ...` to run the CLI, `uv run pytest` for tests, `uv run ruff check` to lint (ruff's default rules; there is no formatter, since the code is laid out by hand). `pyproject.toml` and `uv.lock` are both tracked; commit lockfile changes with the dependency change that caused them.
 - Python is pinned in `.python-version`.
 - `uv` lives in `~/.local/bin` on the development machine, so `export PATH="$HOME/.local/bin:$PATH"` may be needed.
 
@@ -37,7 +37,7 @@ Instructions for anyone, human or agent, working in this repository.
 
 The files are a small database, so they get the few guarantees a database would give. Enable the hook once per clone: `git config core.hooksPath .githooks`.
 
-- **`uv run col4a1a2 check` is the first thing to run after any hand edit, merge or migration.** It validates every row, finds torn lines, duplicate rows and dangling PMIDs, confirms each challenge still matches the records it reviewed, and confirms every extraction the ledger records exists in a snapshot. The pre-commit hook runs it and the tests.
+- **`uv run col4a1a2 check` is the first thing to run after any hand edit, merge or migration.** It validates every row, finds torn lines, duplicate rows and dangling PMIDs, confirms each challenge still matches the records it reviewed, and confirms every extraction the ledger records exists in a snapshot. The pre-commit hook runs it, the linter and the tests.
 - **Tracked logs are append-only.** `ledger`, `triage`, `figures`, `challenges`, `discovery`, `extractions` and `normalized` must extend their `HEAD` version byte for byte. A deliberate rewrite is a migration: commit it with `COL4A1A2_ALLOW_REWRITE=1` and say in `docs/measurements.md` what changed and why. Even then `check` refuses a ledger rewrite that loses a paper or a triage verdict: an event can be the only record of a paper's metadata or verdict, so deleting events is never a safe way to retire them.
 - **Data before index.** Write the result row, then the ledger event. A crash between them leaves a result the ledger does not know about (a warning) rather than a ledger entry pointing at nothing, which would make resume skip a paper that has no result.
 - **One writer at a time.** Writing verbs hold `data/.lock`; a second run exits naming the PID that holds it.

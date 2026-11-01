@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Score triage rules against hand-labelled papers.
 
     uv run col4a1a2-dev triage --snapshot data/raw/2026-10-29
@@ -20,18 +19,18 @@ import sys
 from pathlib import Path
 
 from col4a1a2 import jsonl
-from col4a1a2.patterns import CLINICAL_RE, GENE_RE, HGVS_LIKE
 from col4a1a2.config import Settings, load_settings
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache
+from col4a1a2.patterns import CLINICAL_RE, GENE_RE, HGVS_LIKE
 
 PERSON = re.compile(
     r"\b(proband|probands|patient|patients|family|families|kindred|pedigree|"
-    r"case report|fetus|sibling|siblings|carrier|carriers)\b", re.I)
+    r"case report|fetus|sibling|siblings|carrier|carriers)\b", re.IGNORECASE)
 METHOD = re.compile(
     r"\b(expression|expressed|mRNA|transcriptom\w*|proteom\w*|single[- ]cell|scRNA|"
     r"RNA-seq|knockdown|knockout|overexpress\w*|GWAS|genome[- ]wide association|"
     r"biomarker|molecular docking|immunohistochem\w*|mouse|mice|zebrafish|rat|"
-    r"iPSC|cell line|in vitro|differentially expressed|eQTL|summary statistics)\b", re.I)
+    r"iPSC|cell line|in vitro|differentially expressed|eQTL|summary statistics)\b", re.IGNORECASE)
 # The deployed rule's own vocabulary, so this tool scores what actually runs.
 CLINICAL = CLINICAL_RE
 GENE = GENE_RE

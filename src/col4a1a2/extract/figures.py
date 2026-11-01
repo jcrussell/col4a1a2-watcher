@@ -26,7 +26,6 @@ from col4a1a2.digest import sha256_bytes
 from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.sources.fulltext import FigureRef, rows_to_text, text_deficit
 
-
 log = logging.getLogger("col4a1a2")
 
 FIGURE_PROMPT_VERSION = "f1"

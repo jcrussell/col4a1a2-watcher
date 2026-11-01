@@ -8,20 +8,22 @@ import json
 import logging
 import os
 import sys
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from pathlib import Path
 
 import anthropic
 
+from col4a1a2 import __version__, jsonl, schemas
 from col4a1a2.config import REPO, ConfigError, Settings, load_settings
-from col4a1a2.discovery import DiscoveryLog, plan as plan_slices
-from col4a1a2.extract.prompt import PaperInput
+from col4a1a2.digest import sha256_text
+from col4a1a2.discovery import DiscoveryLog
+from col4a1a2.discovery import plan as plan_slices
 from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import records_digest
-from col4a1a2.digest import sha256_text
 from col4a1a2.extract.llm import Policy, ResponseArchive, SpendMeter
+from col4a1a2.extract.prompt import PaperInput
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, keyword_signals, triage_paper
-from col4a1a2 import __version__, jsonl, schemas
 from col4a1a2.http import PoliteClient
 from col4a1a2.ledger import Ledger
 from col4a1a2.sources import europepmc, ncbi, pubtator
@@ -220,7 +222,7 @@ def _enrich(
                                                                **fig_llm.kwargs())
                     cached = fig_cache.put(pmcid=pmcid, fig=fig, image_sha256=digest,
                                            transcription=tr, usage=usage, provenance=prov)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     # A figure is optional enrichment. Letting one bad image abort
                     # the fetch would discard every paper gathered so far, along
                     # with the rate-limited downloads and the paid vision calls.
@@ -281,7 +283,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                 client,
                 f"({st.europepmc_query}) AND FIRST_PDATE:[{sl.date_from} TO {sl.date_to}]",
             )
-        except Exception as e:  # coverage reporting must never break a fetch
+        except Exception as e:  # coverage reporting must never break a fetch  # noqa: BLE001
             log.debug("hit_count failed for %s: %s", sl.key, e)
         # A slice truncated by --max-search has not been covered, so recording it
         # complete would silently freeze a partial sweep.
@@ -403,7 +405,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                                                          **triage_llm.kwargs())
                     # Data before index: the verdict is cached before the ledger records it.
                     cached = tcache.put(m.pmid, decision, usage, prov)
-                except Exception as e:  # never let triage abort a fetch
+                except Exception as e:  # never let triage abort a fetch  # noqa: BLE001
                     log.warning("triage failed for %s (%s); keeping paper", m.pmid, type(e).__name__)
                     cached = {"read_full_text": True, "reason": f"triage error: {type(e).__name__}",
                               "triage_prompt_version": TRIAGE_PROMPT_VERSION}
@@ -484,7 +486,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                         force_figures=a.figures, acl=acl, fig_cache=fig_cache,
                         fig_llm=fig_llm,
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     # Enrichment is optional. Letting it raise would discard every
                     # paper fetched so far, along with the rate-limited downloads
                     # and the paid vision calls already spent on them.
@@ -533,7 +535,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     log.info("ledger: %d events appended to %s", ledger.appended, ledger.path)
     n = jsonl.write(snap / "papers.jsonl", rows)
     manifest = {
-        "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "fetched_at": dt.datetime.now(dt.UTC).isoformat(),
         "date_from": a.date_from, "date_to": a.date_to, "limit": a.limit, "oa_only": a.oa_only,
         "europepmc_query": st.europepmc_query, "pubtator_queries": st.pubtator_queries,
         "papers": n, "full_text": n_full, "abstract_only": n - n_full,
@@ -588,14 +590,14 @@ def _paper_inputs(snap: Path) -> list[PaperInput]:
 
 
 def cmd_extract(a: argparse.Namespace) -> int:
+    from pydantic import ValidationError as PydanticValidationError
+
     from col4a1a2.extract.client import (
         ExtractionRefused,
         ExtractionTruncated,
         count_tokens,
         extract_paper,
     )
-    from pydantic import ValidationError as PydanticValidationError
-
     from col4a1a2.extract.prompt import PROMPT_VERSION
     from col4a1a2.extract.verify import ground
 
@@ -675,7 +677,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
             jsonl.append(out_path, {"pmid": p.pmid, "pmcid": p.pmcid, "snapshot": snap.name,
                                     "prompt_version": PROMPT_VERSION,
                                     "requested_model": model, "effort": effort,
-                                    "written_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                                    "written_at": dt.datetime.now(dt.UTC).isoformat(),
                                     "text_sha256": text_hash, "error": type(e).__name__,
                                     "detail": str(e)})
             n_failed += 1

@@ -63,7 +63,7 @@ class FakeResponse:
 
 
 class _Messages:
-    def __init__(self, owner: "FakeAnthropic"):
+    def __init__(self, owner: FakeAnthropic):
         self._owner = owner
 
     def _next(self, kw) -> FakeResponse:

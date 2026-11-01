@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integrity gate: keys, foreign keys, append-only logs, then the offline tests.
+# Integrity gate: keys, foreign keys, append-only logs, lint, then the offline tests.
 # Enable once per clone:   git config core.hooksPath .githooks
 # A deliberate rewrite of a tracked log (a migration) needs
 #   COL4A1A2_ALLOW_REWRITE=1 git commit ...
@@ -16,4 +16,5 @@ if ! git diff --quiet -- data/curated schemas; then
 fi
 
 uv run --quiet col4a1a2 check
+uv run --quiet ruff check
 uv run --quiet pytest -q

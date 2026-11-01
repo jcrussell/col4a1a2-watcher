@@ -4,6 +4,7 @@ The vision call itself is never exercised offline."""
 from pathlib import Path
 
 from conftest import make_provenance
+
 from col4a1a2.extract.figures import (
     FIGURE_PROMPT_VERSION,
     FigureCache,

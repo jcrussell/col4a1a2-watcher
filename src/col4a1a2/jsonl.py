@@ -23,8 +23,9 @@ import this module, and a top-level import would close that cycle.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 # Characters that are legal raw inside a JSON string but that Python's
 # str.splitlines() treats as line boundaries.

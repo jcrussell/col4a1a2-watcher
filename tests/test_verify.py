@@ -1,8 +1,12 @@
+from conftest import make_variant
+
 from col4a1a2.extract.schema import (
-    Confidence, PaperExtraction, PaperType, VariantEvidence,
+    Confidence,
+    PaperExtraction,
+    PaperType,
+    VariantEvidence,
 )
 from col4a1a2.extract.verify import ground, normalise, quote_in_text
-from conftest import make_variant
 
 TEXT = "The proband carried the c.1537G>A (p.Gly513Ser) variant — inherited from her mother. Renal ultrasound was normal."
 

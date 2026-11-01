@@ -8,7 +8,6 @@ rule in tests/fixtures/README.md does not apply.
 
 from __future__ import annotations
 
-
 from col4a1a2.config import REPO
 
 FIX = REPO / "tests" / "fixtures"

@@ -27,10 +27,11 @@ from __future__ import annotations
 
 import logging
 
+from pydantic import BaseModel, Field
+
 from col4a1a2.digest import sha256_text
 from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.patterns import CLINICAL_RE, GENE_RE
-from pydantic import BaseModel, Field
 
 TRIAGE_PROMPT_VERSION = "t1"
 MAX_TRIAGE_TOKENS = 2000

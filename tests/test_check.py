@@ -4,11 +4,6 @@ import json
 import subprocess
 
 import pytest
-
-from col4a1a2 import jsonl
-from col4a1a2.check import Checker
-from col4a1a2.extract.rows import records_digest_for
-from col4a1a2.ledger import Ledger
 from conftest import (
     make_challenge_row,
     make_extraction_row,
@@ -17,6 +12,11 @@ from conftest import (
     make_triage_row,
     make_variant,
 )
+
+from col4a1a2 import jsonl
+from col4a1a2.check import Checker
+from col4a1a2.extract.rows import records_digest_for
+from col4a1a2.ledger import Ledger
 
 
 def _git(repo, *args):
@@ -119,13 +119,13 @@ def test_a_migration_may_not_lose_a_triage_verdict(world):
 
 def test_an_index_entry_without_its_data_is_an_error(world):
     """The direction that matters: resume would skip a paper with no result."""
-    st, repo, snap = world
+    st, repo, _snap = world
     st.extractions.write_text("")
     assert "index-without-data" in _errors(st, repo, allow_rewrite=False)
 
 
 def test_data_without_its_index_is_only_a_warning(world):
-    st, repo, snap = world
+    st, repo, _snap = world
     jsonl.append(st.extractions, make_extraction_row("2", text_sha256="other"))
     codes = _codes(st, repo, allow_rewrite=False)
     assert ("WARN", "data-without-index") in codes
@@ -133,7 +133,7 @@ def test_data_without_its_index_is_only_a_warning(world):
 
 
 def test_a_challenge_of_records_that_changed_is_an_error(world):
-    st, repo, snap = world
+    st, repo, _snap = world
     row = jsonl.read(st.extractions)[0]
     row["extraction"]["variants"][0]["n_probands"] = 7
     jsonl.write(st.extractions, [row])
@@ -153,7 +153,7 @@ def test_a_snapshot_without_a_manifest_is_an_error(world):
 
 
 def test_without_snapshots_the_cross_checks_are_skipped_not_failed(world):
-    st, repo, snap = world
+    st, repo, _snap = world
     import shutil
 
     shutil.rmtree(st.snapshot_root)

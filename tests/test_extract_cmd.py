@@ -1,9 +1,10 @@
 """`cmd_extract` end to end against a fake client: resume, models, archive."""
 
+from conftest import cmd_args, make_paper_extraction, make_paper_row, make_settings, make_snapshot
+
 from col4a1a2 import cli, jsonl
 from col4a1a2.extract.rows import latest_extractions
 from col4a1a2.ledger import Ledger
-from conftest import cmd_args, make_paper_extraction, make_paper_row, make_settings, make_snapshot
 
 
 def _setup(tmp_path, monkeypatch, client):

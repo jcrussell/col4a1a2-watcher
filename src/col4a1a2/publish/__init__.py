@@ -316,15 +316,15 @@ def steps(rel: Release) -> str:
     survive = (f"all {rel.n_extracted} records are shown here with the review's verdicts" if rel.include_all else
                f"{len(rel.evidence)} of {rel.n_extracted} records survive and are published")
     items = [
-        f"<strong>Find.</strong> Europe PMC and PubTator are searched for papers naming either gene; "
-        f"{len(rel.literature):,} so far, each recorded whether read or not.",
-        f"<strong>Judge.</strong> Claude reads each title and abstract and keeps {kept:,} papers likely to report "
-        f"carriers.",
-        f"<strong>Read.</strong> Claude reads the {read:,} with open full text, supplements and figures included, "
-        f"and records each variant with quotes that must appear verbatim in the paper.",
+        (f"<strong>Find.</strong> Europe PMC and PubTator are searched for papers naming either gene; "
+         f"{len(rel.literature):,} so far, each recorded whether read or not."),
+        (f"<strong>Judge.</strong> Claude reads each title and abstract and keeps {kept:,} papers likely to report "
+         f"carriers."),
+        (f"<strong>Read.</strong> Claude reads the {read:,} with open full text, supplements and figures included, "
+         f"and records each variant with quotes that must appear verbatim in the paper."),
         f"<strong>Challenge.</strong> A second pass tries to refute each record against the same text; {survive}.",
-        f"<strong>Group.</strong> Ensembl VEP normalizes each variant, and records are grouped into "
-        f"{len(rel.variants)} variants with proband counts as ranges.",
+        (f"<strong>Group.</strong> Ensembl VEP normalizes each variant, and records are grouped into "
+         f"{len(rel.variants)} variants with proband counts as ranges."),
     ]
     more = (f'<p>Methods: <a href="{escape(__repository__)}/blob/main/docs/methods.md">docs/methods.md</a>.</p>'
             if __repository__ else "")

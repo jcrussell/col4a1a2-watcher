@@ -154,7 +154,7 @@ def ask(client, q: dict, release: int | None, *, ttl: float | None = None) -> di
             "error": ans.error, "build_inferred": build, "chrom": ans.chrom, "start": ans.start,
             "end": ans.end, "allele_string": ans.allele_string, "hgvs_c": ans.hgvs_c,
             "hgvs_p": ans.hgvs_p, "consequence": ans.consequence,
-            "written_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+            "written_at": dt.datetime.now(dt.UTC).isoformat()}
 
 
 def normalize_records(records: list[dict], answers: dict[str, dict], ask_one) -> tuple[int, int]:
@@ -229,9 +229,9 @@ def link(v: dict, answers: dict[str, dict]) -> dict:
     flags: list[str] = []
     ref = REFERENCE.get(v.get("gene", ""))
     stated = ACCESSION.search(v.get("transcript_if_stated") or "")
-    if ref and (v.get("transcript_if_stated") or "").strip():
-        if not stated or (stated.group(1) != ref.transcript.split(".")[0] and stated.group(1) not in ref.same_numbering):
-            flags.append("transcript-other")
+    if ref and (v.get("transcript_if_stated") or "").strip() and (
+            not stated or (stated.group(1) != ref.transcript.split(".")[0] and stated.group(1) not in ref.same_numbering)):
+        flags.append("transcript-other")
     for q in queries_for(v):
         cols, raised = resolve(v, q, answers.get(query_key(q)))
         flags += [f for f in raised if f not in flags]

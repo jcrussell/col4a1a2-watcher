@@ -27,15 +27,15 @@ from dataclasses import dataclass
 
 from col4a1a2.extract.schema import PHENOTYPE_SYSTEMS
 
-_CNV_GAIN = re.compile(r"\b(duplicat\w*|trisomy|triplicat\w*|copy[- ]number gain|gain)\b|\bx3\b", re.I)
-_CNV_LOSS = re.compile(r"\b(delet\w*|loss|monosomy)\b", re.I)
+_CNV_GAIN = re.compile(r"\b(duplicat\w*|trisomy|triplicat\w*|copy[- ]number gain|gain)\b|\bx3\b", re.IGNORECASE)
+_CNV_LOSS = re.compile(r"\b(delet\w*|loss|monosomy)\b", re.IGNORECASE)
 
 # Ordered most-specific first. Order is the whole correctness story here.
-_FRAMESHIFT = re.compile(r"fs(\*|Ter|\d|$)", re.I)
+_FRAMESHIFT = re.compile(r"fs(\*|Ter|\d|$)", re.IGNORECASE)
 _SYNONYMOUS = re.compile(r"=\)?\s*$")
-_NONSENSE = re.compile(r"(Ter\d*|\*\d*)\s*\)?\s*$", re.I)
-_INDEL = re.compile(r"(del|dup|ins|delins)", re.I)
-_GLYCINE = re.compile(r"^p\.\(?Gly\d+(?!\d)(?!.*fs)", re.I)
+_NONSENSE = re.compile(r"(Ter\d*|\*\d*)\s*\)?\s*$", re.IGNORECASE)
+_INDEL = re.compile(r"(del|dup|ins|delins)", re.IGNORECASE)
+_GLYCINE = re.compile(r"^p\.\(?Gly\d+(?!\d)(?!.*fs)", re.IGNORECASE)
 _MISSENSE = re.compile(r"^p\.\(?[A-Z][a-z]{2}\d+[A-Z][a-z]{2}\)?$")
 _SPLICE_C = re.compile(r"c\.\d+[+-]\d+")
 _UTR_C = re.compile(r"c\.[*-]\d+")

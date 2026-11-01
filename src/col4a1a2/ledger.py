@@ -39,8 +39,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from col4a1a2.digest import sha256_text
 from col4a1a2 import jsonl
+from col4a1a2.digest import sha256_text
 
 log = logging.getLogger("col4a1a2")
 
@@ -202,7 +202,7 @@ class Ledger:
         if not identity:
             raise ValueError("a ledger row needs an identity")
         row = {"identity": identity, "ledger_version": LEDGER_VERSION,
-               "written_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+               "written_at": dt.datetime.now(dt.UTC).isoformat()}
         row.update({k: v for k, v in fields.items() if v is not None})
         for banned in ("text", "abstract", "body", "evidence_quotes"):
             if banned in row:

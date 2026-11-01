@@ -90,11 +90,11 @@ def body(rel, data: Path) -> str:
         "no patient identifiers, so <code>probands_min</code> is the largest single paper's count and "
         "<code>probands_max</code> the sum over papers, leaving out families a paper says were reported before.</p>"
         "<h3>Read before using</h3>"
-        + _list([f"{rel.unkeyed()} records without a variant key, mostly copy-number changes, are in the "
-                 "evidence table only.",
+        + _list([(f"{rel.unkeyed()} records without a variant key, mostly copy-number changes, are in the "
+                  "evidence table only."),
                  "Reviews are listed in <code>pointer_pmids</code> and add no counts.",
-                 f"Carriers from screens of {SCREEN_MIN:,} or more people are in <code>screened_carriers</code>, "
-                 "not counted as probands.",
+                 (f"Carriers from screens of {SCREEN_MIN:,} or more people are in <code>screened_carriers</code>, "
+                  "not counted as probands."),
                  "A cohort reporting only totals can overlap earlier case reports invisibly; no range covers that."]),
         _facts([("Rows", f"{len(rel.variants)}, {multi} reported in more than one paper"), ("Key", "variant_id")])
         + _files(data, "variants"),
@@ -108,8 +108,8 @@ def body(rel, data: Path) -> str:
         "<h3>Read before using</h3>"
         + _list([escape(spot) + " Check the quotes against the paper before relying on a record.",
                  "<code>figure_sourced</code> marks a record read from a machine transcription of a figure.",
-                 "<code>same_family_as_prior_report</code> means the paper says these patients were published "
-                 "before, so their counts may repeat another row's."]),
+                 ("<code>same_family_as_prior_report</code> means the paper says these patients were published "
+                  "before, so their counts may repeat another row's.")]),
         _facts([("Rows", f"{len(rel.evidence)}, from {len({e['pmid'] for e in rel.evidence})} papers"),
                 ("Key", "record_key")])
         + _files(data, "evidence"),
@@ -135,11 +135,11 @@ def body(rel, data: Path) -> str:
         "evidence &lt;- read.csv(\"evidence.csv\")</pre>",
         _list(["<strong>CSV</strong> opens in any spreadsheet. List columns are joined with <code> | </code>.",
                "<strong>JSON Lines</strong> is one JSON object per line, for programs; lists stay lists.",
-               '<a href="data/datapackage.json"><strong>datapackage.json</strong></a> describes every file, '
-               'column and type as a <a href="https://specs.frictionlessdata.io/data-package/">Frictionless Data '
-               "Package</a>.",
-               '<a href="data/README.txt"><strong>README.txt</strong></a> carries the notice and licence with the '
-               "files."])))
+               ('<a href="data/datapackage.json"><strong>datapackage.json</strong></a> describes every file, '
+                'column and type as a <a href="https://specs.frictionlessdata.io/data-package/">Frictionless Data '
+                "Package</a>."),
+               ('<a href="data/README.txt"><strong>README.txt</strong></a> carries the notice and licence with the '
+                "files.")])))
 
     repo = f' (<a href="{escape(__repository__)}">GitHub</a>)' if __repository__ else ""
     parts.append(_section(

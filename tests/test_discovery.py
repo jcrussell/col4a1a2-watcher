@@ -1,7 +1,7 @@
 """Time-sliced discovery: slice generation, sealing, and query invalidation."""
 
 import datetime as dt
-
+import itertools
 
 from col4a1a2.discovery import (
     DiscoveryLog,
@@ -21,7 +21,7 @@ def _covers_exactly(slices, date_from, date_to):
     must end the day before the next begins or the boundary day is fetched twice."""
     assert slices[0].date_from == date_from
     assert slices[-1].date_to == date_to
-    for a, b in zip(slices, slices[1:]):
+    for a, b in itertools.pairwise(slices):
         assert dt.date.fromisoformat(b.date_from) - dt.date.fromisoformat(a.date_to) == dt.timedelta(days=1)
     for s in slices:
         assert dt.date.fromisoformat(s.date_from) <= dt.date.fromisoformat(s.date_to)
@@ -76,14 +76,14 @@ def test_plan_partitions_into_open_and_sealed_without_losing_any(tmp_path):
     dlog = DiscoveryLog(tmp_path / "d.jsonl")
     todo, sealed = plan("2015-01-01", "2026-10-29", Q, dlog, today=TODAY)
     assert sealed == [] and todo, "nothing recorded yet, so everything is open"
-    all_slices = set(s.key for s in todo)
+    all_slices = {s.key for s in todo}
 
     for sl in todo:
         dlog.record(query=Q, sl=sl, hits_available=5, hits_fetched=5, complete=True)
     todo2, sealed2 = plan("2015-01-01", "2026-10-29", Q, DiscoveryLog(tmp_path / "d.jsonl"), today=TODAY)
     assert sealed2, "settled slices must seal"
     assert todo2, "the recency window must stay open"
-    assert set(s.key for s in todo2) | set(s.key for s in sealed2) == all_slices, \
+    assert {s.key for s in todo2} | {s.key for s in sealed2} == all_slices, \
         "every slice must still be accounted for"
     assert all(is_sealed(s, today=TODAY) for s in sealed2)
     assert not any(is_sealed(s, today=TODAY) for s in todo2)

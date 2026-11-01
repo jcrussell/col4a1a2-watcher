@@ -3,6 +3,7 @@
 import json
 
 from conftest import make_provenance
+
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, TriageDecision
 from col4a1a2.sources.pubtator import gene_linked_variants
 

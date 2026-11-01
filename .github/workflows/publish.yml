@@ -32,6 +32,7 @@ jobs:
           fetch-depth: 0  # the version comes from the latest v* tag
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --locked
+      - run: uv run ruff check
       - run: uv run pytest -q
       - run: uv run col4a1a2 check
       - run: uv run col4a1a2 publish --out _site

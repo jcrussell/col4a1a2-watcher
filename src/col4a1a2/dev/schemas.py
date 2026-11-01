@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Export JSON Schema for every artefact this project writes.
 
     uv run col4a1a2-dev schemas
@@ -14,9 +13,8 @@ from __future__ import annotations
 
 import json
 
-from col4a1a2.config import REPO
-
 from col4a1a2 import schemas
+from col4a1a2.config import REPO
 
 OUT = REPO / "schemas"
 

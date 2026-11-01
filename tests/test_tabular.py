@@ -2,6 +2,7 @@
 col4a1a2-dev fixtures, so no publisher bytes are redistributed."""
 
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -111,7 +112,7 @@ def test_pdf_text_fallback_is_per_page_not_global(monkeypatch):
             return self._text
 
     class FakePdf:
-        pages = [
+        pages: ClassVar[list] = [
             FakePage([[["Gene", "Coding"], ["COL4A1", "c.1A>T"]]], "ignored"),
             FakePage([], "Supplementary Table 2. Additional variants identified in the extended cohort.\n"
                          "Patient Gene Coding Protein Inheritance\n"
