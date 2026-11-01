@@ -498,6 +498,9 @@ class EvidenceRow(Row):
     doi: str = Field(description="DOI of the paper, if known")
     citation: str = Field(description="Short citation: first author, journal, year, PMID, DOI")
     year: str = Field(description="Year of first publication")
+    paper_type: str = Field(description="case_report, case_series, cohort, review, functional or other, as "
+                                        "assigned at extraction; reviews are pointers and contribute no counts "
+                                        "to the variants table")
     gene: str = Field(description="COL4A1 or COL4A2")
     as_written: str = Field(description="The variant exactly as the paper writes it")
     hgvs_c: str = Field(description="Coding-DNA HGVS if the paper gives it or it is unambiguous; empty if not")
@@ -552,6 +555,44 @@ class EvidenceRow(Row):
     extracted_at: str = Field(description="When the record was extracted (UTC)")
 
 
+class VariantRow(Row):
+    """One variant across every paper that reports it, with counts as a range rather than a merge."""
+
+    variant_id: str = Field(description="The grouping key: protein HGVS on the reference protein, or coding-DNA "
+                                        "HGVS on the reference transcript when there is no protein change")
+    gene: str = Field(description="COL4A1 or COL4A2")
+    grouped_by: str = Field(description="protein or coding: which key the records were grouped on")
+    coding_keys: list[str] = Field(description="Every coding-DNA change in the group; several mean different "
+                                               "nucleotide changes with the same protein consequence")
+    grch38: list[str] = Field(description="GRCh38 positions of the coding changes, as Ensembl VEP places them")
+    variant_types: list[str] = Field(description="Variant classes assigned at extraction")
+    n_records: int = Field(description="Evidence records in the group")
+    n_papers: int = Field(description="Papers reporting the variant, reviews included")
+    n_primary_papers: int = Field(description="Papers reporting the variant that are not reviews")
+    probands_min: int = Field(description="Fewest distinct probands in clinical reports: the largest single "
+                                          "paper's count, as if every other report re-described its patients")
+    probands_max: int = Field(description="Most distinct probands in clinical reports: every paper independent, "
+                                          "except records a paper says were reported before")
+    families_min: int = Field(description="As probands_min, for families")
+    families_max: int = Field(description="As probands_max, for families")
+    screened_carriers: int = Field(description="Carriers found by screening at least 1,000 people (cohorts and "
+                                               "biobanks), counted apart from clinical probands")
+    papers_de_novo_confirmed: int = Field(description="Papers reporting at least one de novo case with both "
+                                                      "parents tested")
+    papers_de_novo_assumed: int = Field(description="Papers calling at least one case de novo without parental "
+                                                    "testing described")
+    papers_inherited: int = Field(description="Papers reporting at least one case inherited from a parent")
+    records_prior_report: int = Field(description="Records whose paper says the family was reported before")
+    papers_functional: int = Field(description="Papers describing functional work on the variant")
+    phenotype_systems: str = Field(description="Organ systems affected in at least one carrier in any paper, "
+                                               "comma-separated")
+    first_year: str = Field(description="Year of the earliest report")
+    last_year: str = Field(description="Year of the latest report")
+    pmids: list[str] = Field(description="Every paper in the group")
+    pointer_pmids: list[str] = Field(description="Reviews in the group: pointers to the literature, never counts")
+    normalization_flags: str = Field(description="Normalization flags raised on any record in the group")
+
+
 class LiteratureRow(Row):
     """One paper considered by the watcher, and what became of it."""
 
@@ -602,6 +643,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "manifest.json": ManifestRow,
     "normalized.jsonl": NormalizedRow,
     "evidence.jsonl": EvidenceRow,
+    "variants.jsonl": VariantRow,
     "literature.jsonl": LiteratureRow,
     "datapackage.json": DataPackage,
     "labels.json": TriageLabels,

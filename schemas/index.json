@@ -73,5 +73,10 @@
     "format": "jsonl",
     "model": "TriageDecisionRow",
     "schema": "schemas/triage.schema.json"
+  },
+  "variants.jsonl": {
+    "format": "jsonl",
+    "model": "VariantRow",
+    "schema": "schemas/variants.schema.json"
   }
 }

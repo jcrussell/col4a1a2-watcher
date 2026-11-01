@@ -194,3 +194,17 @@ def test_normalization_columns_come_from_the_tracked_answers(world):
     row = next(e for e in rel.evidence if e["record_key"] == v["record_key"])
     assert row["variant_key"] == q["notation"] and row["grch38"] == "13:5:G/A" and row["key_level"] == "coding"
     assert rel.version == "2026-11-01", "a new answer dates the release"
+
+
+def test_the_variants_table_ships_with_its_residual_risk(world, tmp_path):
+    st, _ = world
+    rel = publish.gather(st)
+    written = publish.write(rel, tmp_path / "s")
+    assert tmp_path / "s" / "data" / "variants.csv" in written
+    for r in jsonl.read(tmp_path / "s" / "data" / "variants.jsonl"):
+        schemas.validate(tmp_path / "s" / "data" / "variants.jsonl", r)
+    readme = (tmp_path / "s" / "data" / "README.txt").read_text()
+    pkg = json.loads((tmp_path / "s" / "data" / "datapackage.json").read_text())
+    res = next(r for r in pkg["resources"] if r["name"] == "variants")
+    for text in (readme, res["description"], (tmp_path / "s" / "index.html").read_text()):
+        assert "overlap earlier case reports invisibly" in text

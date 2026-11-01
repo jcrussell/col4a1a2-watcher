@@ -478,3 +478,17 @@ VEP rewrote 4 coding changes into canonical form: `c.4611_4612insG` to `c.4615du
 **Grouping.** On the coding-DNA key, 12 variants appear in more than one paper, the same 12 as the crude spelling key measured earlier. Grouping at protein level, which joins protein-only records to coding ones, finds 16: p.Gly888Arg and p.Gly1239Arg (three papers each), p.Pro352Leu, p.Arg1063Ter and COL4A2 p.Gly800Arg had been split by spelling. A protein-level group can join different coding changes with the same protein consequence, so a roll-up must list the coding keys under it rather than merge them.
 
 **Revised the same day: candidates in order of precision.** A record can give more than one description of its variant, and `normalize` now tries them in order, coding change, then bare coordinates, then protein change, keying on the first that resolves and asking about the next only when one fails. Coordinates had been tried after a protein change, so 4 records carrying both were keyed on the protein when their coordinates fix the nucleotide change; 2 others have coordinates whose reference base is the same on both builds and now fall back to their protein change, with `build-ambiguous` kept as a flag. The coordinate path also gained the protein cross-check. Result over the 233 records: coding 186 (from 182), protein 31 (from 35), none 16, distinct keys 202; flags `build-inferred-grch37` 9, `build-ambiguous` 3, `transcript-other` 4. The change cost 27 requests.
+
+## First per-variant table (2026-11-01)
+
+Built by `publish` from the 167 confident records: 160 carry a variant key and group into **148 variants** (COL4A1 102, COL4A2 46; 130 grouped on the protein change, 18 on the coding change, mostly UTR and splice). The 7 unkeyed records are structural variants and stay in the evidence table only.
+
+| | Variants |
+|---|---|
+| Reported in more than one paper | 10 |
+| Proband range wider than a single number | 9 |
+| More than one coding change under one protein change | 1 (p.Gly888Arg: `c.2662G>A` and `c.2662G>C`) |
+| With population-screen carriers | 2 (5 carriers; the 174-carrier biobank record is not in the confident set) |
+| With a paper reporting a confirmed de novo case | 25 |
+
+Summed over variants, probands run from 150 (every possible overlap real) to 161 (papers independent). The range is narrow because few variants recur in this release, not because overlap has been resolved: most variants appear in one paper, where the range is a single number by construction. The widest are p.Gly1239Arg and p.Gly888Arg, 1 to 3 probands across three papers each.

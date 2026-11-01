@@ -1,4 +1,4 @@
-"""Build the public release from tracked files alone: two tables and a static site.
+"""Build the public release from tracked files alone: three tables and a static site.
 
     uv run col4a1a2 publish [--out _site] [--all]
 
@@ -25,6 +25,7 @@ from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import record_key
 from col4a1a2.ledger import fold_rows, paper_status
+from col4a1a2.publish import variants as variants_mod
 
 LICENSE = {"name": "CC-BY-4.0", "path": "https://creativecommons.org/licenses/by/4.0/",
            "title": "Creative Commons Attribution 4.0, except the excerpt columns"}
@@ -35,11 +36,13 @@ EXCERPT_COLUMNS = ("evidence_quotes", "reported_classification")
 TEMPLATE = Path(__file__).with_name("index.html")
 EVIDENCE_COLUMNS = list(schemas.EvidenceRow.model_fields)
 LITERATURE_COLUMNS = list(schemas.LiteratureRow.model_fields)
+VARIANT_COLUMNS = list(schemas.VariantRow.model_fields)
 
 
 @dataclass
 class Release:
     evidence: list[dict]
+    variants: list[dict]
     literature: list[dict]
     version: str
     include_all: bool
@@ -53,6 +56,14 @@ class Release:
                     "disputed, could not verify, or flagged for a person; see the status columns.")
         return (f"{len(self.evidence)} of {self.n_extracted} extracted records: those an adversarial review "
                 "upheld against the paper's text, with every quote found verbatim and nothing flagged for a person.")
+
+    def unkeyed(self) -> int:
+        return sum(1 for e in self.evidence if not variants_mod.group_key(e))
+
+    def variants_note(self) -> str:
+        return (f"{len(self.variants)} variants from the {len(self.evidence) - self.unkeyed()} released records "
+                f"that carry a variant key; {self.unkeyed()} without one (structural variants, mostly) are in "
+                f"the evidence table only. {variants_mod.RESIDUAL_RISK}")
 
     def notice(self) -> str:
         checked = (f"{self.n_spot_checked} records spot-checked by a person" if self.n_spot_checked
@@ -102,6 +113,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
             row = {f: v.get(f) for f in EVIDENCE_COLUMNS if f in v}
             row.update({
                 "record_key": key, "pmid": r["pmid"], "pmcid": r.get("pmcid"), "doi": meta.get("doi"),
+                "paper_type": r["extraction"].get("paper_type"),
                 "citation": meta.get("citation"), "year": (meta.get("first_pub_date") or "")[:4],
                 "quotes_grounded": v["as_written"] not in ungrounded,
                 "figure_sourced": v["as_written"] in (g.get("figure_sourced") or []),
@@ -127,7 +139,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
     # that only adds challenges changes which records are confident.
     stamps = [r.get("written_at", "") for r in ledger_rows] + [r["written_at"] for r in extractions] \
         + [c.get("written_at", "") for c in challenges.values()] + [a["written_at"] for a in answers.values()]
-    return Release(evidence=evidence, literature=literature, version=max(stamps, default="")[:10],
+    return Release(evidence=evidence, variants=variants_mod.roll_up(evidence), literature=literature, version=max(stamps, default="")[:10],
                    include_all=include_all, n_extracted=n_extracted,
                    n_spot_checked=_spot_checked(st), verdicts=verdicts)
 
@@ -186,6 +198,8 @@ def datapackage(rel: Release) -> dict:
                               "https://www.ensembl.org/info/about/publications.html asks)",
                      "path": "https://www.ensembl.org"}],
         "resources": [resource("evidence", schemas.EvidenceRow, len(rel.evidence)),
+                      {**resource("variants", schemas.VariantRow, len(rel.variants)),
+                       "description": f"{schemas.VariantRow.__doc__.strip()} {rel.variants_note()} {rel.notice()}"},
                       resource("literature", schemas.LiteratureRow, len(rel.literature))],
     }
 
@@ -208,6 +222,7 @@ def readme(rel: Release) -> str:
         rel.notice(),
         "",
         "evidence.csv / evidence.jsonl: " + rel.selection(),
+        "variants.csv / variants.jsonl: one row per variant across papers. " + rel.variants_note(),
         "literature.csv / literature.jsonl: every paper considered and what became of it.",
         "datapackage.json describes every column.",
         "",
@@ -228,6 +243,7 @@ def site(rel: Release) -> str:
         "version": rel.version, "notice": rel.notice(), "selection": rel.selection(),
         "include_all": rel.include_all, "n_extracted": rel.n_extracted, "verdicts": rel.verdicts,
         "evidence": rel.evidence,
+        "variants": rel.variants, "variants_note": rel.variants_note(),
         "literature": [{k: r[k] for k in keep} for r in rel.literature],
     }
     from html import escape
@@ -248,6 +264,7 @@ def write(rel: Release, out: Path) -> list[Path]:
     data.mkdir(parents=True, exist_ok=True)
     written = []
     for name, rows, cols in (("evidence", rel.evidence, EVIDENCE_COLUMNS),
+                             ("variants", rel.variants, VARIANT_COLUMNS),
                              ("literature", rel.literature, LITERATURE_COLUMNS)):
         jsonl.write(data / f"{name}.jsonl", rows)
         jsonl.write_table(data / f"{name}.csv", cols, rows)

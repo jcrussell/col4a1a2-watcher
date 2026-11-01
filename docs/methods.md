@@ -108,13 +108,15 @@ Two design rules follow:
 - **Count probands only from primary reports.** Reviews and meta-analyses cite their sources exhaustively and are the papers most likely to recycle published patients, so they serve as pointers and contribute no counts.
 - **Represent the uncertainty rather than resolving it.** Publish one row per variant per paper, which needs no dedup decision and is always correct, plus a roll-up that reports a range: fewest distinct probands assuming every possible overlap is real, most assuming all are independent, with the distinct centre count and the contributing PMIDs. The width of that range is itself the signal. Nothing merges silently, and any dedup verdict carries its reasoning.
 
+The roll-up is built (`publish/variants.py`, published as `variants.csv` and `variants.jsonl`). Records are grouped on the normalized protein change, or on the coding change when there is no protein consequence. `probands_min` is the largest single paper's count and `probands_max` the sum over papers, leaving out records whose paper says the family was reported before; families likewise. Carriers from screens of at least 1,000 people are counted apart as `screened_carriers`, and inheritance is counted in papers (papers reporting a confirmed de novo case, an inherited one), which survives overlap where a summed count does not. The signals above, rarity, author overlap and resolved prior-report claims, are not used yet; they would narrow the range, never replace it.
+
 Residual risk, to be stated wherever the table is published: large cohort papers that report totals without per-patient variant detail can overlap earlier case reports invisibly, and consortia reuse cohorts.
 
 ## Output format
 
 Working files are JSON Lines, one object per record, carrying full provenance: model, prompt and schema versions, token usage and the grounding report.
 
-Published tables are tab-separated with a `datapackage.json` descriptor that names, types and defines every column, so the table is machine-readable rather than merely parseable. Tabs rather than commas is a measured choice: about half the extracted quotes contain commas and none of the extracted text contains a tab or a newline. The writer still rejects them rather than trusting that.
+Published tables are CSV, with JSON Lines beside each, and a `datapackage.json` descriptor that names, types and defines every column, so the table is machine-readable rather than merely parseable. About half the extracted quotes contain commas, so the CSV writer quotes; cell whitespace, newlines included, is collapsed so every row is one line.
 
 Every row carries both a prepared one-line citation and the structured identifiers it was built from.
 

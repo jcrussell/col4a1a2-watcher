@@ -72,23 +72,35 @@ footer { color: var(--muted); font-size: 0.85em; margin-top: 28px; }
 <body>
 <main>
   <h1>COL4A1/COL4A2 carrier evidence</h1>
-  <p class="sub">Published variant carriers, one row per variant per paper. Data as of @@VERSION@@.</p>
+  <p class="sub">Published variant carriers: one row per variant across papers, and the per-paper records behind it. Data as of @@VERSION@@.</p>
   <div class="notice" role="note">
     <p><strong>@@NOTICE@@</strong></p>
     <p>@@SELECTION@@</p>
   </div>
   <div class="stats" id="stats"></div>
   <p class="downloads">Download:
+    <a href="data/variants.csv">variants.csv</a><a href="data/variants.jsonl">variants.jsonl</a>
     <a href="data/evidence.csv">evidence.csv</a><a href="data/evidence.jsonl">evidence.jsonl</a>
     <a href="data/literature.csv">literature.csv</a><a href="data/literature.jsonl">literature.jsonl</a>
     <a href="data/datapackage.json">datapackage.json</a> (column definitions) <a href="data/README.txt">README.txt</a>
   </p>
   <div class="tabs" role="tablist">
-    <button role="tab" id="tab-evidence" aria-selected="true">Evidence</button>
+    <button role="tab" id="tab-variants" aria-selected="true">Variants</button>
+    <button role="tab" id="tab-evidence" aria-selected="false">Evidence</button>
     <button role="tab" id="tab-literature" aria-selected="false">Literature</button>
   </div>
 
-  <section id="pane-evidence">
+  <section id="pane-variants">
+    <p class="count" id="va-note"></p>
+    <div class="controls">
+      <input id="va-q" type="search" placeholder="Search variant, phenotype, PMID…" aria-label="Search variants">
+      <select id="va-gene" aria-label="Gene"><option value="">Both genes</option><option>COL4A1</option><option>COL4A2</option></select>
+      <span class="count" id="va-count"></span>
+    </div>
+    <div class="wrap"><table id="va-table"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="pane-evidence" hidden>
     <div class="controls">
       <input id="ev-q" type="search" placeholder="Search variant, paper, phenotype…" aria-label="Search evidence">
       <select id="ev-gene" aria-label="Gene"><option value="">Both genes</option><option>COL4A1</option><option>COL4A2</option></select>
@@ -140,14 +152,14 @@ footer { color: var(--muted); font-size: 0.85em; margin-top: 28px; }
   function norm(s) { return String(s == null ? "" : s).toLowerCase(); }
 
   // ---------------------------------------------------------------- stats
-  var ev = D.evidence, lit = D.literature;
-  var papers = {}, variants = {};
-  ev.forEach(function (r) { papers[r.pmid] = 1; variants[r.gene + " " + r.as_written.toLowerCase()] = 1; });
+  var ev = D.evidence, lit = D.literature, va = D.variants;
+  var papers = {};
+  ev.forEach(function (r) { papers[r.pmid] = 1; });
   var watch = lit.filter(function (r) { return r.status === "kept_not_read"; }).length;
   var stats = [
     [ev.length, D.include_all ? "records" : "records released (of " + D.n_extracted + " extracted)"],
     [Object.keys(papers).length, "papers with released records"],
-    [Object.keys(variants).length, "distinct variants as written"],
+    [va.length, "variants, grouped across papers"],
     [lit.length, "papers considered"],
     [watch, "relevant papers with no open full text"]
   ];
@@ -188,6 +200,73 @@ footer { color: var(--muted); font-size: 0.85em; margin-top: 28px; }
     }
     return draw;
   }
+
+  // Variants
+  function short(key) { return String(key || "").replace(/^N[MP]_\d+\.\d+:/, ""); }
+  function span(lo, hi) { return lo === hi ? String(lo) : lo + "–" + hi; }
+  document.getElementById("va-note").textContent = D.variants_note;
+  var vaQ = document.getElementById("va-q"), vaGene = document.getElementById("va-gene");
+  var vaCols = [
+    {key: "gene", label: "Gene", value: function (r) { return r.gene; }},
+    {key: "variant", label: "Variant", value: function (r) { return r.variant_id; }},
+    {key: "papers", label: "Papers", value: function (r) { return r.n_papers; }},
+    {key: "probands", label: "Probands", value: function (r) { return r.probands_max; }},
+    {key: "families", label: "Families", cls: "hide-sm", value: function (r) { return r.families_max; }},
+    {key: "screened", label: "Screened", cls: "hide-sm", value: function (r) { return r.screened_carriers; }},
+    {key: "denovo", label: "De novo papers", cls: "hide-sm", value: function (r) { return r.papers_de_novo_confirmed + r.papers_de_novo_assumed; }},
+    {key: "inherited", label: "Inherited papers", cls: "hide-sm", value: function (r) { return r.papers_inherited; }},
+    {key: "pheno", label: "Phenotypes", cls: "hide-sm", value: function (r) { return r.phenotype_systems; }},
+    {key: "years", label: "Reported", cls: "hide-sm", value: function (r) { return r.first_year; }}
+  ];
+  function vaRow(r, frag) {
+    var coding = r.grouped_by === "protein" ? r.coding_keys.map(short).join(", ") : "";
+    var tr = el("tr", {class: "rec", tabindex: "0", "aria-expanded": "false"}, [
+      el("td", {text: r.gene}),
+      el("td", {class: "variant"}, [short(r.variant_id), coding ? el("div", {text: coding}) : null]),
+      el("td", {class: "num", text: String(r.n_papers)}),
+      el("td", {class: "num", text: span(r.probands_min, r.probands_max)}),
+      el("td", {class: "num hide-sm", text: span(r.families_min, r.families_max)}),
+      el("td", {class: "num hide-sm", text: r.screened_carriers ? String(r.screened_carriers) : "—"}),
+      el("td", {class: "num hide-sm", text: String(r.papers_de_novo_confirmed + r.papers_de_novo_assumed) +
+        (r.papers_de_novo_assumed ? " (" + r.papers_de_novo_assumed + " assumed)" : "")}),
+      el("td", {class: "num hide-sm", text: String(r.papers_inherited)}),
+      el("td", {class: "hide-sm"}, (r.phenotype_systems ? r.phenotype_systems.split(",") : []).map(function (p) { return el("span", {class: "chip", text: p.trim().replace(/_/g, " ")}); })),
+      el("td", {class: "hide-sm", text: r.first_year === r.last_year ? r.first_year : r.first_year + "–" + r.last_year})
+    ]);
+    function toggle() {
+      var next = tr.nextSibling;
+      if (next && next.classList && next.classList.contains("detail")) { next.remove(); tr.setAttribute("aria-expanded", "false"); return; }
+      var dl = el("dl");
+      function item(label, value) { if (value) { dl.appendChild(el("dt", {text: label})); dl.appendChild(el("dd", null, [value])); } }
+      item("Key", r.variant_id);
+      item("Coding changes", r.coding_keys.join(", "));
+      item("GRCh38", r.grch38.join(", "));
+      item("Type", r.variant_types.join(", ").replace(/_/g, " "));
+      item("Reported before", r.records_prior_report ? r.records_prior_report + " record(s) say the family was reported before" : "");
+      item("Functional work", r.papers_functional ? r.papers_functional + " paper(s)" : "");
+      item("Normalization", r.normalization_flags);
+      var links = el("span");
+      r.pmids.forEach(function (p, i) { if (i) links.appendChild(document.createTextNode(", ")); links.appendChild(pubmed(p)); });
+      item("Papers", links);
+      if (r.pointer_pmids.length) item("Reviews (not counted)", r.pointer_pmids.join(", "));
+      var go = el("button", {type: "button", text: "Show the " + r.n_records + " record(s) behind this row"});
+      go.addEventListener("click", function () { evQ.value = r.variant_id; evGene.value = ""; show("evidence"); drawEv(); });
+      tr.after(el("tr", {class: "detail"}, [el("td", {colspan: String(vaCols.length)}, [dl, go])]));
+      tr.setAttribute("aria-expanded", "true");
+    }
+    tr.addEventListener("click", function (e) { if (e.target.tagName !== "A") toggle(); });
+    tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    frag.appendChild(tr);
+  }
+  var drawVa = makeTable(document.getElementById("va-table"), vaCols, function () {
+    var q = norm(vaQ.value), g = vaGene.value;
+    return va.filter(function (r) {
+      if (g && r.gene !== g) return false;
+      if (!q) return true;
+      return norm([r.variant_id, r.coding_keys.join(" "), r.grch38.join(" "), r.pmids.join(" "), r.phenotype_systems, r.variant_types.join(" ")].join(" ")).indexOf(q) >= 0;
+    });
+  }, vaRow, document.getElementById("va-count"), "variants");
+  [vaQ, vaGene].forEach(function (n) { n.addEventListener("input", drawVa); });
 
   // Evidence
   var evQ = document.getElementById("ev-q"), evGene = document.getElementById("ev-gene"), evVerdict = document.getElementById("ev-verdict");
@@ -261,7 +340,7 @@ footer { color: var(--muted); font-size: 0.85em; margin-top: 28px; }
       if (g && r.gene !== g) return false;
       if (v && r.reviewer_verdict !== v) return false;
       if (!q) return true;
-      return norm([r.as_written, r.hgvs_c, r.hgvs_p, r.citation, r.pmid, r.phenotype_systems, r.phenotype_details, r.variant_type].join(" ")).indexOf(q) >= 0;
+      return norm([r.as_written, r.hgvs_c, r.hgvs_p, r.variant_key, r.protein_key, r.citation, r.pmid, r.phenotype_systems, r.phenotype_details, r.variant_type].join(" ")).indexOf(q) >= 0;
     });
   }, evRow, document.getElementById("ev-count"), "records");
   [evQ, evGene, evVerdict].forEach(function (n) { n.addEventListener("input", drawEv); });
@@ -298,15 +377,16 @@ footer { color: var(--muted); font-size: 0.85em; margin-top: 28px; }
 
   // ---------------------------------------------------------------- tabs
   function show(which) {
-    ["evidence", "literature"].forEach(function (k) {
+    ["variants", "evidence", "literature"].forEach(function (k) {
       document.getElementById("pane-" + k).hidden = k !== which;
       document.getElementById("tab-" + k).setAttribute("aria-selected", String(k === which));
     });
   }
+  document.getElementById("tab-variants").addEventListener("click", function () { show("variants"); });
   document.getElementById("tab-evidence").addEventListener("click", function () { show("evidence"); });
   document.getElementById("tab-literature").addEventListener("click", function () { show("literature"); });
 
-  drawEv(); drawLit();
+  drawVa(); drawEv(); drawLit();
 })();
 </script>
 </body>

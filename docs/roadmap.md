@@ -22,13 +22,15 @@ In place:
 
 - `normalize`: every extracted variant keyed on the reference transcript through Ensembl VEP, with the disagreements between a paper's coding and protein changes flagged.
 
-Not yet: the human spot-check, the per-variant roll-up, and `report`.
+- The per-variant table: records grouped on the normalized key, proband and family counts as a range from full overlap to independence, population screens and reviews counted apart.
+
+Not yet: the human spot-check, the deduplication signals that would narrow the ranges, and `report`.
 
 ## Milestones
 
 **M1. End to end on one window.** Done, except the human spot-check that seeds the gold set in `data/curated/gold/`.
 
-**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: a per-variant roll-up over the normalized keys; a gold set of thirty papers and measured precision and recall.
+**M2. Bootstrap.** The whole back catalogue (discovery starts at 2000 by default), triaged and extracted: done for open access. Remaining: a gold set of thirty papers and measured precision and recall.
 
 **M3. Watcher.** ClinVar diff, `report`, `watch` as a single scheduled command, snapshot freshness keys, idempotence tests. Runs monthly after the ClinVar release, with extraction through the Batches API at half price.
 
@@ -41,7 +43,7 @@ Not yet: the human spot-check, the per-variant roll-up, and `report`.
 - **No precision estimate exists**, for extraction or for review, because `data/curated/gold/` is empty. `col4a1a2 review` emits the queue; filling it is human work and the one thing blocking a stated accuracy figure.
 - **`missed_variants` needs a relevance filter** before its count can be read as recall: common SNPs from association sections ground correctly but should never be records.
 - **`variant_type` has no class for a copy-number gain**; `derive.py` flags gains typed `deletion_cnv`, and the fix waits for a prompt revision that is worth re-extracting for.
-- **Deduplication is designed but not built.** See `docs/methods.md`.
+- **Deduplication reports ranges, not verdicts.** The variants table brackets overlap between papers; the signals that would narrow a range (allele frequency, author and centre overlap, resolved prior-report claims) are designed in `docs/methods.md` and not built.
 - Reviews contribute pointers, never counts, by design.
 
 ## Later, optional

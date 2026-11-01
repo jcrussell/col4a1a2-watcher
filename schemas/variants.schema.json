@@ -1,0 +1,175 @@
+{
+  "additionalProperties": false,
+  "description": "One row of variants.jsonl. One variant across every paper that reports it, with counts as a range rather than a merge.",
+  "properties": {
+    "coding_keys": {
+      "description": "Every coding-DNA change in the group; several mean different nucleotide changes with the same protein consequence",
+      "items": {
+        "type": "string"
+      },
+      "title": "Coding Keys",
+      "type": "array"
+    },
+    "families_max": {
+      "description": "As probands_max, for families",
+      "title": "Families Max",
+      "type": "integer"
+    },
+    "families_min": {
+      "description": "As probands_min, for families",
+      "title": "Families Min",
+      "type": "integer"
+    },
+    "first_year": {
+      "description": "Year of the earliest report",
+      "title": "First Year",
+      "type": "string"
+    },
+    "gene": {
+      "description": "COL4A1 or COL4A2",
+      "title": "Gene",
+      "type": "string"
+    },
+    "grch38": {
+      "description": "GRCh38 positions of the coding changes, as Ensembl VEP places them",
+      "items": {
+        "type": "string"
+      },
+      "title": "Grch38",
+      "type": "array"
+    },
+    "grouped_by": {
+      "description": "protein or coding: which key the records were grouped on",
+      "title": "Grouped By",
+      "type": "string"
+    },
+    "last_year": {
+      "description": "Year of the latest report",
+      "title": "Last Year",
+      "type": "string"
+    },
+    "n_papers": {
+      "description": "Papers reporting the variant, reviews included",
+      "title": "N Papers",
+      "type": "integer"
+    },
+    "n_primary_papers": {
+      "description": "Papers reporting the variant that are not reviews",
+      "title": "N Primary Papers",
+      "type": "integer"
+    },
+    "n_records": {
+      "description": "Evidence records in the group",
+      "title": "N Records",
+      "type": "integer"
+    },
+    "normalization_flags": {
+      "description": "Normalization flags raised on any record in the group",
+      "title": "Normalization Flags",
+      "type": "string"
+    },
+    "papers_de_novo_assumed": {
+      "description": "Papers calling at least one case de novo without parental testing described",
+      "title": "Papers De Novo Assumed",
+      "type": "integer"
+    },
+    "papers_de_novo_confirmed": {
+      "description": "Papers reporting at least one de novo case with both parents tested",
+      "title": "Papers De Novo Confirmed",
+      "type": "integer"
+    },
+    "papers_functional": {
+      "description": "Papers describing functional work on the variant",
+      "title": "Papers Functional",
+      "type": "integer"
+    },
+    "papers_inherited": {
+      "description": "Papers reporting at least one case inherited from a parent",
+      "title": "Papers Inherited",
+      "type": "integer"
+    },
+    "phenotype_systems": {
+      "description": "Organ systems affected in at least one carrier in any paper, comma-separated",
+      "title": "Phenotype Systems",
+      "type": "string"
+    },
+    "pmids": {
+      "description": "Every paper in the group",
+      "items": {
+        "type": "string"
+      },
+      "title": "Pmids",
+      "type": "array"
+    },
+    "pointer_pmids": {
+      "description": "Reviews in the group: pointers to the literature, never counts",
+      "items": {
+        "type": "string"
+      },
+      "title": "Pointer Pmids",
+      "type": "array"
+    },
+    "probands_max": {
+      "description": "Most distinct probands in clinical reports: every paper independent, except records a paper says were reported before",
+      "title": "Probands Max",
+      "type": "integer"
+    },
+    "probands_min": {
+      "description": "Fewest distinct probands in clinical reports: the largest single paper's count, as if every other report re-described its patients",
+      "title": "Probands Min",
+      "type": "integer"
+    },
+    "records_prior_report": {
+      "description": "Records whose paper says the family was reported before",
+      "title": "Records Prior Report",
+      "type": "integer"
+    },
+    "screened_carriers": {
+      "description": "Carriers found by screening at least 1,000 people (cohorts and biobanks), counted apart from clinical probands",
+      "title": "Screened Carriers",
+      "type": "integer"
+    },
+    "variant_id": {
+      "description": "The grouping key: protein HGVS on the reference protein, or coding-DNA HGVS on the reference transcript when there is no protein change",
+      "title": "Variant Id",
+      "type": "string"
+    },
+    "variant_types": {
+      "description": "Variant classes assigned at extraction",
+      "items": {
+        "type": "string"
+      },
+      "title": "Variant Types",
+      "type": "array"
+    }
+  },
+  "required": [
+    "variant_id",
+    "gene",
+    "grouped_by",
+    "coding_keys",
+    "grch38",
+    "variant_types",
+    "n_records",
+    "n_papers",
+    "n_primary_papers",
+    "probands_min",
+    "probands_max",
+    "families_min",
+    "families_max",
+    "screened_carriers",
+    "papers_de_novo_confirmed",
+    "papers_de_novo_assumed",
+    "papers_inherited",
+    "records_prior_report",
+    "papers_functional",
+    "phenotype_systems",
+    "first_year",
+    "last_year",
+    "pmids",
+    "pointer_pmids",
+    "normalization_flags"
+  ],
+  "title": "VariantRow",
+  "type": "object"
+}

@@ -127,6 +127,11 @@
       "title": "Normalization Flags",
       "type": "string"
     },
+    "paper_type": {
+      "description": "case_report, case_series, cohort, review, functional or other, as assigned at extraction; reviews are pointers and contribute no counts to the variants table",
+      "title": "Paper Type",
+      "type": "string"
+    },
     "phenotype_details": {
       "description": "The phenotype as reported, including age at onset if stated",
       "title": "Phenotype Details",
@@ -225,6 +230,7 @@
     "doi",
     "citation",
     "year",
+    "paper_type",
     "gene",
     "as_written",
     "hgvs_c",
