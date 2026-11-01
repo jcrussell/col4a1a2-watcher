@@ -1,7 +1,10 @@
 # Build the public release from tracked files and deploy it to GitHub Pages,
 # on a version tag only (v0.1.0, ...), so the site always matches a release.
 # Run it by hand (workflow_dispatch) for a dry run: the build and the uploaded
-# site artifact are real, and the deploy job is skipped.
+# site artifact are real, the deploy and release jobs are skipped, and the
+# release notes the next tag would get are shown in the run summary.
+# After a deploy, the release job creates the GitHub Release, its notes
+# generated from the commit log by git-cliff (cliff.toml).
 # Confident records only: `--all` is for people inspecting the data and never
 # runs here. No API key and no network beyond installing packages.
 name: publish
@@ -32,6 +35,8 @@ jobs:
       - run: uv run pytest -q
       - run: uv run col4a1a2 check
       - run: uv run col4a1a2 publish --out _site
+      - if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: uv run git-cliff --unreleased --strip header >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -52,3 +57,22 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  release:
+    needs: deploy
+    # Pinned so the same commit builds the same bytes; Dependabot does not
+    # update this, so moving to a newer image is a deliberate edit.
+    runs-on: ubuntu-24.04
+    # Only this job can write to the repository, and only to create the release.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # git-cliff needs the whole log and every tag
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - run: uv run git-cliff --current --strip header --output "$RUNNER_TEMP/notes.md"
+      - run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}

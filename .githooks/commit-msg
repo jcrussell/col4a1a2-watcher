@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Conventional commit subjects, so cliff.toml can group the changelog:
+#   type(optional scope)!: description
+# Merges, reverts and fixup!/squash! commits pass through.
+set -euo pipefail
+subject=$(head -n1 "$1")
+types='feat|fix|perf|docs|refactor|test|ci|build|chore'
+if [[ $subject =~ ^(Merge|Revert|fixup!|squash!) ]] \
+   || [[ $subject =~ ^($types)(\([a-z0-9._/-]+\))?!?:\ [^[:space:]] ]]; then
+    exit 0
+fi
+echo "commit-msg: subject must look like 'feat: ...', 'fix(scope): ...' or 'chore!: ...'" >&2
+echo "            types: ${types//|/, }" >&2
+echo "            got:   $subject" >&2
+exit 1

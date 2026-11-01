@@ -6,6 +6,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       # Their own PR, because a parser bump can change the assembled text, and
       # with it the resume key: merging one re-runs extraction on every paper
@@ -23,6 +26,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    commit-message:
+      prefix: ci
+      include: scope
     groups:
       # ci.yml never runs the Pages actions, which only publish.yml uses, so a
       # green PR says nothing about them: dry-run publish.yml on the PR's branch

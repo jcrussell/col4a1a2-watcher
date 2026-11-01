@@ -24,3 +24,4 @@ jobs:
       - run: uv run pytest -q
       - run: uv run col4a1a2 check
       - run: uv run col4a1a2 publish --out _site
+      - run: uv run git-cliff --unreleased > /dev/null  # the release notes still render

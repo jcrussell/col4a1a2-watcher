@@ -46,5 +46,6 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 
 [dependency-groups]
 dev = [
+    "git-cliff>=2.14.2",
     "pytest>=9.2.0",
 ]
