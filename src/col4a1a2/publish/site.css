@@ -89,12 +89,22 @@ h3 { font-size: 1.05rem; line-height: 1.3; font-weight: 700; margin: 20px 0 6px;
 .map-key .k-other i { background: var(--trichrome); }
 .summary { margin: 0 0 22px; max-width: var(--measure); }
 
-/* About page */
-main > .which { max-width: var(--measure); }
-.steps { max-width: var(--measure); padding-left: 1.4em; margin: 8px 0; }
+/* About page: below the map, how it's made at the reading measure and what's here
+   beside it, so the page fills the width the map sets without lengthening a line.
+   The aside is the lighter column, set off by a rule rather than a box. */
+.about-cols { max-width: var(--measure); }
+.about-cols h2 { margin-top: 32px; }
+.steps { padding-left: 1.4em; margin: 8px 0; }
 .steps li { padding-left: 4px; }
 .steps li + li { margin-top: 8px; }
-main > h2 + p, .steps + p { max-width: var(--measure); }
+@media (min-width: 1120px) {
+  .about-cols { max-width: none; display: grid; grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr);
+    grid-template-areas: "made here"; column-gap: 48px; align-items: start; }
+  .made { grid-area: made; }
+  .here { grid-area: here; border-left: 1px solid var(--rule); padding-left: 24px; }
+  .here .which { grid-template-columns: 1fr; gap: 0; }
+  .here .which dd { margin: 2px 0 14px; color: var(--muted); }
+}
 
 
 /* Tabs and tables */
@@ -166,7 +176,7 @@ blockquote { margin: 6px 0; padding: 2px 12px; border-left: 3px solid var(--tric
 footer { color: var(--muted); font-size: 0.86em; margin-top: 36px; border-top: 1px solid var(--rule); padding-top: 12px; }
 footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 24px; }
 footer p { margin: 0; }
-footer .version { white-space: nowrap; }
+footer .version { overflow-wrap: anywhere; }
 
 /* Downloads page */
 /* Same column as the top bar, so left edges align; only the content narrows. */
@@ -184,6 +194,20 @@ footer .version { white-space: nowrap; }
 .facts dd { margin: 0; }
 .cols td:first-child { font-family: var(--mono); font-size: 0.86em; white-space: nowrap; }
 .cols td:nth-child(2) { color: var(--muted); white-space: nowrap; }
+/* Each section: the explanation at the measure, what to scan or act on beside it,
+   the column table across both. The aside is set off the same way as the About page's. */
+@media (min-width: 1120px) {
+  /* A grid keeps the heading's margin inside the section, so it moves to the section:
+     a jump to #variants then lands on the heading, not 40px above it. */
+  .doc > .split { max-width: none; display: grid; grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr);
+    grid-template-areas: "head head" "main aside" "after after"; column-gap: 48px; align-items: start; margin-top: 40px; }
+  .split > h2 { grid-area: head; margin: 0 0 16px; }  /* 16px: what h2 + p gives elsewhere */
+  .split-aside > :first-child, .split-main > :first-child { margin-top: 0; }
+  .split-aside .files { flex-direction: column; align-items: flex-start; }
+  .split-main { grid-area: main; }
+  .split-aside { grid-area: aside; border-left: 1px solid var(--rule); padding-left: 24px; }
+  .split > details { grid-area: after; }
+}
 .doc pre { background: var(--surface); border-left: 3px solid var(--rule); padding: 10px 14px; overflow-x: auto;
   font: 0.84em/1.5 var(--mono); }
 
