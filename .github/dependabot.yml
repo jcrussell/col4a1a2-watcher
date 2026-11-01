@@ -1,0 +1,32 @@
+# Dependency updates as pull requests, so ci.yml tests each one before it lands.
+# Monthly and grouped. Major versions arrive one per PR, outside the groups.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      # Their own PR, because a parser bump can change the assembled text, and
+      # with it the resume key: merging one re-runs extraction on every paper
+      # whose text moved, at Opus prices, while the fixture tests stay green.
+      # Merge deliberately, and diff the text hashes of a snapshot first.
+      # A dependency goes to the first group that matches it.
+      parsers:
+        patterns: [lxml, pdfplumber, "pdfminer*", openpyxl, python-docx]
+        update-types: [minor, patch]
+      python:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      # ci.yml never runs the Pages actions, which only publish.yml uses, so a
+      # green PR says nothing about them: dry-run publish.yml on the PR's branch
+      # before merging one that touches them.
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]

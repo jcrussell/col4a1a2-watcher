@@ -20,7 +20,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned so the same commit builds the same bytes; Dependabot does not
+    # update this, so moving to a newer image is a deliberate edit.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,7 +39,9 @@ jobs:
   deploy:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    # Pinned so the same commit builds the same bytes; Dependabot does not
+    # update this, so moving to a newer image is a deliberate edit.
+    runs-on: ubuntu-24.04
     # Only the job that deploys holds the Pages token; the build runs tests.
     permissions:
       pages: write

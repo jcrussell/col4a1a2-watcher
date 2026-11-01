@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned so the same commit builds the same bytes; Dependabot does not
+    # update this, so moving to a newer image is a deliberate edit.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
