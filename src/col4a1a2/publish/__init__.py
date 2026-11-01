@@ -4,8 +4,9 @@
 
 Inputs are `data/curated/` and the code, nothing under `data/raw/`, so CI can
 build the release from a checkout. The output is deterministic: rows are
-sorted, and the version is the date of the newest `written_at` in the data,
-never the clock, so the same commit always builds the same bytes.
+sorted, the release version is the package's (from the git tag), and "data as
+of" is the date of the newest `written_at` in the data, never the clock, so the
+same commit always builds the same bytes.
 
 By default the evidence table holds only confident records: upheld by the
 checked adversarial review, every quote found in the text, nothing flagging
@@ -20,7 +21,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from col4a1a2 import __repository__, jsonl, normalize, schemas
+from col4a1a2 import __repository__, __version__, jsonl, normalize, schemas
 from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import record_key
@@ -51,7 +52,7 @@ class Release:
     evidence: list[dict]
     variants: list[dict]
     literature: list[dict]
-    version: str
+    data_as_of: str
     include_all: bool
     n_extracted: int
     n_spot_checked: int
@@ -150,7 +151,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
     # that only adds challenges changes which records are confident.
     stamps = [r.get("written_at", "") for r in ledger_rows] + [r["written_at"] for r in extractions] \
         + [c.get("written_at", "") for c in challenges.values()] + [a["written_at"] for a in answers.values()]
-    return Release(evidence=evidence, variants=variants_mod.roll_up(evidence), literature=literature, version=max(stamps, default="")[:10],
+    return Release(evidence=evidence, variants=variants_mod.roll_up(evidence), literature=literature, data_as_of=max(stamps, default="")[:10],
                    include_all=include_all, n_extracted=n_extracted,
                    n_spot_checked=_spot_checked(st), verdicts=verdicts)
 
@@ -200,7 +201,8 @@ def datapackage(rel: Release) -> dict:
         "profile": "tabular-data-package",
         "name": "col4a1a2-carrier-evidence",
         "title": "COL4A1/COL4A2 published carrier evidence",
-        "version": rel.version,
+        "version": __version__,
+        "data_as_of": rel.data_as_of,
         "description": f"{rel.notice()} {rel.selection()}",
         "licenses": [{**LICENSE, "description": licence_notice()}],
         "sources": [{"title": "Europe PMC", "path": "https://europepmc.org"},
@@ -224,7 +226,7 @@ def licence_notice() -> str:
 def readme(rel: Release) -> str:
     """The notice for anyone holding the tables without the site."""
     return "\n".join([
-        "COL4A1/COL4A2 published carrier evidence, version " + rel.version,
+        f"COL4A1/COL4A2 published carrier evidence, version {__version__}, data as of {rel.data_as_of}",
         "",
         rel.notice(),
         "",
@@ -271,7 +273,7 @@ def footer(rel: Release) -> str:
     from html import escape
 
     licence = escape(licence_notice()).replace("CC BY 4.0", f'<a href="{LICENSE["path"]}">CC BY 4.0</a>', 1)
-    return (f'  <footer>\n    <p>{licence}</p>\n    <p class="version">Version {escape(rel.version)}</p>\n'
+    return (f'  <footer>\n    <p>{licence}</p>\n    <p class="version">Version {escape(__version__)}, data as of {escape(rel.data_as_of)}</p>\n'
             "  </footer>\n")
 
 

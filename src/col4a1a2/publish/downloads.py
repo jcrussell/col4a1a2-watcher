@@ -13,7 +13,7 @@ from collections import Counter
 from html import escape
 from pathlib import Path
 
-from col4a1a2 import __repository__, schemas
+from col4a1a2 import __repository__, __version__, schemas
 from col4a1a2.ledger import STATUS_MEANINGS
 from col4a1a2.normalize import REFERENCE
 from col4a1a2.publish.variants import SCREEN_MIN
@@ -138,7 +138,7 @@ def body(rel, data: Path) -> str:
         '<h2 id="citing">Citing</h2>'
         "<p>The facts are the papers': cite them from each row's <code>citation</code>, <code>pmid</code> and "
         f"<code>doi</code>. Cite this release as \u201cCOL4A1/COL4A2 published carrier evidence, version "
-        f"{escape(rel.version)}\u201d{repo}.</p>"
+        f"{escape(__version__)}\u201d{repo}.</p>"
         "<p>Variant keys come from Ensembl VEP; cite it as "
         '<a href="https://www.ensembl.org/info/about/publications.html">Ensembl asks</a>.</p>')
     return "\n".join(parts)

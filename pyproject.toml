@@ -1,6 +1,6 @@
 [project]
 name = "col4a1a2-watcher"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A monthly literature watcher that builds an open per-variant table of published COL4A1/COL4A2 carriers"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -26,14 +26,23 @@ Repository = "https://github.com/jcrussell/col4a1a2-watcher"
 col4a1a2 = "col4a1a2.cli:main"
 col4a1a2-dev = "col4a1a2.dev:main"
 
-[tool.uv.build-backend]
-# The distribution is col4a1a2-watcher but the module is col4a1a2: without this
-# the backend would look for src/col4a1a2_watcher.
-module-name = "col4a1a2"
-
 [build-system]
-requires = ["uv_build>=0.13.6,<0.14.0"]
-build-backend = "uv_build"
+requires = ["hatchling>=1.26", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+# The version is the latest v* tag, via hatch-vcs: tagging v0.2.0 makes the
+# release 0.2.0, and an untagged commit gets a development version.
+[tool.hatch.version]
+source = "vcs"
+
+# The distribution is col4a1a2-watcher but the module is col4a1a2.
+[tool.hatch.build.targets.wheel]
+packages = ["src/col4a1a2"]
+
+[tool.uv]
+# Rebuild the editable install when the commit or a tag changes, so the
+# version uv reports follows git.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [dependency-groups]
 dev = [

@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the version comes from the latest v* tag
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --locked
       - run: uv run pytest -q

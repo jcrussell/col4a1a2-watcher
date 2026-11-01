@@ -49,9 +49,9 @@ The files are a small database, so they get the few guarantees a database would 
 
 - **`publish` builds from tracked files only.** `data/curated/`, `config/` and the code; never `data/raw/`. That is what lets CI build the release from a checkout, and a test runs it with no snapshot directory at all.
 - **Confident by default.** The release holds records the checked review upheld, with every quote grounded and nothing flagged (`extract.rows.is_confident`). `--all` exists for people inspecting the data; CI never passes it.
-- **Deterministic.** Sorted rows and a version taken from the data, never the clock, so the same commit builds the same bytes.
+- **Deterministic.** Sorted rows, the release version from the git tag, and "data as of" from the data, never the clock, so the same commit builds the same bytes. (An uncommitted working tree adds a date to its development version; CI builds from a clean checkout.)
 - **The release is built, never committed, and deployed only from a tag.** `_site/` is gitignored; pushing a `v*` tag runs `.github/workflows/publish.yml`, which builds and deploys it; running that workflow by hand is a dry run that builds and uploads the site without deploying. Tag a release only after `ci.yml` and a dry run are green on GitHub. `ci.yml` runs the tests, `check` and a throwaway build on every push.
-- **One version, in `pyproject.toml`.** `col4a1a2.__version__` reads it from the package metadata and the User-Agent's `{version}` is filled from that; tag releases `v<version>`.
+- **One version, from the git tag.** `pyproject.toml` declares the version dynamic and hatch-vcs computes it from the latest `v*` tag: tagging `v0.2.0` makes the release `0.2.0`, and an untagged commit gets a development version such as `0.1.dev51+g66ad8dd`. `col4a1a2.__version__` reads it from the package metadata, the User-Agent's `{version}` and the release are filled from that, and CI checks out full history so the tag is visible.
 - **No spot-check rate without a schema.** `publish` refuses to run while `data/curated/gold/` has files and no model in `schemas.py`.
 
 ## Shared code: import, don't restate

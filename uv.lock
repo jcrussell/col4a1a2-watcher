@@ -278,7 +278,6 @@ wheels = [
 
 [[package]]
 name = "col4a1a2-watcher"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

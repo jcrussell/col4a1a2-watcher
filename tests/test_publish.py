@@ -158,14 +158,14 @@ def test_a_record_the_reviewer_calls_a_duplicate_is_not_confident(world):
     assert flags[keys[0]] == "duplicate"
 
 
-def test_the_version_moves_when_only_challenges_change(world):
+def test_the_data_date_moves_when_only_challenges_change(world):
     """New challenges change which records are confident, so they date the release."""
     st, _ = world
-    before = publish.gather(st).version
+    before = publish.gather(st).data_as_of
     rows = jsonl.read(st.curated_dir / "challenges.jsonl")
     rows[0]["written_at"] = "2027-01-01T00:00:00+00:00"
     jsonl.write(st.curated_dir / "challenges.jsonl", rows)
-    assert publish.gather(st).version == "2027-01-01" != before
+    assert publish.gather(st).data_as_of == "2027-01-01" != before
 
 
 def test_a_placeholder_inside_the_data_is_left_alone(world, tmp_path):
@@ -195,7 +195,7 @@ def test_normalization_columns_come_from_the_tracked_answers(world):
     rel = publish.gather(st, include_all=True)
     row = next(e for e in rel.evidence if e["record_key"] == v["record_key"])
     assert row["variant_key"] == q["notation"] and row["grch38"] == "13:5:G/A" and row["key_level"] == "coding"
-    assert rel.version == "2026-11-01", "a new answer dates the release"
+    assert rel.data_as_of == "2026-11-01", "a new answer dates the release"
 
 
 def test_the_variants_table_ships_with_its_residual_risk(world, tmp_path):
@@ -245,3 +245,15 @@ def test_the_downloads_page_explains_every_file_and_column(world, tmp_path):
     assert "<script src" not in page and "<link" not in page
     assert 'aria-current="page">Downloads' in page
     assert 'href="downloads.html"' in (tmp_path / "s" / "index.html").read_text()
+
+
+def test_the_release_carries_the_package_version_from_git(world, tmp_path):
+    from col4a1a2 import __version__
+
+    st, _ = world
+    publish.write(publish.gather(st), tmp_path / "s")
+    pkg = json.loads((tmp_path / "s" / "data" / "datapackage.json").read_text())
+    assert pkg["version"] == __version__ and pkg["data_as_of"]
+    readme = (tmp_path / "s" / "data" / "README.txt").read_text()
+    assert f"version {__version__}, data as of {pkg['data_as_of']}" in readme
+    assert f"Version {__version__}, data as of" in (tmp_path / "s" / "index.html").read_text()

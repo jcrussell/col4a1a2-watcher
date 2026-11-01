@@ -21,7 +21,7 @@ from col4a1a2.extract.challenge import records_digest
 from col4a1a2.digest import sha256_text
 from col4a1a2.extract.llm import Policy, ResponseArchive, SpendMeter
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, keyword_signals, triage_paper
-from col4a1a2 import jsonl, schemas
+from col4a1a2 import __version__, jsonl, schemas
 from col4a1a2.http import PoliteClient
 from col4a1a2.ledger import Ledger
 from col4a1a2.sources import europepmc, ncbi, pubtator
@@ -935,7 +935,8 @@ def cmd_publish(a: argparse.Namespace) -> int:
     for path in publish.write(rel, out):
         print(f"  wrote {path}")
     print(f"{len(rel.evidence)} evidence rows ({'all' if rel.include_all else 'confident'} of "
-          f"{rel.n_extracted} extracted), {len(rel.literature)} papers considered, data as of {rel.version}")
+          f"{rel.n_extracted} extracted), {len(rel.literature)} papers considered, version {__version__}, "
+          f"data as of {rel.data_as_of}")
     return 0
 
 
