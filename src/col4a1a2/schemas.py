@@ -69,7 +69,7 @@ class ChallengeUsage(Usage):
 class TriageVerdict(Row):
     """Both forms of the triage verdict.
 
-    `papers.jsonl` stores all eleven fields; the ledger stores the four that
+    `papers.jsonl` stores all twelve fields; the ledger stores the four that
     describe the decision rather than the signals behind it. One model with
     optional fields covers both, and forbids a fifth spelling of either.
     """
@@ -85,6 +85,8 @@ class TriageVerdict(Row):
     pubtator_gene_linked_variant: bool | None = None
     pubtator_linked_hgvs: list[str] = Field(default_factory=list)
     pubtator_search_hit: bool | None = None
+    # The model was not asked, because the run's budget was spent.
+    deferred: bool | None = None
 
 
 class ChallengeSummary(Row):
@@ -391,6 +393,11 @@ class ManifestRow(Row):
     figure_vision_calls: int | None = None
     figure_vision_tokens: dict[str, int] | None = None
     figure_cache_hits: int | None = None
+    # Every Claude call the fetch paid for, triage and figures together, priced
+    # per attempt; cached and replayed answers cost nothing.
+    claude_spend_usd: float | None = None
+    budget_usd: float | None = None
+    triage_deferred_by_budget: int | None = None
     full_text_failed: int | None = None
     network_requests: int = 0
     cache_hits: int = 0

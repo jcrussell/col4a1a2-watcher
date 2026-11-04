@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import json
 import logging
@@ -23,7 +24,7 @@ from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import records_digest
 from col4a1a2.extract.llm import Policy, ResponseArchive, SpendMeter
 from col4a1a2.extract.prompt import PaperInput
-from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, keyword_signals, triage_paper
+from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, keyword_signals, llm_verdict
 from col4a1a2.http import PoliteClient, TooManyFailures
 from col4a1a2.ledger import Ledger
 from col4a1a2.sources import europepmc, ncbi, pubtator
@@ -116,6 +117,7 @@ def _enrich(
     acl=None,
     fig_cache=None,
     fig_llm=None,
+    meter: SpendMeter | None = None,
 ) -> _Enrichment:
     """Fetch the article's file bundle, parse its tables, and transcribe figures.
 
@@ -214,14 +216,20 @@ def _enrich(
             digest = fig_cache.digest(member.data)
             meta["image_sha256"] = digest
             cached = fig_cache.get(digest, fig_llm.model, refresh=fig_llm.refresh)
+            if cached is None and meter is not None and meter.over_budget():
+                meta["skip_reason"] = "budget reached"
+                e.figure_meta.append(meta)
+                continue
             if cached is None:
                 try:
-                    tr, usage, prov = figmod.transcribe_figure(acl, member.data, mt, fig,
-                                                               image_sha256=digest,
-                                                               max_tokens=st.figures_max_tokens,
-                                                               **fig_llm.kwargs())
+                    with meter.metered() if meter is not None else contextlib.nullcontext():
+                        tr, reply = figmod.transcribe_figure(acl, member.data, mt, fig,
+                                                             image_sha256=digest,
+                                                             max_tokens=st.figures_max_tokens,
+                                                             **fig_llm.kwargs())
+                    usage = reply.usage_row()
                     cached = fig_cache.put(pmcid=pmcid, fig=fig, image_sha256=digest,
-                                           transcription=tr, usage=usage, provenance=prov)
+                                           transcription=tr, usage=usage, provenance=reply.provenance())
                 except Exception as exc:  # noqa: BLE001
                     # A figure is optional enrichment. Letting one bad image abort
                     # the fetch would discard every paper gathered so far, along
@@ -388,6 +396,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     acl = make_anthropic(st) if use_llm else None
     archive = ResponseArchive(st.responses_dir)
     triage_llm = Policy(st.triage_model, st.triage_effort, archive, refresh=a.no_llm_cache)
+    # One meter for every Claude call the fetch makes, triage and figures alike.
+    meter = SpendMeter(st.price_for, archive, a.budget_usd)
+    n_triage_deferred = 0
     fig_llm = Policy(st.figure_model, st.figure_effort, archive, refresh=a.no_llm_cache)
 
     triaged: list[tuple[europepmc.PaperMeta, list[dict], dict]] = []
@@ -398,17 +409,17 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         tr = keyword_signals(m.title, m.abstract, hints=hints, linked=linked,
                              search_hit=m.pmid in pubtator_hits, gene_ids=gene_ids)
         if use_llm:
-            cached = tcache.get(m.pmid, triage_llm.model, refresh=triage_llm.refresh)
+            cached = llm_verdict(acl, tcache, meter, triage_llm, m.pmid, m.title, m.abstract)
             if cached is None:
-                try:
-                    decision, usage, prov = triage_paper(acl, m.title, m.abstract,
-                                                         **triage_llm.kwargs())
-                    # Data before index: the verdict is cached before the ledger records it.
-                    cached = tcache.put(m.pmid, decision, usage, prov)
-                except Exception as e:  # never let triage abort a fetch  # noqa: BLE001
-                    log.warning("triage failed for %s (%s); keeping paper", m.pmid, type(e).__name__)
-                    cached = {"read_full_text": True, "reason": f"triage error: {type(e).__name__}",
-                              "triage_prompt_version": TRIAGE_PROMPT_VERSION}
+                # No verdict rather than a guessed one; the next run with budget
+                # asks. A PubTator-linked variant keeps a paper whatever the model
+                # says, so that one is kept now. Any other stays untriaged in the
+                # ledger.
+                n_triage_deferred += 1
+                tr["keep"] = bool(tr["pubtator_gene_linked_variant"])
+                tr["deferred"] = not tr["keep"]
+                triaged.append((m, hints, tr))
+                continue
             tr["llm_keep"] = bool(cached["read_full_text"])
             tr["llm_reason"] = cached.get("reason", "")
             tr["triage_prompt_version"] = cached.get("triage_prompt_version", TRIAGE_PROMPT_VERSION)
@@ -424,6 +435,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     n_keep_all = sum(1 for _, _, tr in triaged if tr["keep"])
     log.info("triage: %d of %d papers kept (%s); cache hits %d, new calls %d",
              n_keep_all, len(metas), "llm" if use_llm else "keyword", tcache.hits, tcache.misses)
+    if n_triage_deferred:
+        log.warning("budget of $%.2f reached: %d papers left untriaged for a later run",
+                    a.budget_usd, n_triage_deferred)
     # Write point 3. Recorded for every triaged candidate, including the ones
     # `--limit` is about to discard, so each carries its title, journal, date
     # and identifier rather than a bare triage decision.
@@ -438,7 +452,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             has_pmcid=bool(m.pmcid), found_by={m.source}, citation=citation(m),
             dropped_at="", snapshot=snap.name,
         )
-        if m.pmid:
+        if m.pmid and not tr.get("deferred"):
             ledger.record_triage(m.pmid, {k: tr.get(k) for k in
                                           ("keep", "llm_keep", "llm_reason",
                                            "pubtator_gene_linked_variant")})
@@ -479,7 +493,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                         client, pt, xml, m.pmcid, st.bundle_store / m.pmcid,
                         st=st, want_supplements=want_supplements, want_figures=want_figures,
                         force_figures=a.figures, acl=acl, fig_cache=fig_cache,
-                        fig_llm=fig_llm,
+                        fig_llm=fig_llm, meter=meter,
                     )
                 except Exception as exc:  # noqa: BLE001
                     # Enrichment is optional. Letting it raise would discard every
@@ -563,6 +577,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         "figure_vision_calls": vision_usage["calls"],
         "figure_vision_tokens": {"input": vision_usage["input"], "output": vision_usage["output"]},
         "figure_cache_hits": fig_cache.hits if fig_cache else 0,
+        "claude_spend_usd": round(meter.spent, 4),
+        "budget_usd": a.budget_usd,
+        "triage_deferred_by_budget": n_triage_deferred,
         "network_requests": client.network_requests, "cache_hits": client.cache_hits,
         "rate_limiter_slept_s": round(client.limiter.slept_total, 1),
     }
@@ -674,7 +691,7 @@ def cmd_extract(a: argparse.Namespace) -> int:
     n_failed = 0
     n_ok = 0
     n_skipped = 0
-    meter = SpendMeter(st.price_for(model), archive, a.budget_usd)
+    meter = SpendMeter(st.price_for, archive, a.budget_usd)
     for p in papers:
         text_hash = sha256_text(p.text)
         if (p.pmid, text_hash) in done or (
@@ -684,13 +701,14 @@ def cmd_extract(a: argparse.Namespace) -> int:
             n_skipped += 1
             continue
         if meter.over_budget():
-            log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_ok)
+            log.warning("budget of $%.2f reached after %d papers%s; stopping", a.budget_usd, n_ok,
+                        f" (no price for {', '.join(sorted(meter.unpriced))})" if meter.unpriced else "")
             break
         log.info("extracting %s (%s)", p.pmid, "abstract" if p.abstract_only else "full text")
-        meter.begin()
         try:
-            res = extract_paper(client, p, model=model, effort=effort, text_sha256=text_hash,
-                                archive=archive, refresh=a.no_llm_cache)
+            with meter.metered():
+                res = extract_paper(client, p, model=model, effort=effort, text_sha256=text_hash,
+                                    archive=archive, refresh=a.no_llm_cache)
         except (ExtractionRefused, ExtractionTruncated, PydanticValidationError) as e:
             # One unusable paper must not abort the batch; record why and move on.
             log.warning("%s: %s", p.pmid, e)
@@ -733,7 +751,6 @@ def cmd_extract(a: argparse.Namespace) -> int:
         jsonl.append(out_path, row)
         ex = res.extraction
         n_ok += 1
-        meter.charge(reply.usage)
         if is_current:
             ledger.record(identity=p.pmid, stage="extracted", snapshot=snap.name,
                           text_sha256=text_hash, prompt_version=res.prompt_version,
@@ -781,7 +798,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
     archive = ResponseArchive(st.responses_dir)
     # The reviewer runs on the extraction model, and reviews only current rows.
     model = st.extract_model
-    meter = SpendMeter(st.price_for(model), archive, a.budget_usd)
+    meter = SpendMeter(st.price_for, archive, a.budget_usd)
     n_done = n_failed = 0
 
     for r in rows:
@@ -802,14 +819,15 @@ def cmd_challenge(a: argparse.Namespace) -> int:
                      cached.get("challenge_prompt_version"))
             continue
         if meter.over_budget():
-            log.warning("budget of $%.2f reached after %d papers; stopping", a.budget_usd, n_done)
+            log.warning("budget of $%.2f reached after %d papers%s; stopping", a.budget_usd, n_done,
+                        f" (no price for {', '.join(sorted(meter.unpriced))})" if meter.unpriced else "")
             break
         log.info("challenging %s (%d records)", pmid, len(recs))
-        meter.begin()
         try:
-            ch, usage, prov = challenge_paper(client, pmid=pmid, source_text=text, records=recs,
-                                              model=model, effort=a.effort,
-                                              archive=archive, refresh=a.no_llm_cache)
+            with meter.metered():
+                ch, reply = challenge_paper(client, pmid=pmid, source_text=text, records=recs,
+                                            model=model, effort=a.effort,
+                                            archive=archive, refresh=a.no_llm_cache)
         except (ChallengeFailed, Exception) as e:  # fails closed: never "nothing to refute"
             if isinstance(e, KeyboardInterrupt):
                 raise
@@ -819,8 +837,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
         rep = check(ch, recs, text)
         # Data before index, as in `cmd_extract`.
         cache.put(pmid=pmid, text_sha256=r["text_sha256"], records_digest=digest,
-                  challenge=ch, report=rep, usage=usage, provenance=prov)
-        meter.charge(usage)
+                  challenge=ch, report=rep, usage=reply.usage_row(), provenance=reply.provenance())
         ledger.record(identity=pmid, stage="challenged", snapshot=snap.name,
                       challenge={k: rep.as_dict()[k] for k in
                                  ("n_records", "n_upheld", "n_disputed", "n_unverifiable",
@@ -833,7 +850,7 @@ def cmd_challenge(a: argparse.Namespace) -> int:
             flags.append(f"{len(rep.fabricated)} FABRICATED")
         print(f"{pmid}: {len(recs)} records -> upheld={len(rep.upheld)} disputed={len(rep.disputed)} "
               f"unverifiable={len(rep.unverifiable)} missed={len(rep.missed_grounded)}"
-              f"{'  ' + ' '.join(flags) if flags else ''}  [{prov['effort']}]")
+              f"{'  ' + ' '.join(flags) if flags else ''}  [{reply.effort}]")
 
     print(f"\n{n_done} challenged, {n_failed} failed, cache hits {cache.hits}, ${meter.spent:.2f} spent")
     return 0
@@ -1134,7 +1151,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    f = sub.add_parser("fetch-papers", parents=[common, snap_opt, fresh_opt],
+    f = sub.add_parser("fetch-papers", parents=[common, snap_opt, fresh_opt, budget_opt],
                        help="search Europe PMC + PubTator and fetch texts into a snapshot")
     f.add_argument("--date-from", help="YYYY-MM-DD")
     f.add_argument("--date-to", help="YYYY-MM-DD")

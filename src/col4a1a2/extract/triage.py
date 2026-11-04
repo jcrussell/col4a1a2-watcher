@@ -26,12 +26,16 @@ the first's.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from col4a1a2.digest import sha256_text
 from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.patterns import CLINICAL_RE, GENE_RE
+
+if TYPE_CHECKING:
+    from col4a1a2.extract.llm import Reply
 
 TRIAGE_PROMPT_VERSION = "t1"
 MAX_TRIAGE_TOKENS = 2000
@@ -79,10 +83,11 @@ class TriageFailed(RuntimeError):
 
 
 def triage_paper(client, title: str, abstract: str | None, *, model: str, effort: str,
-                 archive=None, refresh: bool = False) -> tuple[TriageDecision, dict, dict]:
+                 archive=None, refresh: bool = False) -> tuple[TriageDecision, Reply]:
     """One call on title + abstract. Raises on API failure; caller decides.
 
-    Returns the decision, its usage, and the provenance every cached row carries.
+    Returns the decision and the reply, whose usage and provenance every cached
+    row carries.
     """
     from col4a1a2.extract.llm import call, system_block
 
@@ -93,7 +98,30 @@ def triage_paper(client, title: str, abstract: str | None, *, model: str, effort
         output_format=TriageDecision, fallbacks=False, archive=archive, refresh=refresh,
         request={"prompt_version": TRIAGE_PROMPT_VERSION, "input_sha256": sha256_text(user)},
     )
-    return reply.require(TriageFailed), reply.usage_row(), reply.provenance()
+    return reply.require(TriageFailed), reply
+
+
+def llm_verdict(client, cache: TriageCache, meter, policy, pmid: str, title: str,
+                abstract: str | None) -> dict | None:
+    """The model's verdict on one paper, or None when the budget forbids asking.
+
+    A cached verdict costs nothing and is returned whatever the budget. A call
+    that fails keeps the paper, because recall is what the gate is for.
+    """
+    cached = cache.get(pmid, policy.model, refresh=policy.refresh)
+    if cached is not None:
+        return cached
+    if meter.over_budget():
+        return None
+    try:
+        with meter.metered():
+            decision, reply = triage_paper(client, title, abstract, **policy.kwargs())
+        # Data before index: the verdict is cached before the ledger records it.
+        return cache.put(pmid, decision, reply.usage_row(), reply.provenance())
+    except Exception as e:  # never let triage abort a fetch  # noqa: BLE001
+        log.warning("triage failed for %s (%s); keeping paper", pmid, type(e).__name__)
+        return {"read_full_text": True, "reason": f"triage error: {type(e).__name__}",
+                "triage_prompt_version": TRIAGE_PROMPT_VERSION}
 
 
 def keyword_signals(title: str, abstract: str | None, *, hints: list[dict], linked: list[dict],

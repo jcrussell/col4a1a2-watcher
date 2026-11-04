@@ -98,10 +98,13 @@ figure_effort = "low"
 # USD per million tokens. Token counts in the usage records are the durable
 # fact; these are a convenience for reporting and will go stale, so any spend
 # figure can be recomputed from the counts.
+# Checked against the pricing page 2026-11-04 (5-minute cache writes; Haiku's
+# rates are for prompts under 100k tokens). A fallback can serve a turn on
+# another model, so add any model a fallback may use, or a budgeted run stops.
 # Check each model's own price: triage measures $0.000103 per paper over 742
 # decisions, and an older model's price would overstate it tenfold.
 "claude-opus-5-5" = { input = 4.0, output = 20.0, cache_read = 0.20, cache_write = 5.0 }
-"claude-haiku-5-5" = { input = 0.10, output = 0.50, cache_read = 0.005, cache_write = 0.125 }
+"claude-haiku-5-5" = { input = 0.10, output = 0.50, cache_read = 0.01, cache_write = 0.125 }
 
 # Every setting in [figures] and [supplements] changes the assembled paper text,
 # therefore its hash, therefore whether a paper is re-extracted. Each is

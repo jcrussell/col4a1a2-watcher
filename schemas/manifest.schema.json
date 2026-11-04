@@ -7,6 +7,18 @@
       "title": "Abstract Only",
       "type": "integer"
     },
+    "budget_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Budget Usd"
+    },
     "cache_hits": {
       "default": 0,
       "title": "Cache Hits",
@@ -59,6 +71,18 @@
       ],
       "default": null,
       "title": "Candidates Triaged"
+    },
+    "claude_spend_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Claude Spend Usd"
     },
     "date_from": {
       "anyOf": [
@@ -334,6 +358,18 @@
       ],
       "default": null,
       "title": "Text Affecting"
+    },
+    "triage_deferred_by_budget": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Triage Deferred By Budget"
     },
     "triage_keep": {
       "default": 0,

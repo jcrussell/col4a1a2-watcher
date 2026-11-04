@@ -110,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--borderline-is-yes", action="store_true",
                     help="count the 'borderline' label as a true positive")
     ap.add_argument("--llm", action="store_true", help="also call Haiku live (costs money)")
+    ap.add_argument("--budget-usd", type=float,
+                    help="with --llm, stop calling once this much has been spent")
     a = ap.parse_args(argv)
 
     st = load_settings()
@@ -150,22 +152,31 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.llm:
         from col4a1a2.cli import make_anthropic
+        from col4a1a2.extract.llm import ResponseArchive, SpendMeter
         from col4a1a2.extract.triage import triage_paper
         print("\nlive Haiku calls:")
         client = make_anthropic(st)
+        # An archive with no root: a measurement calls live every time, and pays
+        # every time, so nothing is stored or replayed, only metered.
+        archive = ResponseArchive(None)
+        meter = SpendMeter(st.price_for, archive, a.budget_usd)
         live, tin, tout = {}, 0, 0
         for p in known:
-            d, u, _prov = triage_paper(client, papers[p].get("title") or "", papers[p].get("abstract"),
-                                       model=st.triage_model, effort=st.triage_effort)
+            if meter.over_budget():
+                print(f"  budget of ${a.budget_usd:.2f} reached; {len(known) - len(live)} papers not called")
+                break
+            with meter.metered():
+                d, reply = triage_paper(client, papers[p].get("title") or "", papers[p].get("abstract"),
+                                        model=st.triage_model, effort=st.triage_effort, archive=archive)
             live[p] = d.read_full_text
-            tin += u["input"]
-            tout += u["output"]
+            tin += reply.usage["input"]
+            tout += reply.usage["output"]
             mark = "" if d.read_full_text == truth[p] else "  <-- disagrees with label"
             print(f"  {p} {'READ' if d.read_full_text else 'skip':>4}  {d.reason[:66]}{mark}")
-        score("live Haiku gate", lambda p, _s: live[p], sig, truth)
-        price = st.price_for(st.triage_model)
-        cost = f"${price.cost(input=tin, output=tout):.4f}" if price else "unpriced"
-        print(f"tokens in={tin} out={tout}  cost={cost}")
+        if len(live) == len(known):
+            score("live Haiku gate", lambda p, _s: live[p], sig, truth)
+        print(f"tokens in={tin} out={tout}  cost=${meter.spent:.4f}"
+              + (f" plus unpriced calls on {', '.join(sorted(meter.unpriced))}" if meter.unpriced else ""))
     return 0
 
 

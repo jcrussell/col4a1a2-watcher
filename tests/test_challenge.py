@@ -172,7 +172,8 @@ def test_challenge_sends_the_records_and_the_fallback_beta(fake_anthropic):
     recs = slim_records("1", [_variant()], [])
     ch = _ch(verdicts=[RecordVerdict(record_key=recs[0]["record_key"], verdict=Verdict.upheld)])
     client = fake_anthropic(default_output=ch)
-    out, usage, prov = challenge_paper(client, pmid="1", source_text=TEXT, records=recs, model="m")
+    out, reply = challenge_paper(client, pmid="1", source_text=TEXT, records=recs, model="m")
+    usage, prov = reply.usage_row(), reply.provenance()
     assert out == ch
     assert prov["requested_model"] == "m" and prov["effort"] == "medium"
     sent = client.calls[0]

@@ -51,6 +51,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -58,6 +59,9 @@ from col4a1a2.digest import sha256_json, sha256_text
 from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.extract.prompt import PROMPT_VERSION
 from col4a1a2.extract.verify import find_quote, normalise
+
+if TYPE_CHECKING:
+    from col4a1a2.extract.llm import Reply
 
 log = logging.getLogger("col4a1a2")
 
@@ -250,11 +254,11 @@ def check(challenge: PaperChallenge, records: list[dict], source_text: str) -> C
 def challenge_paper(client, *, pmid: str, source_text: str, records: list[dict],
                     model: str, effort: str | None = None,
                     max_tokens: int = MAX_CHALLENGE_TOKENS, archive=None,
-                    refresh: bool = False) -> tuple[PaperChallenge, dict, dict]:
+                    refresh: bool = False) -> tuple[PaperChallenge, Reply]:
     """One call per paper. Raises ChallengeFailed rather than returning nothing.
 
     `effort` defaults to one scaled by the number of records. Returns the
-    challenge, its usage, and the provenance its cached row carries.
+    challenge and the reply, whose usage and provenance its cached row carries.
     """
     from col4a1a2.extract.llm import call, system_block
 
@@ -272,7 +276,7 @@ def challenge_paper(client, *, pmid: str, source_text: str, records: list[dict],
         request={"prompt_version": CHALLENGE_PROMPT_VERSION, "pmid": pmid,
                  "input_sha256": sha256_text(source_text), "records_digest": records_digest(records)},
     )
-    return reply.require(ChallengeFailed), reply.usage_row(), reply.provenance()
+    return reply.require(ChallengeFailed), reply
 
 
 class ChallengeCache(KeyedCache):

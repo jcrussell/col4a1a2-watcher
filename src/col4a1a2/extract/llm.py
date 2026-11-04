@@ -25,6 +25,7 @@ model the API says served it, the model we asked for, the effort, and when.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import inspect
 import json
@@ -41,6 +42,10 @@ from col4a1a2.schemas import RESPONSE_SUFFIX as SUFFIX
 log = logging.getLogger("col4a1a2")
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+# A refusal that arrives before any output is billed only in these categories,
+# per Anthropic's refusals page (as of September 2026; it says the set may change).
+BILLED_REFUSAL_CATEGORIES = frozenset({"bio", "frontier_llm", "reasoning_extraction"})
 
 
 @dataclass
@@ -113,30 +118,47 @@ def system_block(text: str) -> list[dict]:
 class SpendMeter:
     """What a run has spent, and whether it may spend more.
 
-    Call `begin()` before each model call and `charge(usage)` after it. A reply
-    served from the response archive cost nothing this run, and the meter tells
-    by whether the archive's hit count moved in between.
+    Wrap each model call in `with meter.metered():`. The meter charges what the
+    archive recorded as paid while the block ran, so a call billed and then
+    rejected (a refusal, a truncation, output that does not parse) is charged
+    like any other, and an answer replayed from disk, which records nothing,
+    costs nothing.
+
+    `price_for` maps a model to its prices. Each billed attempt is priced at the
+    rates of the model that ran it, since a fallback can serve a turn on a model
+    other than the one requested. An attempt on a model with no price makes the
+    spend unknown, and a run with a budget then stops rather than spend blind.
     """
 
-    def __init__(self, price, archive: ResponseArchive | None, budget_usd: float | None):
-        self.price = price
+    def __init__(self, price_for, archive: ResponseArchive, budget_usd: float | None):
+        self.price_for = price_for
         self.archive = archive
         self.budget_usd = budget_usd
         self.spent = 0.0
-        self._hits = 0
+        self.unpriced: set[str] = set()
 
     def over_budget(self) -> bool:
-        return bool(self.budget_usd) and self.spent >= self.budget_usd
+        # None is no budget; 0 is a real one, allowing only answers already paid for.
+        return self.budget_usd is not None and (self.spent >= self.budget_usd or bool(self.unpriced))
 
-    def begin(self) -> None:
-        self._hits = self.archive.hits if self.archive is not None else 0
+    @contextlib.contextmanager
+    def metered(self):
+        mark = len(self.archive.paid)
+        try:
+            yield
+        finally:
+            for attempts in self.archive.paid[mark:]:
+                self.charge(attempts)
 
-    def charge(self, usage: dict) -> None:
-        replayed = self.archive is not None and self.archive.hits > self._hits
-        if self.price and not replayed:
-            self.spent += self.price.cost(input=usage.get("input", 0), output=usage.get("output", 0),
-                                          cache_read=usage.get("cache_read", 0),
-                                          cache_write=usage.get("cache_write", 0))
+    def charge(self, attempts: list[tuple[str, dict]]) -> None:
+        for model, usage in attempts:
+            price = self.price_for(model)
+            if price is None:
+                if model not in self.unpriced:
+                    log.warning("no price for %s; spend from here on is unknown", model)
+                self.unpriced.add(model)
+                continue
+            self.spent += price.cost(**usage)
 
 
 @dataclass
@@ -166,13 +188,18 @@ def request_digest(kwargs: dict) -> str:
 
 
 class ResponseArchive:
-    """`<root>/<YYYY-MM>/<digest>.<stamp>.response.json`; newest per digest wins."""
+    """`<root>/<YYYY-MM>/<digest>.<stamp>.response.json`; newest per digest wins.
+
+    With no root nothing is stored or replayed, but paid calls are still
+    counted, so a measurement that must call live is metered all the same.
+    """
 
     def __init__(self, root: Path | None):
         self.root = root
         self._index: dict[str, Path] | None = None
-        # Answers served from disk, so callers can leave them out of spend.
         self.hits = 0
+        # The billed attempts of every call this run paid for, in order.
+        self.paid: list[list[tuple[str, dict]]] = []
 
     def _scan(self) -> dict[str, Path]:
         if self._index is None:
@@ -187,6 +214,7 @@ class ResponseArchive:
         return json.loads(p.read_text(encoding="utf-8")) if p else None
 
     def put(self, record: dict) -> Path | None:
+        self.paid.append(billed_attempts(record["response"], record["requested_model"]))
         if self.root is None:
             return None
         from col4a1a2 import schemas
@@ -206,11 +234,48 @@ def _dump(resp: Any) -> dict:
 
 
 def _usage(raw: dict) -> dict:
-    u = raw.get("usage") or {}
+    return _counts(raw.get("usage") or {})
+
+
+def _counts(u: dict) -> dict:
     return {"input": u.get("input_tokens", 0) or 0,
             "output": u.get("output_tokens", 0) or 0,
             "cache_read": u.get("cache_read_input_tokens", 0) or 0,
             "cache_write": u.get("cache_creation_input_tokens", 0) or 0}
+
+
+def billed_attempts(raw: dict, requested_model: str) -> list[tuple[str, dict]]:
+    """Each attempt the API bills for this response, with the model whose prices apply.
+
+    Top-level `usage` covers only the attempt that produced the message. With
+    fallbacks on, `usage.iterations` lists every attempt: a model that declined
+    is a `message` entry and the one that served the turn a `fallback_message`.
+    Each is billed at its own model's rates, except a decline before any output,
+    which is billed only in `BILLED_REFUSAL_CATEGORIES`. A declined hop's
+    category is on the `fallback` block that hands over from it, in order; the
+    last attempt's, if it declined too, is the response's `stop_details`.
+    """
+    served = raw.get("model") or requested_model
+    its = (raw.get("usage") or {}).get("iterations") or []
+    if not its:
+        return [(served, _usage(raw))]
+    handoffs = [((b.get("trigger") or {}).get("category"))
+                for b in raw.get("content") or [] if b.get("type") == "fallback"]
+    out = []
+    for i, it in enumerate(its):
+        model = it.get("model") or served
+        counts = _counts(it)
+        last = i == len(its) - 1
+        if last:
+            declined = raw.get("stop_reason") == "refusal"
+            category = (raw.get("stop_details") or {}).get("category")
+        else:
+            declined = it.get("type") == "message"
+            category = handoffs.pop(0) if handoffs else None
+        if declined and not counts["output"] and category not in BILLED_REFUSAL_CATEGORIES:
+            continue
+        out.append((model, counts))
+    return out
 
 
 def parse(raw: dict, output_format: type[BaseModel]) -> BaseModel | None:

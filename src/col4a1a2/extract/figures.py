@@ -19,12 +19,16 @@ from __future__ import annotations
 
 import base64
 import logging
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from col4a1a2.digest import sha256_bytes
 from col4a1a2.extract.cache import KeyedCache
 from col4a1a2.sources.fulltext import FigureRef, rows_to_text, text_deficit
+
+if TYPE_CHECKING:
+    from col4a1a2.extract.llm import Reply
 
 log = logging.getLogger("col4a1a2")
 
@@ -111,10 +115,11 @@ def transcribe_figure(
     image_sha256: str | None = None,
     archive=None,
     refresh: bool = False,
-) -> tuple[FigureTranscription, dict, dict]:
+) -> tuple[FigureTranscription, Reply]:
     """One vision call. The caption is supplied as text so the model need not guess.
 
-    Returns the transcription, its usage, and the provenance its cached row carries.
+    Returns the transcription and the reply, whose usage and provenance its
+    cached row carries.
     """
     from col4a1a2.extract.llm import call, system_block
 
@@ -139,7 +144,7 @@ def transcribe_figure(
     # Thinking is always on for this model and counts against max_tokens, so a
     # dense figure can spend the whole budget before emitting a text block, and a
     # safety decline emits none either; `require` checks the stop reason first.
-    return reply.require(TranscriptionFailed), reply.usage_row(), reply.provenance()
+    return reply.require(TranscriptionFailed), reply
 
 
 def transcription_to_text(fig: FigureRef, t: FigureTranscription) -> str:
