@@ -185,6 +185,18 @@
       "title": "Full Text",
       "type": "integer"
     },
+    "full_text_failed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Full Text Failed"
+    },
     "ledger_events": {
       "anyOf": [
         {

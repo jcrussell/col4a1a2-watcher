@@ -24,7 +24,7 @@ from col4a1a2.extract.challenge import records_digest
 from col4a1a2.extract.llm import Policy, ResponseArchive, SpendMeter
 from col4a1a2.extract.prompt import PaperInput
 from col4a1a2.extract.triage import TRIAGE_PROMPT_VERSION, TriageCache, keyword_signals, triage_paper
-from col4a1a2.http import PoliteClient
+from col4a1a2.http import PoliteClient, TooManyFailures
 from col4a1a2.ledger import Ledger
 from col4a1a2.sources import europepmc, ncbi, pubtator
 from col4a1a2.sources.europepmc import citation
@@ -462,14 +462,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
     n_fig_read = 0
     vision_usage = {"input": 0, "output": 0, "calls": 0}
     for m, hints, triage in triaged:
-        xml = None
-        fulltext_source = None
+        xml, fulltext_source, failed = None, None, []
         if m.pmcid and (triage["keep"] or a.fetch_all_texts):
-            xml = europepmc.full_text_xml(client, m.pmcid)
-            fulltext_source = "europepmc" if xml else None
-            if not xml:
-                xml = ncbi.pmc_full_text_xml(client, m.pmcid, email)
-                fulltext_source = "ncbi" if xml else None
+            xml, fulltext_source, failed = _full_text(client, m.pmcid, email)
         if xml:
             pt = jats_to_text(xml)
             abstract_only = False
@@ -514,6 +509,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             "text_sha256": sha256_text(text),
             "regions": [{"kind": r.kind, "label": r.label, "start": r.start, "end": r.end} for r in regions],
             "fulltext_source": fulltext_source,
+            "fulltext_failed": [] if xml else failed,
             "supplement_bundle": enr.bundle_summary,
             "supplements": enr.supplement_meta,
             "figures": enr.figure_meta,
@@ -524,7 +520,9 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         })
     for r in rows:
         prev = ledger._state.get(r["pmid"] or "") or {}
-        if r["pmid"] and prev.get("text_sha256") != r["text_sha256"]:
+        # A paper whose full text failed to arrive was not fetched; recording
+        # its abstract as its text would make it look closed access.
+        if r["pmid"] and prev.get("text_sha256") != r["text_sha256"] and not r["fulltext_failed"]:
             ledger.record(identity=r["pmid"], stage="fetched", snapshot=snap.name,
                           text_sha256=r["text_sha256"], n_chars=r["n_chars"],
                           abstract_only=r["abstract_only"],
@@ -532,13 +530,16 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                           bundle_status=(r.get("supplement_bundle") or {}).get("status"),
                           n_supplements=len([x for x in (r.get("supplements") or []) if x.get("sheets")]),
                           n_figures=len([x for x in (r.get("figures") or []) if x.get("transcribed")]))
+    n_failed = sum(1 for r in rows if r["fulltext_failed"])
+    if n_failed:
+        log.warning("%d full texts failed to arrive; those papers are left for a later fetch", n_failed)
     log.info("ledger: %d events appended to %s", ledger.appended, ledger.path)
     n = jsonl.write(snap / "papers.jsonl", rows)
     manifest = {
         "fetched_at": dt.datetime.now(dt.UTC).isoformat(),
         "date_from": a.date_from, "date_to": a.date_to, "limit": a.limit, "oa_only": a.oa_only,
         "europepmc_query": st.europepmc_query, "pubtator_queries": st.pubtator_queries,
-        "papers": n, "full_text": n_full, "abstract_only": n - n_full,
+        "papers": n, "full_text": n_full, "abstract_only": n - n_full - n_failed, "full_text_failed": n_failed,
         "triage_keep": sum(1 for r in rows if r["triage"]["keep"]), "triage_keep_before_limit": n_keep_all,
         "candidates_triaged": n_triaged,
         "candidates_cut_by_limit": max(0, n_triaged - a.limit) if a.limit else 0,
@@ -578,6 +579,24 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------- extract
 
+def _full_text(client: PoliteClient, pmcid: str, email: str) -> tuple[bytes | None, str | None, list[str]]:
+    """JATS XML from Europe PMC, else NCBI, with where it came from and which
+    sources kept failing. A failure is not an absence: a source that could not
+    answer says nothing about whether the article is open."""
+    failed = []
+    for name, get in (("europepmc", lambda: europepmc.full_text_xml(client, pmcid)),
+                      ("ncbi", lambda: ncbi.pmc_full_text_xml(client, pmcid, email))):
+        try:
+            xml = get()
+        except TooManyFailures as e:
+            log.warning("%s full text for %s kept failing (%s)", name, pmcid, e)
+            failed.append(name)
+            continue
+        if xml:
+            return xml, name, failed
+    return None, None, failed
+
+
 def _paper_inputs(snap: Path) -> list[PaperInput]:
     return [
         PaperInput(pmid=r["pmid"], pmcid=r.get("pmcid"), title=r.get("title", ""), text=r["text"],
@@ -585,7 +604,8 @@ def _paper_inputs(snap: Path) -> list[PaperInput]:
                    journal=r.get("journal"), pub_date=r.get("first_pub_date"),
                    regions=[TextRegion(**d) for d in r.get("regions", [])])
         for r in jsonl.read(snap / "papers.jsonl")
-        if r.get("triage", {}).get("keep", True) or getattr(_paper_inputs, "include_all", False)
+        if not r.get("fulltext_failed")
+        and (r.get("triage", {}).get("keep", True) or getattr(_paper_inputs, "include_all", False))
     ]
 
 

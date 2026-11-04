@@ -534,6 +534,13 @@
       "default": null,
       "title": "First Pub Date"
     },
+    "fulltext_failed": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Fulltext Failed",
+      "type": "array"
+    },
     "fulltext_source": {
       "anyOf": [
         {

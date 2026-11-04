@@ -281,6 +281,9 @@ class PaperRow(Row):
     text_sha256: str = ""
     regions: list[Region] = Field(default_factory=list)
     fulltext_source: str | None = None
+    # Sources that kept failing, when none delivered: the text is the abstract
+    # only because of the failure, so extraction skips the paper.
+    fulltext_failed: list[str] = Field(default_factory=list)
     supplement_bundle: SupplementBundle = Field(default_factory=SupplementBundle)
     supplements: list[SupplementMeta] = Field(default_factory=list)
     figures: list[FigureMeta] = Field(default_factory=list)
@@ -388,6 +391,7 @@ class ManifestRow(Row):
     figure_vision_calls: int | None = None
     figure_vision_tokens: dict[str, int] | None = None
     figure_cache_hits: int | None = None
+    full_text_failed: int | None = None
     network_requests: int = 0
     cache_hits: int = 0
     rate_limiter_slept_s: float = 0.0
