@@ -514,4 +514,25 @@ Effect on the release: evidence rows 167 to 213, variants 148 to 180. Of the 41 
 
 Abstract-only is computed, not taken from the model: the release's `abstract_only` column reads the ledger's `fetched` event for the exact text extracted. The model's own `input_was_abstract_only` disagrees with it on 4 papers read in full.
 
-The fetch that built the snapshot also found 86 open-access papers whose text has grown since extraction (165 supplementary files parsed, 44 figures transcribed from bundles that arrived this time), so they are due for re-extraction. Europe PMC's full-text endpoint returned HTTP 500 on every retry for 42 articles during this fetch; one of them had aborted the first attempt, until a full text that keeps failing became a fallback to NCBI rather than an exception.
+The fetch that built the snapshot also found 86 open-access papers with no extraction at their current text: 51 never extracted, and 35 whose text had grown (165 supplementary files parsed, 44 figures transcribed from bundles that arrived this time). Europe PMC's full-text endpoint returned HTTP 500 on every retry for 42 articles during this fetch; one of them had aborted the first attempt, until a full text that keeps failing became a fallback to NCBI rather than an exception.
+
+## The open-access backlog, and front matter that passed for full text (2026-11-04)
+
+The 2026-11-03 fetch left 86 kept open-access papers with no extraction at their current text: 51 never extracted and 35 whose text had grown, mostly from parsed supplements. `extract` and `challenge` ran over the snapshot with budgets of $12 and $6. Plain `extract` also took the 48 kept papers that have a title and no abstract, which the abstract run had left out.
+
+| | Full text | Title only |
+|---|---|---|
+| Papers | 86 | 48 |
+| Papers yielding records | 40 | 3 |
+| Records | 120 | 3 |
+| Cost, extraction | $6.08 | $0.38 |
+
+The challenge ($4.41 for all 134) upheld 113 records, disputed none and could not verify 10. It also reported 127 grounded "missed" variants, nearly all association SNPs, mouse alleles and polymorphisms the extractor was right to leave out, so that count is still not a recall figure. The meter matched `col4a1a2 spend` to the cent on both runs.
+
+Effect on the release: evidence rows 213 to 252, variants 180 to 211. Re-extraction gives records new keys; matched on paper, gene and HGVS, 39 variants are new and one was lost: 36786861 COL4A1 c.*31G>T, upheld and grounded, now rated low confidence by the model. Other changes in re-extracted papers are mostly counts read differently (31922066 `n_tested` 18 to 179) and, in 34531397, protein changes written with one-letter codes.
+
+**Front matter passed for full text.** For 33 papers PMC returns XML with a title and abstract and no body, 27 of them saying in a comment that the publisher does not allow the full text to be downloaded as XML. Fetch counted any XML as full text, so these were extracted under a FULL TEXT label and 7 released rows showed `abstract_only` false. Fetch now requires a body, supplement or figure (`PaperText.is_full_text`), and records a `fetched` event when a text's classification changes even if the text does not. A re-fetch at a budget of $0 corrected the 33 papers without changing any text, so no extraction was redone.
+
+**A title is not evidence.** The three title-only records ground, because their quotes are the title, and only the model's own low confidence kept them out of the release. Fetch now records `has_abstract`, and `publish` flags `title_only` on every record from a paper with neither full text nor abstract, so none can be confident. The re-fetch wrote `has_abstract` for all 3,139 papers once: 121 have none.
+
+Known and not fixed here: a somatic COL4A1-VEGFD fusion in myofibroma (33830670) is counted as 2 probands, and a duplication of both genes (31719132) is filed under COL4A1 alone. Both are extraction-prompt questions.
