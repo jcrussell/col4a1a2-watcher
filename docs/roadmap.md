@@ -38,7 +38,7 @@ Not yet: the human spot-check, the deduplication signals that would narrow the r
 
 ## Known gaps
 
-- **Closed-access papers yield title and abstract only**, and more of the relevant literature is closed than open: the gate keeps about a third of closed-access candidates against about 9% of open-access ones. Those papers are in the ledger as triaged and kept, not extracted.
+- **Closed-access papers yield title and abstract only**, and more of the relevant literature is closed than open: the gate keeps about a third of closed-access candidates against about 9% of open-access ones. Those with an abstract are extracted from it and marked `abstract_only` in the release, which gives about 0.28 confident records per paper; the 48 with a title only stay triaged and kept, not extracted.
 - **Some supplements and figures stay out of reach**: supplements the publisher hosts and PMC does not, bundles the Europe PMC endpoint fails to deliver (most requests; successes are kept and reused), scanned PDFs (detected and recorded, never guessed at), and TIFF figures, which the vision API does not accept. Figures are transcribed only for papers whose text does not already name its variants.
 - **No precision estimate exists**, for extraction or for review, because `data/curated/gold/` is empty. `col4a1a2 review` emits the queue; filling it is human work and the one thing blocking a stated accuracy figure.
 - **`missed_variants` needs a relevance filter** before its count can be read as recall: common SNPs from association sections ground correctly but should never be records.

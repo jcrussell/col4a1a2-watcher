@@ -103,7 +103,7 @@ def test_families_equal_probands_fires_only_at_scale():
 
 
 def test_checks_are_quiet_on_the_real_corpus():
-    """Measured: four findings over 233 records in 209 papers.
+    """Measured: four findings over 233 records in 209 papers, before abstract-only papers were added.
 
     Two are the CNV gain typed as a deletion, which is real. Guards against a
     future check that floods the review queue. If this fails, the new check
@@ -116,7 +116,7 @@ def test_checks_are_quiet_on_the_real_corpus():
             rows[r["pmid"]] = r
     findings = [f for r in rows.values() for f in check_extraction(r["extraction"])]
     n_records = sum(len(r["extraction"]["variants"]) for r in rows.values())
-    assert n_records == 233
+    assert n_records >= 233, "the corpus only grows"
     assert len(findings) <= 8, f"{len(findings)} findings over {n_records} records: {findings}"
     assert any(f.check == "cnv_gain_typed_as_deletion" and f.pmid == "33375380" for f in findings)
 

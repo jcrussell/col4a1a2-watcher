@@ -492,3 +492,26 @@ Built by `publish` from the 167 confident records: 160 carry a variant key and g
 | With a paper reporting a confirmed de novo case | 25 |
 
 Summed over variants, probands run from 150 (every possible overlap real) to 161 (papers independent). The range is narrow because few variants recur in this release, not because overlap has been resolved: most variants appear in one paper, where the range is a single number by construction. The widest are p.Gly1239Arg and p.Gly888Arg, 1 to 3 probands across three papers each.
+
+## Abstract-only extraction of closed-access papers (2026-11-03)
+
+The gate had kept 214 papers with no open full text. 48 have no abstract either, only a title, and were not extracted. The other 166 went through the unchanged pipeline (prompt v1, challenge c1) on title and abstract alone: a seeded sample of 40 first, then the remaining 126.
+
+| | Sample of 40 | All 166 |
+|---|---|---|
+| Papers yielding records | 21 | 63 |
+| Records | 24 | 75 |
+| Quotes not matching the abstract | 0 | 0 |
+| **Confident** (upheld, unflagged) | **14** | **46** |
+| Upheld but low confidence | 8 | 23 |
+| Unverifiable | 2 | 5 |
+| Disputed, with a grounded quote | 0 | 1 |
+| Cost, extraction and challenge | $1.16 | $4.28, about $0.026 per paper |
+
+The sample ran high: it projected 55 to 60 confident records and the whole set gave 46, 0.28 per paper. The low-confidence records are what they should be: abstracts that say "a novel COL4A1 mutation" without naming it, and large 13q deletions or duplications.
+
+Effect on the release: evidence rows 167 to 213, variants 148 to 180. Of the 41 variant keys the abstract records carry, 6 were already in the table from full texts.
+
+Abstract-only is computed, not taken from the model: the release's `abstract_only` column reads the ledger's `fetched` event for the exact text extracted. The model's own `input_was_abstract_only` disagrees with it on 4 papers read in full.
+
+The fetch that built the snapshot also found 86 open-access papers whose text has grown since extraction (165 supplementary files parsed, 44 figures transcribed from bundles that arrived this time), so they are due for re-extraction. Europe PMC's full-text endpoint returned HTTP 500 on every retry for 42 articles during this fetch; one of them had aborted the first attempt, until a full text that keeps failing became a fallback to NCBI rather than an exception.
