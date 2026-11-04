@@ -269,3 +269,18 @@ def test_abstract_only_comes_from_the_fetched_text_not_the_model(world):
     led.record(identity="2", stage="fetched", text_sha256="an earlier text", abstract_only=True)
     by = {e["pmid"]: e["abstract_only"] for e in publish.gather(st, include_all=True).evidence}
     assert by == {"1": True, "2": None}, "only the text that was extracted counts"
+
+
+def test_a_title_with_nothing_under_it_never_publishes(world):
+    """Its quotes ground against the title, which proves nothing; the newest fetched event decides."""
+    st, _ = world
+    led = Ledger(st.curated_dir / "ledger.jsonl")
+    sha = next(r["text_sha256"] for r in jsonl.read(st.extractions) if r["pmid"] == "1")
+    before = {e["record_key"] for e in publish.gather(st).evidence if e["pmid"] == "1"}
+    assert before, "the fixture publishes something from paper 1"
+    led.record(identity="1", stage="fetched", text_sha256=sha, abstract_only=True, has_abstract=False)
+    assert not [e for e in publish.gather(st).evidence if e["pmid"] == "1"]
+    flagged = [e for e in publish.gather(st, include_all=True).evidence if e["pmid"] == "1"]
+    assert flagged and all("title_only" in e["review_flags"] for e in flagged)
+    led.record(identity="1", stage="fetched", text_sha256=sha, abstract_only=True, has_abstract=True)
+    assert {e["record_key"] for e in publish.gather(st).evidence if e["pmid"] == "1"} == before

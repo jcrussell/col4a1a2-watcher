@@ -109,11 +109,18 @@ def review_flags(variant: dict, grounding: dict, verdict: str, *, duplicate: boo
     return flags
 
 
-def record_review(key: str, variant: dict, grounding: dict, challenge: dict | None) -> tuple[str, list[str]]:
-    """A record's checked review verdict and its flags, as `review` and `publish` both see them."""
+def record_review(key: str, variant: dict, grounding: dict, challenge: dict | None, *,
+                  title_only: bool = False) -> tuple[str, list[str]]:
+    """A record's checked review verdict and its flags, as `review` and `publish` both see them.
+
+    `title_only` is a paper with neither full text nor abstract. Its quotes
+    ground against the title, which proves nothing, so the record is flagged
+    whatever the model's confidence.
+    """
     verdict = reviewer_verdict(key, challenge)
     duplicate = key in (((challenge or {}).get("report") or {}).get("duplicates") or [])
-    return verdict, review_flags(variant, grounding, verdict, duplicate=duplicate)
+    flags = review_flags(variant, grounding, verdict, duplicate=duplicate)
+    return verdict, [*flags, "title_only"] if title_only else flags
 
 
 def is_confident(verdict: str, flags: list[str]) -> bool:

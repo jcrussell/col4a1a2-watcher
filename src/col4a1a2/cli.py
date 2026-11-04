@@ -481,8 +481,6 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             xml, fulltext_source, failed = _full_text(client, m.pmcid, email)
         if xml:
             pt = jats_to_text(xml)
-            abstract_only = False
-            n_full += 1
             (snap / "fulltext").mkdir(exist_ok=True)
             (snap / "fulltext" / f"{m.pmcid}.xml").write_bytes(xml)
             n_tables = pt.n_tables
@@ -508,9 +506,13 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
                 for k in ("input", "output", "calls"):
                     vision_usage[k] += enr.vision_usage[k]
             text, regions = pt.as_prompt_text(), pt.regions()
+            abstract_only = not pt.is_full_text
+            has_abstract = bool(pt.abstract.strip())
+            n_full += not abstract_only
         else:
             text = f"TITLE: {m.title}\n\nABSTRACT:\n{m.abstract or '(no abstract available)'}"
             abstract_only, n_tables, regions = True, 0, []
+            has_abstract = bool((m.abstract or "").strip())
             enr = _Enrichment()
         rows.append({
             "pmid": m.pmid, "pmcid": m.pmcid, "doi": m.doi, "title": m.title, "journal": m.journal,
@@ -519,7 +521,7 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
             "abstract": m.abstract,
             "citation": citation(m),
             "is_open_access": m.is_open_access, "source": m.source,
-            "abstract_only": abstract_only, "n_tables": n_tables, "n_chars": len(text), "text": text,
+            "abstract_only": abstract_only, "has_abstract": has_abstract, "n_tables": n_tables, "n_chars": len(text), "text": text,
             "text_sha256": sha256_text(text),
             "regions": [{"kind": r.kind, "label": r.label, "start": r.start, "end": r.end} for r in regions],
             "fulltext_source": fulltext_source,
@@ -536,10 +538,13 @@ def cmd_fetch_papers(a: argparse.Namespace) -> int:
         prev = ledger._state.get(r["pmid"] or "") or {}
         # A paper whose full text failed to arrive was not fetched; recording
         # its abstract as its text would make it look closed access.
-        if r["pmid"] and prev.get("text_sha256") != r["text_sha256"] and not r["fulltext_failed"]:
+        # A new event also when what the text is changes without the text: a
+        # correction to how a text is classified must reach the release.
+        changed = any(prev.get(k) != r[k] for k in ("text_sha256", "abstract_only", "has_abstract"))
+        if r["pmid"] and changed and not r["fulltext_failed"]:
             ledger.record(identity=r["pmid"], stage="fetched", snapshot=snap.name,
                           text_sha256=r["text_sha256"], n_chars=r["n_chars"],
-                          abstract_only=r["abstract_only"],
+                          abstract_only=r["abstract_only"], has_abstract=r["has_abstract"],
                           fulltext_source=r.get("fulltext_source"),
                           bundle_status=(r.get("supplement_bundle") or {}).get("status"),
                           n_supplements=len([x for x in (r.get("supplements") or []) if x.get("sheets")]),

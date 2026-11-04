@@ -199,6 +199,7 @@ class LedgerEvent(Row):
     text_sha256: str | None = None
     n_chars: int | None = None
     abstract_only: bool | None = None
+    has_abstract: bool | None = None
     fulltext_source: str | None = None
     bundle_status: int | None = None
     n_supplements: int | None = None
@@ -277,6 +278,8 @@ class PaperRow(Row):
     is_open_access: bool = False
     source: str = ""
     abstract_only: bool = False
+    # False for a title with nothing under it, whose records never publish.
+    has_abstract: bool | None = None
     n_tables: int = 0
     n_chars: int = 0
     text: str = ""

@@ -104,19 +104,24 @@ def fold_rows(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
-def abstract_only_texts(rows: list[dict]) -> dict[tuple[str, str], bool]:
-    """Whether each fetched text was the title and abstract alone, keyed on (identity, text hash).
+TEXT_FACTS = ("abstract_only", "has_abstract")
+
+
+def fetched_texts(rows: list[dict]) -> dict[tuple[str, str], dict]:
+    """What each fetched text was, keyed on (identity, text hash): whether it
+    was the title and abstract alone, and whether it had an abstract at all.
 
     Recorded by `fetch-papers` from what it assembled. The model's own
     `input_was_abstract_only` is no substitute: it has claimed abstract-only
-    for papers it read in full. Events from before the field existed carry
-    None and are ignored.
+    for papers it read in full. The newest event wins per fact, so a later
+    fetch can correct one; events from before a fact existed carry None and
+    leave it unknown.
     """
-    out: dict[tuple[str, str], bool] = {}
-    for r in rows:
-        if r.get("stage") == "fetched" and r.get("text_sha256") and r.get("abstract_only") is not None:
-            key = (r["identity"], r["text_sha256"])
-            out[key] = out.get(key, False) or bool(r["abstract_only"])
+    out: dict[tuple[str, str], dict] = {}
+    for r in sorted(rows, key=lambda r: r.get("written_at", "")):
+        if r.get("stage") == "fetched" and r.get("text_sha256"):
+            facts = out.setdefault((r["identity"], r["text_sha256"]), dict.fromkeys(TEXT_FACTS))
+            facts.update({k: r[k] for k in TEXT_FACTS if r.get(k) is not None})
     return out
 
 

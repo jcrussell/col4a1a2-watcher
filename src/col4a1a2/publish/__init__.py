@@ -26,7 +26,7 @@ from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import record_key
 from col4a1a2.extract.schema import PHENOTYPE_SYSTEMS, VARIANT_TYPES
-from col4a1a2.ledger import STATUS_MEANINGS, abstract_only_texts, fold_rows, paper_status
+from col4a1a2.ledger import STATUS_MEANINGS, fetched_texts, fold_rows, paper_status
 from col4a1a2.publish import variants as variants_mod
 
 LICENSE = {"name": "CC-BY-4.0", "path": "https://creativecommons.org/licenses/by/4.0/",
@@ -97,7 +97,7 @@ def _spot_checked(st: Settings) -> int:
 def gather(st: Settings, *, include_all: bool = False) -> Release:
     ledger_rows = jsonl.read_tolerant(st.curated_dir / "ledger.jsonl", what="ledger")
     fold = fold_rows(ledger_rows)
-    abstract_only = abstract_only_texts(ledger_rows)
+    texts = fetched_texts(ledger_rows)
     extractions = rows_mod.latest_extractions(st.extractions, st.extract_model)
     challenges = rows_mod.current_challenges(
         jsonl.read_tolerant(st.curated_dir / "challenges.jsonl", what="challenges"), st.extract_model)
@@ -108,6 +108,8 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
     n_extracted = 0
     for r in extractions:
         meta = fold.get(r["pmid"], {})
+        facts = texts.get((r["pmid"], r["text_sha256"])) or {}
+        title_only = bool(facts.get("abstract_only")) and facts.get("has_abstract") is False
         challenge = rows_mod.challenge_for(r, challenges)
         verdict_by_key = {v.get("record_key"): v for v in (challenge or {}).get("challenge", {}).get("verdicts", [])}
         g = r.get("grounding") or {}
@@ -115,7 +117,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
         for i, v in enumerate(r["extraction"].get("variants") or []):
             n_extracted += 1
             key = record_key(r["pmid"], i, v)
-            verdict, flags = rows_mod.record_review(key, v, g, challenge)
+            verdict, flags = rows_mod.record_review(key, v, g, challenge, title_only=title_only)
             verdicts[verdict] = verdicts.get(verdict, 0) + 1
             if not include_all and not rows_mod.is_confident(verdict, flags):
                 continue
@@ -126,7 +128,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
                 "citation": meta.get("citation"), "year": (meta.get("first_pub_date") or "")[:4],
                 "quotes_grounded": v["as_written"] not in ungrounded,
                 "figure_sourced": v["as_written"] in (g.get("figure_sourced") or []),
-                "abstract_only": abstract_only.get((r["pmid"], r["text_sha256"])),
+                "abstract_only": facts.get("abstract_only"),
                 "reviewer_verdict": verdict,
                 "reviewer_problem": ((verdict_by_key.get(key) or {}).get("problem")
                                      if verdict == "disputed" else None),

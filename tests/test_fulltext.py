@@ -33,3 +33,14 @@ def test_bibliographic_xrefs_removed():
     pt = jats_to_text(xml)
     assert "Known fact. Next." in pt.body
     assert "should be dropped" not in pt.body
+
+
+def test_front_matter_alone_is_not_a_full_text():
+    """PMC serves some articles as title and abstract only, saying so in a comment."""
+    xml = (b'<article><front><article-meta><title-group><article-title>A COL4A1 family</article-title>'
+           b'</title-group><abstract><p>We report c.1G&gt;A.</p></abstract></article-meta></front>'
+           b'<!--The publisher of this article does not allow downloading of the full text in XML form.-->'
+           b'</article>')
+    pt = jats_to_text(xml)
+    assert pt.abstract and not pt.is_full_text
+    assert jats_to_text((FIX / "PMC13693400.xml").read_bytes()).is_full_text

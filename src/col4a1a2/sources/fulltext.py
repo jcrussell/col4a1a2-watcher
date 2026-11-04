@@ -73,6 +73,12 @@ class PaperText:
     supplements: list[tuple[str, str]] = field(default_factory=list)
     figures: list[tuple[str, str]] = field(default_factory=list)
 
+    @property
+    def is_full_text(self) -> bool:
+        """More than front matter. Some publishers let PMC serve only the title
+        and abstract as XML, which must not pass for a full text."""
+        return bool(self.body.strip() or self.supplements or self.figures)
+
     def _assemble(self) -> tuple[str, list[TextRegion]]:
         chunks: list[tuple[str, str, str]] = [("title", "", f"TITLE: {self.title}".strip())]
         if self.abstract:

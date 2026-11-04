@@ -359,6 +359,18 @@
       "default": null,
       "title": "Fulltext Source"
     },
+    "has_abstract": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Has Abstract"
+    },
     "has_pmcid": {
       "anyOf": [
         {
