@@ -963,6 +963,27 @@ def cmd_ledger(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_spend(a: argparse.Namespace) -> int:
+    """Total Claude's cost over the response archive and the older table rows."""
+    from col4a1a2.extract.spend import tally
+
+    st: Settings = a.settings
+    t = tally(st.responses_dir, st.curated_dir, st.price_for)
+    if a.json:
+        print(json.dumps(t, indent=2))
+        return 0
+    print(f"{'source':8} {'site':10} {'model':18} {'calls':>6} {'input':>11} {'output':>10} "
+          f"{'cache read':>11} {'cache write':>11} {'USD':>9}")
+    for r in t["rows"]:
+        print(f"{r['source']:8} {r['site']:10} {r['model']:18} {r['calls']:>6} {r['input']:>11,} "
+              f"{r['output']:>10,} {r['cache_read']:>11,} {r['cache_write']:>11,} {r['usd']:>9.2f}")
+    print(f"total ${t['total_usd']:.2f}, of which ${t['estimated_usd']:.2f} is estimated from table rows "
+          f"written before the archive began ({t['archive_starts'] or 'no archive yet'})")
+    if t["unpriced"]:
+        print(f"no price configured for {', '.join(t['unpriced'])}; their calls are not in the total")
+    return 0
+
+
 # ---------------------------------------------------------------- show
 
 def cmd_publish(a: argparse.Namespace) -> int:
@@ -1198,6 +1219,11 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("ledger", parents=[common], help="summarise every candidate ever considered")
     g.add_argument("--tsv", help="also write the folded ledger to this TSV")
     g.set_defaults(func=cmd_ledger)
+
+    sp = sub.add_parser("spend", parents=[common],
+                        help="what Claude has cost, from the response archive and older table rows (local only)")
+    sp.add_argument("--json", action="store_true", help="the tally as JSON")
+    sp.set_defaults(func=cmd_spend)
 
     nz = sub.add_parser("normalize", parents=[common],
                         help="key every extracted variant on the reference transcript with Ensembl VEP")
