@@ -16,10 +16,19 @@ that text rather than trusting a pre-parsed object.
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_git(monkeypatch):
+    """A hook exports GIT_DIR, GIT_INDEX_FILE and the like, and a test's
+    `git -C <tmp repo>` would obey them and write to the real repository."""
+    for k in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(k)
 
 
 @dataclass

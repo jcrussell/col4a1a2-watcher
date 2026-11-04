@@ -191,11 +191,11 @@ def test_normalization_columns_come_from_the_tracked_answers(world):
         "query_key": normalize.query_key(q), **q, "ensembl_release": 116, "status": "ok", "error": "",
         "build_inferred": None, "chrom": "13", "start": 5, "end": 5, "allele_string": "G/A",
         "hgvs_c": q["notation"], "hgvs_p": "", "consequence": ["start_lost"],
-        "written_at": "2026-11-01T00:00:00+00:00"})
+        "written_at": "2999-01-01T00:00:00+00:00"})
     rel = publish.gather(st, include_all=True)
     row = next(e for e in rel.evidence if e["record_key"] == v["record_key"])
     assert row["variant_key"] == q["notation"] and row["grch38"] == "13:5:G/A" and row["key_level"] == "coding"
-    assert rel.data_as_of == "2026-11-01", "a new answer dates the release"
+    assert rel.data_as_of == "2999-01-01", "a new answer dates the release"
 
 
 def test_the_variants_table_ships_with_its_residual_risk(world, tmp_path):
