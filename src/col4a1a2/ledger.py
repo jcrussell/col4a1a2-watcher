@@ -104,6 +104,22 @@ def fold_rows(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
+def abstract_only_texts(rows: list[dict]) -> dict[tuple[str, str], bool]:
+    """Whether each fetched text was the title and abstract alone, keyed on (identity, text hash).
+
+    Recorded by `fetch-papers` from what it assembled. The model's own
+    `input_was_abstract_only` is no substitute: it has claimed abstract-only
+    for papers it read in full. Events from before the field existed carry
+    None and are ignored.
+    """
+    out: dict[tuple[str, str], bool] = {}
+    for r in rows:
+        if r.get("stage") == "fetched" and r.get("text_sha256") and r.get("abstract_only") is not None:
+            key = (r["identity"], r["text_sha256"])
+            out[key] = out.get(key, False) or bool(r["abstract_only"])
+    return out
+
+
 # What each `paper_status` value means, for people reading the release.
 STATUS_MEANINGS = {
     "extracted": "Read in full and extracted",

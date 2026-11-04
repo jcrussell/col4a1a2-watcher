@@ -103,11 +103,13 @@ def body(rel, data: Path) -> str:
     parts.append(_section(
         "evidence", "evidence: one row per variant per paper",
         "<p>What one paper says about one variant, with the sentences that say it. Claude extracted each record "
-        "from the full text, supplements and figures; a second pass then tried to refute it against the same text. "
+        "from the full text, supplements and figures, or from the abstract where no full text is open; a second pass then tried to refute it against the same text. "
         f"This file holds {escape(rel.selection())}</p>"
         "<h3>Read before using</h3>"
         + _list([escape(spot) + " Check the quotes against the paper before relying on a record.",
                  "<code>figure_sourced</code> marks a record read from a machine transcription of a figure.",
+                 ("<code>abstract_only</code> marks a record read from the title and abstract alone, because "
+                  "the full text is not open access; its counts and phenotypes are what the abstract states."),
                  ("<code>same_family_as_prior_report</code> means the paper says these patients were published "
                   "before, so their counts may repeat another row's.")]),
         _facts([("Rows", f"{len(rel.evidence)}, from {len({e['pmid'] for e in rel.evidence})} papers"),

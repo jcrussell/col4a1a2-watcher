@@ -26,7 +26,7 @@ from col4a1a2.config import Settings
 from col4a1a2.extract import rows as rows_mod
 from col4a1a2.extract.challenge import record_key
 from col4a1a2.extract.schema import PHENOTYPE_SYSTEMS, VARIANT_TYPES
-from col4a1a2.ledger import STATUS_MEANINGS, fold_rows, paper_status
+from col4a1a2.ledger import STATUS_MEANINGS, abstract_only_texts, fold_rows, paper_status
 from col4a1a2.publish import variants as variants_mod
 
 LICENSE = {"name": "CC-BY-4.0", "path": "https://creativecommons.org/licenses/by/4.0/",
@@ -97,6 +97,7 @@ def _spot_checked(st: Settings) -> int:
 def gather(st: Settings, *, include_all: bool = False) -> Release:
     ledger_rows = jsonl.read_tolerant(st.curated_dir / "ledger.jsonl", what="ledger")
     fold = fold_rows(ledger_rows)
+    abstract_only = abstract_only_texts(ledger_rows)
     extractions = rows_mod.latest_extractions(st.extractions, st.extract_model)
     challenges = rows_mod.current_challenges(
         jsonl.read_tolerant(st.curated_dir / "challenges.jsonl", what="challenges"), st.extract_model)
@@ -125,6 +126,7 @@ def gather(st: Settings, *, include_all: bool = False) -> Release:
                 "citation": meta.get("citation"), "year": (meta.get("first_pub_date") or "")[:4],
                 "quotes_grounded": v["as_written"] not in ungrounded,
                 "figure_sourced": v["as_written"] in (g.get("figure_sourced") or []),
+                "abstract_only": abstract_only.get((r["pmid"], r["text_sha256"])),
                 "reviewer_verdict": verdict,
                 "reviewer_problem": ((verdict_by_key.get(key) or {}).get("problem")
                                      if verdict == "disputed" else None),

@@ -2,6 +2,18 @@
   "additionalProperties": false,
   "description": "One row of evidence.jsonl. One published record: a variant reported in carriers in one paper.",
   "properties": {
+    "abstract_only": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The paper's full text was not available, so the record was read from its title and abstract alone; empty if not recorded",
+      "title": "Abstract Only"
+    },
     "as_written": {
       "description": "The variant exactly as the paper writes it",
       "title": "As Written",
@@ -260,6 +272,7 @@
     "evidence_quotes",
     "quotes_grounded",
     "figure_sourced",
+    "abstract_only",
     "reviewer_verdict",
     "reviewer_problem",
     "review_flags",

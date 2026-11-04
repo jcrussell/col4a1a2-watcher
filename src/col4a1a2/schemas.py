@@ -557,6 +557,8 @@ class EvidenceRow(Row):
                                                    "copyright, not CC BY")
     quotes_grounded: bool = Field(description="Every quote was found verbatim in the paper's text")
     figure_sourced: bool = Field(description="The record rests on a machine transcription of a figure")
+    abstract_only: bool | None = Field(description="The paper's full text was not available, so the record was "
+                                                   "read from its title and abstract alone; empty if not recorded")
     reviewer_verdict: str = Field(description="Outcome of the adversarial review, checked against the text: upheld, "
                                               "disputed, unverifiable, dispute not grounded, or not reviewed")
     reviewer_problem: str = Field(description="The reviewer's stated problem, if it disputed the record")

@@ -257,3 +257,15 @@ def test_the_release_carries_the_package_version_from_git(world, tmp_path):
     readme = (tmp_path / "s" / "data" / "README.txt").read_text()
     assert f"version {__version__}, data as of {pkg['data_as_of']}" in readme
     assert f"Version {__version__}, data as of" in (tmp_path / "s" / "index.html").read_text()
+
+
+def test_abstract_only_comes_from_the_fetched_text_not_the_model(world):
+    """The ledger records what fetch assembled; the model has claimed abstract-only for full texts."""
+    st, _ = world
+    led = Ledger(st.curated_dir / "ledger.jsonl")
+    rows = {r["pmid"]: r for r in jsonl.read(st.extractions)}
+    assert rows["1"]["extraction"]["input_was_abstract_only"] is False
+    led.record(identity="1", stage="fetched", text_sha256=rows["1"]["text_sha256"], abstract_only=True)
+    led.record(identity="2", stage="fetched", text_sha256="an earlier text", abstract_only=True)
+    by = {e["pmid"]: e["abstract_only"] for e in publish.gather(st, include_all=True).evidence}
+    assert by == {"1": True, "2": None}, "only the text that was extracted counts"
